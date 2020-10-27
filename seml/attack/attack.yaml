@@ -1,0 +1,51 @@
+seml:
+  db_collection: neurips_attack
+  executable: experiment_attack.py
+  conda_environment: base
+  project_root_dir: .
+
+slurm:
+  name: neurips_attack
+  output_dir: seml/attack/output
+  experiments_per_job: 1
+  sbatch_options:
+    gres: gpu:1       # num GPUs
+    mem: 16G          # memory
+    cpus-per-task: 4  # num cores
+    time: 0-08:00     # max time, D-HH:MM
+
+fixed:
+  epsilons: [0, 0.1, 0.25]
+  surrogate_params:
+    n_filters: 64
+    dropout: 0.5
+    train_params:
+      lr: 1e-2
+      weight_decay: 1e-3
+      patience: 100
+      max_epochs: 3000
+  artifact_dir: cache
+  pert_adj_storage_type: attack
+  model_storage_type: pretrained
+  device: 0
+  binary_attr: False
+
+grid:
+  dataset:
+    type: choice
+    options:
+      - cora_ml
+      - citeseer
+
+  attack:
+    type: choice
+    options:
+      - fgsm
+      - pgd
+
+  seed:
+    type: choice
+    options:
+      - 0
+      - 1
+      - 5
