@@ -13,6 +13,9 @@ os.system(f'pip install torch-sparse==latest+{cuda_v} -f https://pytorch-geometr
 os.system(f'pip install torch-cluster==latest+{cuda_v} -f https://pytorch-geometric.com/whl/torch-{torch_v}.html')
 os.system(f'pip install torch-spline-conv==latest+{cuda_v} -f https://pytorch-geometric.com/whl/torch-{torch_v}.html')
 
+os.system(f'cd prebuilt_kernels; pip install -e .')
+os.system(f'cd sparse_smoothing; pip install -e .')
+
 setup(
     name='rgnn',
     version='1.0.0',

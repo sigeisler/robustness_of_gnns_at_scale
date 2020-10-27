@@ -1,0 +1,3 @@
+[submodule "sparse_smoothing"]
+	path = sparse_smoothing
+	url = https://github.com/abojchevski/sparse_smoothing
