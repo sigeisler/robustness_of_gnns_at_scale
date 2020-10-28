@@ -16,7 +16,7 @@ extra_link_args += ['-lcusparse', '-l', 'cusparse']
 
 setup(
     name='prebuilt_kernels',
-    version='0.0.1',
+    version='1.0.0',
     author='Simon Geisler',
     author_email='geisler@in.tum.de',
     description='Custom kernels for sparse topk and median',
@@ -28,7 +28,11 @@ setup(
             [
                 'csrc/custom.cpp',
                 'csrc/custom_kernel.cu'
-            ]
+            ],
+            #extra_cuda_cflags=['-lcusparse_static', '-lculibos']
+            # extra_compile_args=extra_compile_args,
+            extra_link_args=extra_link_args,
+            include_dirs=['/nfs/staff-ssd/geisler/anaconda3/envs/neurips20/lib/python3.7/site-packages/torch/lib']
         )
     ],
     cmdclass={

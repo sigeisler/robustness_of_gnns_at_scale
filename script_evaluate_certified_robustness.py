@@ -56,8 +56,7 @@ def print_results(df_result: pd.DataFrame, decimals=3):
         aggfunc=lambda x: ''.join(x)
     )
 
-    with pd.option_context('display.max_rows', None, 'display.max_columns', None):
-        logging.info(f'Combined results:\n {df_result}')
+    logging.warning(f'Combined results:\n {df_result.to_markdown()}')
 
 
 def main(args: argparse.Namespace):

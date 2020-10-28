@@ -1,3 +1,6 @@
+"""Contains a greedy FGSM implementation. In each iteration the edge is flipped, determined by the largest gradient 
+towards increasing the loss.
+"""
 from copy import deepcopy
 
 import numpy as np
@@ -56,19 +59,14 @@ class FGSM():
         for i in range(n_perturbations):
             logits = self.model.to(self.device)(self.X, self.adj)
 
-            # TODO:
-            # correct_prediction_mask = torch.zeros_like(logits[:, 0], dtype=bool)
-            # correct_prediction_mask[self.idx_attack] = True
-            # correct_prediction_mask &= logits.argmax(1) == self.labels
-            # loss = F.cross_entropy(logits[correct_prediction_mask], self.labels[correct_prediction_mask])
             loss = F.cross_entropy(logits[self.idx_attack], self.labels[self.idx_attack])
 
             gradient = torch.autograd.grad(loss, self.adj)[0]
             gradient[self.original_adj != self.adj] = 0
             gradient *= 2 * (0.5 - self.adj)
 
-            assert torch.all(gradient.nonzero()[:, 0] < gradient.nonzero()[:, 1]),\
-                'Only upper half should get nonzero gradient'
+            # assert torch.all(gradient.nonzero()[:, 0] < gradient.nonzero()[:, 1]),\
+            #     'Only upper half should get nonzero gradient'
 
             maximum = torch.max(gradient)
             edge_pert = (maximum == gradient).nonzero()

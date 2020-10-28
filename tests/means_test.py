@@ -4,6 +4,7 @@ from rgnn.means import (soft_weighted_medoid, soft_weighted_medoid_k_neighborhoo
                         weighted_dimwise_median, weighted_medoid, weighted_medoid_k_neighborhood)
 
 
+device = 0 if torch.cuda.is_available() else 'cpu'
 temperature = 1e-3
 
 
@@ -180,8 +181,8 @@ class TestSoftWeightedMedoidKNeighborhood():
 
     def test_simple_example_weighted_k2(self):
         A = torch.tensor([[0.5, 0.3, 0, 0.4], [0.3, 0.2, 0, 0], [0, 0, 0.9, 0.3],
-                          [0.4, 0, 0.4, 0.4]], dtype=torch.float32).cuda()
-        x = torch.tensor([[-10, 10, 10], [-1, 1, 1], [0, 0, 0], [10, -10, -10]], dtype=torch.float32).cuda()
+                          [0.4, 0, 0.4, 0.4]], dtype=torch.float32).to(device)
+        x = torch.tensor([[-10, 10, 10], [-1, 1, 1], [0, 0, 0], [10, -10, -10]], dtype=torch.float32).to(device)
         medoids = soft_weighted_medoid_k_neighborhood(A.to_sparse(), x, k=2, temperature=temperature)
 
         row_sum = A.sum(-1)
@@ -201,8 +202,8 @@ class TestSoftWeightedMedoidKNeighborhood():
 
     def test_simple_example_weighted_k3(self):
         A = torch.tensor([[0.5, 0.3, 0, 0.4], [0.3, 0.2, 0, 0], [0, 0, 0.9, 0.3],
-                          [0.4, 0, 0.4, 0.4]], dtype=torch.float32).cuda()
-        x = torch.tensor([[-10, 10, 10], [-1, 1, 1], [0, 0, 0], [10, -10, -10]], dtype=torch.float32).cuda()
+                          [0.4, 0, 0.4, 0.4]], dtype=torch.float32).to(device)
+        x = torch.tensor([[-10, 10, 10], [-1, 1, 1], [0, 0, 0], [10, -10, -10]], dtype=torch.float32).to(device)
         medoids = soft_weighted_medoid_k_neighborhood(A.to_sparse(), x, k=3, temperature=temperature)
 
         row_sum = A.sum(-1)
@@ -219,8 +220,8 @@ class TestSoftWeightedMedoidKNeighborhood():
         assert torch.all(medoids[layer_idx] == row_sum[layer_idx] * x[2])
 
     def test_simple_example_unweighted_k3(self):
-        A = torch.tensor([[1, 1, 0, 1], [1, 1, 0, 0], [0, 0, 1, 1], [1, 0, 1, 1]], dtype=torch.float32).cuda()
-        x = torch.tensor([[-10, 10, 10], [-1, 1, 1], [0, 0, 0], [10, -10, -10]], dtype=torch.float32).cuda()
+        A = torch.tensor([[1, 1, 0, 1], [1, 1, 0, 0], [0, 0, 1, 1], [1, 0, 1, 1]], dtype=torch.float32).to(device)
+        x = torch.tensor([[-10, 10, 10], [-1, 1, 1], [0, 0, 0], [10, -10, -10]], dtype=torch.float32).to(device)
         medoids = soft_weighted_medoid_k_neighborhood(A.to_sparse(), x, k=3, temperature=temperature)
 
         row_sum = A.sum(-1)
@@ -241,8 +242,8 @@ class TestWeightedDimwiseMedian():
 
     def test_simple_example_weighted(self):
         A = torch.tensor([[0.5, 0.3, 0, 0.4], [0.3, 0.2, 0, 0], [0, 0, 0.9, 0.3],
-                          [0.4, 0, 0.4, 0.4]], dtype=torch.float32).cuda()
-        x = torch.tensor([[-10, 10, 10], [-1, 1, 1], [0, 0, 0], [10, -10, -10]], dtype=torch.float32).cuda()
+                          [0.4, 0, 0.4, 0.4]], dtype=torch.float32).to(device)
+        x = torch.tensor([[-10, 10, 10], [-1, 1, 1], [0, 0, 0], [10, -10, -10]], dtype=torch.float32).to(device)
         median = weighted_dimwise_median(A.to_sparse(), x)
 
         row_sum = A.sum(-1)
@@ -259,8 +260,8 @@ class TestWeightedDimwiseMedian():
         assert torch.all(median[layer_idx] == row_sum[layer_idx] * x[2])
 
     def test_simple_example_unweighted(self):
-        A = torch.tensor([[1, 1, 0, 1], [1, 1, 0, 0], [0, 0, 1, 1], [0, 1, 1, 1]], dtype=torch.float32).cuda()
-        x = torch.tensor([[-10, 10, 10], [-1, 1, 0], [0, 0, 1], [10, -10, -10]], dtype=torch.float32).cuda()
+        A = torch.tensor([[1, 1, 0, 1], [1, 1, 0, 0], [0, 0, 1, 1], [0, 1, 1, 1]], dtype=torch.float32).to(device)
+        x = torch.tensor([[-10, 10, 10], [-1, 1, 0], [0, 0, 1], [10, -10, -10]], dtype=torch.float32).to(device)
         median = weighted_dimwise_median(A.to_sparse(), x)
 
         row_sum = A.sum(-1)

@@ -18,7 +18,6 @@ at::Tensor dimmedian_idx_forward_cuda(
     torch::Tensor adj,
     const int n_threads = 1024);
 
-
 // C++ to CUDA Methods
 std::vector<at::Tensor> topk_forward(
     torch::Tensor edge_idx,

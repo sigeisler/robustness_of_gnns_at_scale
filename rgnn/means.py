@@ -11,11 +11,16 @@ import torch_sparse
 
 try:
     import prebuilt_kernels as custom_cuda_kernels
+    if not hasattr(custom_cuda_kernels, 'topk'):
+        raise ImportError()
 except ImportError:
     cache_dir = os.path.join('.', 'extension', socket.gethostname(), torch.__version__)
     os.makedirs(cache_dir, exist_ok=True)
     custom_cuda_kernels = load(name="custom_cuda",
-                               sources=["csrc/custom.cpp", "csrc/custom.cu"],
+                               sources=["csrc/custom.cpp", "csrc/custom_kernel.cu"],
+                               # , ['-lcusparse_static', '-lculibos'],
+                               extra_cuda_cflags=['-lcusparse', '-l', 'cusparse'],
+                               extra_include_paths=['/usr/local/cuda/include/'],
                                verbose=True,
                                build_directory=cache_dir)
 

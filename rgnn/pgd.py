@@ -3,8 +3,8 @@ Kaidi Xu, Hongge Chen, Sijia Liu, Pin Yu Chen, Tsui Wei Weng, Mingyi Hong, and X
 for graph neural networks: An optimization perspective. IJCAI International Joint Conference on Artificial
 Intelligence, 2019-Augus:3961–3967, 2019. ISSN10450823. doi: 10.24963/ijcai.2019/550.
 
-The Subsequent code was mostly copied from https://github.com/DSE-MSU/DeepRobust (under MIT License) and we did not
-intent to unify the code style, programming paradigms, etc. to the rest of the code base.
+The Subsequent code build upon the implementation https://github.com/DSE-MSU/DeepRobust (under MIT License). We did 
+not intent to unify the code style, programming paradigms, etc. with the rest of the code base.
 
 """
 
@@ -64,8 +64,6 @@ class PGD(object):
         self.n = self.X.shape[0]
         self.device = X.device
         self.n_perturbations = 0
-        # TODO:
-        #self.correct_prediction_mask = None
 
         self.attr_adversary = self.X  # Only the adjacency matrix will be perturbed
         self.adj_adversary = None
@@ -128,10 +126,6 @@ class PGD(object):
         output = output[self.idx_attack]
         labels = self.labels[self.idx_attack]
         if self.loss_type == "CE":
-            # TODO:
-            # if self.correct_prediction_mask is None:
-            #     self.correct_prediction_mask = output.argmax(1) == labels
-            # loss = F.nll_loss(output[self.correct_prediction_mask], labels[self.correct_prediction_mask])
             loss = F.nll_loss(output, labels)
         if self.loss_type == "CW":
             eye = torch.eye(labels.max() + 1, device=self.device)

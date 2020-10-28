@@ -437,16 +437,16 @@ TSWLatexianTemp*
 # Mac OS
 */*DS_Store
 
-# Local
-cache/*
-extension/*
-prebuilt_kernels/build
-prebuilt_kernels/dist
-prebuilt_kernels/prebuilt_kernels.egg-info
-seml/*/output 
-
 # VS CODE
 */.vscode
 
 # Misc
 *.txt
+
+# Local
+cache_debug/*
+extension/*
+prebuilt_kernels/build
+prebuilt_kernels/dist
+prebuilt_kernels/prebuilt_kernels.egg-info
+seml/*/output 
