@@ -1,3 +1,6 @@
+"""The models: GCN, GDC SVG GCN, Jaccard GCN, ...
+"""
+
 from collections import OrderedDict
 from typing import Any, Dict, Optional, Sequence, Tuple, Union
 
@@ -253,8 +256,9 @@ class RGNNConv(ChainableGCNConv):
         return NotImplemented
 
     def propagate(self, edge_index: torch.Tensor, size=None, **kwargs) -> torch.Tensor:
-        A = torch.sparse.FloatTensor(edge_index, kwargs['norm']).coalesce()
         x = kwargs['x']
+        edge_weights = kwargs['norm'] if 'norm' in kwargs else kwargs['edge_weight']
+        A = torch.sparse.FloatTensor(edge_index, edge_weights).coalesce()
         return self._mean(A, x, **self._mean_kwargs)
 
 

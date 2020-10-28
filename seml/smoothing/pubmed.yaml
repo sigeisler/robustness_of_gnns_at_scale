@@ -1,7 +1,7 @@
 seml:
   db_collection: neurips_smoothing
   executable: experiment_smoothing.py
-  conda_environment: base
+  conda_environment: neurips20
   project_root_dir: .
 
 slurm:
@@ -12,7 +12,7 @@ slurm:
     gres: gpu:1       # num GPUs
     mem: 16G          # memory
     cpus-per-task: 4  # num cores
-    time: 1-00:00     # max time, D-HH:MM
+    time: 5-00:00     # max time, D-HH:MM
 
 fixed:
   n_samples_pre_eval: 100

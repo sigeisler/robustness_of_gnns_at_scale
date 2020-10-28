@@ -1,3 +1,6 @@
+"""Utils to retrieve/split/... the data.
+"""
+
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Union, Tuple
 import warnings

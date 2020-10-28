@@ -1,4 +1,4 @@
-"""For the util methods such as conversions or adjacency preprocessings
+"""For the util methods such as conversions or adjacency preprocessings.
 """
 import numpy as np
 import scipy.sparse as sp

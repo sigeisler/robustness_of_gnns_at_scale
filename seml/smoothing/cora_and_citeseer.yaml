@@ -1,7 +1,7 @@
 seml:
   db_collection: neurips_smoothing
   executable: experiment_smoothing.py
-  conda_environment: base
+  conda_environment: neurips20
   project_root_dir: .
 
 slurm:

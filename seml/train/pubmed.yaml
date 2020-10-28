@@ -1,7 +1,7 @@
 seml:
   db_collection: neurips_train
   executable: experiment_train.py
-  conda_environment: base
+  conda_environment: neurips20
   project_root_dir: .
 
 slurm:
