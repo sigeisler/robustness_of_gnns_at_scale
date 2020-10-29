@@ -2,6 +2,7 @@
 """
 
 import os
+import logging
 import socket
 
 import numba
@@ -13,19 +14,19 @@ import torch_scatter
 import torch_sparse
 
 try:
-    import prebuilt_kernels as custom_cuda_kernels
-    if not hasattr(custom_cuda_kernels, 'topk'):
-        raise ImportError()
-except ImportError:
-    cache_dir = os.path.join('.', 'extension', socket.gethostname(), torch.__version__)
-    os.makedirs(cache_dir, exist_ok=True)
-    custom_cuda_kernels = load(name="custom_cuda",
-                               sources=["csrc/custom.cpp", "csrc/custom_kernel.cu"],
-                               # , ['-lcusparse_static', '-lculibos'],
-                               extra_cuda_cflags=['-lcusparse', '-l', 'cusparse'],
-                               extra_include_paths=['/usr/local/cuda/include/'],
-                               verbose=True,
-                               build_directory=cache_dir)
+    try:
+        import kernels as custom_cuda_kernels
+        if not hasattr(custom_cuda_kernels, 'topk'):
+            raise ImportError()
+    except ImportError:
+        cache_dir = os.path.join('.', 'extension', socket.gethostname(), torch.__version__)
+        os.makedirs(cache_dir, exist_ok=True)
+        custom_cuda_kernels = load(name="custom_cuda",
+                                   sources=["kernels/csrc/custom.cpp", "kernels/csrc/custom_kernel.cu"],
+                                   extra_cuda_cflags=['-lcusparse', '-l', 'cusparse'],
+                                   build_directory=cache_dir)
+except:  # noqa: E722
+    logging.warn('Cuda kernels could not loaded -> no CUDA support!')
 
 
 @numba.jit(nopython=True)
@@ -111,7 +112,7 @@ def _sparse_top_k(A: torch.sparse.FloatTensor, k: int, return_sparse: bool = Tru
 
 
 def partial_distance_matrix(x: torch.Tensor, partial_idx: torch.Tensor) -> torch.Tensor:
-    """Calculates the partial distance matrix given the indices. For a low memory footprint (small computation graph) 
+    """Calculates the partial distance matrix given the indices. For a low memory footprint (small computation graph)
     it is essential to avoid duplicated computation of the distances.
 
     Parameters
@@ -165,6 +166,7 @@ def soft_weighted_medoid_k_neighborhood(
     k: int = 32,
     temperature: float = 1.0,
     with_weight_correction: bool = True,
+    threshold_for_dense_if_cpu: int = 5_000,
     **kwargs
 ) -> torch.Tensor:
     """Soft Weighted Medoid in the top `k` neighborhood (see Eq. 6 and Eq. 7 in our paper). This function can be used
@@ -175,24 +177,30 @@ def soft_weighted_medoid_k_neighborhood(
     Parameters
     ----------
     A : torch.sparse.FloatTensor
-        Sparse [n, n] tensor of the weighted/normalized adjacency matrix
+        Sparse [n, n] tensor of the weighted/normalized adjacency matrix.
     x : torch.Tensor
-        Dense [n, d] tensor containing the node attributes/embeddings
+        Dense [n, d] tensor containing the node attributes/embeddings.
     k : int, optional
-        Neighborhood size for selecting the top k elements, by default 32
+        Neighborhood size for selecting the top k elements, by default 32.
     temperature : float, optional
-        Controlling the steepnedd of the softmax, by default 1.0
+        Controlling the steepness of the softmax, by default 1.0.
     with_weight_correction : bool, optional
-        For enabling an alternative normalisazion (see above), by default True
+        For enabling an alternative normalisazion (see above), by default True.
+    threshold_for_dense_if_cpu : int, optional
+        On cpu, for runtime reasons, we use a dense implementation if feasible, by default 5_000.
 
     Returns
     -------
     torch.Tensor
-        The new embeddings [n, d]
+        The new embeddings [n, d].
     """
     n, d = x.shape
     if k > n:
+        if with_weight_correction:
+            raise NotImplementedError('`k` less than `n` and `with_weight_correction` is not implemented.')
         return soft_weighted_medoid(A, x, temperature=temperature)
+    if not x.is_cuda and n < threshold_for_dense_if_cpu:
+        return dense_cpu_soft_weighted_medoid_k_neighborhood(A, x, k, temperature, with_weight_correction)
 
     # Custom CUDA extension / Numba JIT code for the top k values of the sparse adjacency matrix
     top_k_weights, top_k_idx = _sparse_top_k(A, k=k, return_sparse=False)
@@ -226,6 +234,40 @@ def soft_weighted_medoid_k_neighborhood(
     a_row_sum = torch_scatter.scatter_sum(A._values(), A._indices()[0], dim=-1)
     new_embeddings = a_row_sum.view(-1, 1) * torch_sparse.spmm(reliable_adj_index, reliable_adj_values, n, n, x)
     return new_embeddings
+
+
+def dense_cpu_soft_weighted_medoid_k_neighborhood(
+    A: torch.sparse.FloatTensor,
+    x: torch.Tensor,
+    k: int = 32,
+    temperature: float = 1.0,
+    with_weight_correction: bool = False,
+    **kwargs
+) -> torch.Tensor:
+    """Dense cpu implementation (for details see `soft_weighted_medoid_k_neighborhood`).
+    """
+    n, d = x.size()
+    A_dense = A.to_dense()
+
+    l2 = _distance_matrix(x)
+
+    topk_a, topk_a_idx = torch.topk(A_dense, k=k, dim=1)
+    topk_l2_idx = topk_a_idx[:, None, :].expand(n, k, k)
+    distances_k = (
+        topk_a[:, None, :].expand(n, k, k)
+        * l2[topk_l2_idx, topk_l2_idx.transpose(1, 2)]
+    ).sum(-1)
+    distances_k[topk_a == 0] = torch.finfo(distances_k.dtype).max
+    distances_k[~torch.isfinite(distances_k)] = torch.finfo(distances_k.dtype).max
+
+    row_sum = A_dense.sum(-1)[:, None]
+
+    topk_weights = torch.zeros(A.shape, device=A.device)
+    topk_weights[torch.arange(n)[:, None].expand(n, k), topk_a_idx] = F.softmax(-distances_k / temperature, dim=-1)
+    if with_weight_correction:
+        topk_weights[torch.arange(n)[:, None].expand(n, k), topk_a_idx] *= topk_a
+        topk_weights /= topk_weights.sum(-1)[:, None]
+    return row_sum * (topk_weights @ x)
 
 
 def weighted_dimwise_median(A: torch.sparse.FloatTensor, x: torch.Tensor, **kwargs) -> torch.Tensor:

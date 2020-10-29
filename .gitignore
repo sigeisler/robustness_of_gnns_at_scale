@@ -446,7 +446,7 @@ TSWLatexianTemp*
 # Local
 cache_debug/*
 extension/*
-prebuilt_kernels/build
-prebuilt_kernels/dist
-prebuilt_kernels/prebuilt_kernels.egg-info
+kernels/build
+kernels/dist
+kernels/kernels.egg-info
 seml/*/output 

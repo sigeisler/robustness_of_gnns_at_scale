@@ -12,7 +12,7 @@ def get_ppr_matrix(adjacency_matrix: torch.Tensor,
                    normalize_adjacency_matrix: bool = False,
                    use_cpu: bool = False,
                    **kwargs) -> torch.Tensor:
-    """Calculates the personalized page rank diffusion of the adjacency matrix as proposed in Johannes Klicpera, 
+    """Calculates the personalized page rank diffusion of the adjacency matrix as proposed in Johannes Klicpera,
     Stefan Weißenberger, and Stephan Günnemann. Diffusion Improves Graph Learning.
 
     Parameters
@@ -73,7 +73,8 @@ def get_ppr_matrix(adjacency_matrix: torch.Tensor,
 
 
 def get_truncated_svd(adjacency_matrix: torch.Tensor, rank: int = 50):
-    """Truncated SVD preprocessing as proposed in Negin Entezari, Saba A. Al - Sayouri, Amirali Darvishzadeh, and Evangelos E. Papalexakis. All you need is Low(rank):  Defending against adversarial attacks on graphs. 
+    """Truncated SVD preprocessing as proposed in Negin Entezari, Saba A. Al - Sayouri, Amirali Darvishzadeh, and
+    Evangelos E. Papalexakis. All you need is Low(rank):  Defending against adversarial attacks on graphs.
 
     Attention: the result will not be sparse!
 

@@ -6,7 +6,7 @@ import os
 from typing import Any, Callable, Dict, List, Optional, Union, Tuple
 
 from filelock import SoftFileLock
-import sacred
+from sacred import Experiment
 from tinydb import Query, TinyDB
 from tinydb_serialization import SerializationMiddleware, Serializer
 import torch
@@ -40,7 +40,7 @@ class Storage():
         Timeout for a write lock of the local file db, by default 10.
     """
 
-    def __init__(self, cache_dir: str = 'cache', experiment: sacred.Experiment = None, lock_timeout: int = 10):
+    def __init__(self, cache_dir: str = 'cache', experiment: Optional[Experiment] = None, lock_timeout: int = 10):
         self.experiment = experiment
         self.cache_dir = cache_dir
         self.lock_timeout = lock_timeout
@@ -82,11 +82,9 @@ class Storage():
     def _get_db(self, table: str) -> TinyDB:
         if table == 'index':
             raise ValueError('The table must not be `index`!')
-        if table not in self.dbs:
-            serialization = SerializationMiddleware()
-            serialization.register_serializer(DateTimeSerializer(), 'DateTime')
-            self.dbs[table] = TinyDB(self._get_index_path(table), storage=serialization)
-        return self.dbs[table]
+        serialization = SerializationMiddleware()
+        serialization.register_serializer(DateTimeSerializer(), 'DateTime')
+        return TinyDB(self._get_index_path(table), storage=serialization)
 
     def _upsert_meta(self, table: str, params: Dict[str, Any], experiment_id: Optional[int] = None) -> List[int]:
         meta = {} if self.experiment is None else {'commit': self.experiment.mainfile.commit,
@@ -97,7 +95,9 @@ class Storage():
                 'time': datetime.utcnow(),
                 'experiment_id': experiment_id}
 
-        return self._get_db(table).upsert(data, Query().params == params)
+        table = self._get_db(table)
+        doc_id = table.upsert(data, Query().params == params)
+        return doc_id
 
     def _remove_meta(self, table: str, params: Dict[str, Any], experiment_id: Optional[int] = None) -> List[int]:
         return self._get_db(table).remove(Query().params == params)
@@ -161,7 +161,7 @@ class Storage():
             path = self._build_artifact_path(artifact_type, ids[0])
             torch.save(artifact, path)
             return path
-        except:
+        except:  # noqa: E722
             Storage.locked_call(
                 lambda: self._remove_meta(artifact_type, params),
                 self._get_lock_path(artifact_type),
@@ -192,7 +192,11 @@ class Storage():
         RuntimeError
             In case more than one artifact with identical configuration is found.
         """
-        documents = self._find_meta_by_exact_params(artifact_type, params)
+        documents = Storage.locked_call(
+            lambda: self._find_meta_by_exact_params(artifact_type, params),
+            self._get_lock_path(artifact_type),
+            self.lock_timeout,
+        )
         if len(documents) == 0:
             return None
         elif len(documents) > 1:
@@ -222,7 +226,11 @@ class Storage():
         List[Dict[str, Any]]
             List of loaded artifact params and artifacts (use key `artifact` to retrieve artifact).
         """
-        raw_documents = self._find_meta(artifact_type, match_condition)
+        raw_documents = Storage.locked_call(
+            lambda: self._find_meta(artifact_type, match_condition),
+            self._get_lock_path(artifact_type),
+            self.lock_timeout,
+        )
 
         documents = []
         for document in raw_documents:

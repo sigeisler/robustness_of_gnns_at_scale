@@ -1,12 +1,12 @@
 seml:
+  name: neurips_smoothing
   db_collection: neurips_smoothing
   executable: experiment_smoothing.py
   conda_environment: neurips20
-  project_root_dir: .
+  project_root_dir: ../..
+  output_dir: seml/smoothing/output
 
 slurm:
-  name: neurips_smoothing
-  output_dir: seml/smoothing/output
   experiments_per_job: 1
   sbatch_options:
     gres: gpu:1       # num GPUs

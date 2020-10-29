@@ -6,13 +6,13 @@ import logging
 import os
 import json
 import sys
-from typing import Any, Callable, Dict, List, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from sacred import Experiment
 from seml.config import read_config, generate_configs
 
 
-def build_configs_and_run(config_files: Sequence[str], executable: str = None,
+def build_configs_and_run(config_files: Sequence[str], executable: Optional[str] = None,
                           kwargs: Dict[str, Any] = {}) -> Tuple[List[Dict[str, Any]], Callable]:
     """Returns all (deduplicated) configs provided in `config_files` and provides the `run`. You can pass the
     config via the `config_updates` argument (see Example below).

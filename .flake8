@@ -3,4 +3,6 @@ max-line-length = 120
 exclude =
     .git,
     __pycache__
+    sparse_smoothing
+    experiment*
 ignore=E24,W50,W690

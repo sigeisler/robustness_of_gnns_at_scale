@@ -1,4 +1,4 @@
-"""Contains a greedy FGSM implementation. In each iteration the edge is flipped, determined by the largest gradient 
+"""Contains a greedy FGSM implementation. In each iteration the edge is flipped, determined by the largest gradient
 towards increasing the loss.
 """
 from copy import deepcopy

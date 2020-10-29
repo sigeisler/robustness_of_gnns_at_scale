@@ -1,3 +1,5 @@
+"""To execute multiple experiments from the command line and print the results as markdown table.
+"""
 import argparse
 import json
 import logging
@@ -56,7 +58,8 @@ def print_results(df_result: pd.DataFrame, decimals=3):
         aggfunc=lambda x: ''.join(x)
     )
 
-    logging.warning(f'Combined results:\n {df_result.to_markdown()}')
+    df_result = df_result.reset_index()
+    logging.warning(f'Combined results: \n {df_result.to_markdown(showindex=False)}')
 
 
 def main(args: argparse.Namespace):

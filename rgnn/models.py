@@ -96,9 +96,9 @@ class GCN(nn.Module):
                  n_filters: int = 64,
                  dropout: int = 0.5,
                  do_omit_softmax: bool = False,
-                 gdc_params: Dict[str, float] = None,
-                 svd_params: Dict[str, float] = None,
-                 jaccard_params: Dict[str, float] = None,
+                 gdc_params: Optional[Dict[str, float]] = None,
+                 svd_params: Optional[Dict[str, float]] = None,
+                 jaccard_params: Optional[Dict[str, float]] = None,
                  do_cache_adj_prep: bool = False,
                  **kwargs):
         super().__init__()
@@ -133,8 +133,8 @@ class GCN(nn.Module):
                 adj: Optional[torch.Tensor] = None,
                 attr_idx: Optional[torch.Tensor] = None,
                 edge_idx: Optional[torch.Tensor] = None,
-                n: int = None,
-                d: int = None) -> torch.Tensor:
+                n: Optional[int] = None,
+                d: Optional[int] = None) -> torch.Tensor:
         x, edge_idx = GCN.parse_forward_input(data, adj, attr_idx, edge_idx, n, d)
 
         # Perform preprocessing such as SVD, GDC or Jaccard
@@ -153,8 +153,8 @@ class GCN(nn.Module):
                             adj: Optional[torch.Tensor] = None,
                             attr_idx: Optional[torch.Tensor] = None,
                             edge_idx: Optional[torch.Tensor] = None,
-                            n: int = None,
-                            d: int = None) -> Tuple[torch.Tensor, torch.Tensor]:
+                            n: Optional[int] = None,
+                            d: Optional[int] = None) -> Tuple[torch.Tensor, torch.Tensor]:
         # PyTorch Geometric support
         if isinstance(data, Data):
             x, edge_idx = data.x, data.edge_index
@@ -449,8 +449,8 @@ class RGCN(r_gcn.RGCN):
                 adj: Optional[torch.Tensor] = None,
                 attr_idx: Optional[torch.Tensor] = None,
                 edge_idx: Optional[torch.Tensor] = None,
-                n: int = None,
-                d: int = None):
+                n: Optional[int] = None,
+                d: Optional[int] = None):
         x, edge_idx = GCN.parse_forward_input(data, adj, attr_idx, edge_idx, n, d)
         self.device = x.device
 

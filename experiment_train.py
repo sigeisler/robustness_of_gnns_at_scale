@@ -56,9 +56,13 @@ def config():
 
 
 @ex.automain
-def run(_config, dataset: str, model_params: Dict[str, Any], train_params: Dict[str, Any], binary_attr: bool,
+def run(dataset: str, model_params: Dict[str, Any], train_params: Dict[str, Any], binary_attr: bool,
         seed: int, artifact_dir: str, model_storage_type: str, device: Union[str, int], display_steps: int):
-    logging.info(_config)
+    logging.info({
+        'dataset': dataset, 'model_params': model_params, 'train_params': train_params, 'binary_attr': binary_attr,
+        'seed': seed, 'artifact_dir': artifact_dir, 'model_storage_type': model_storage_type, 'device': device,
+        'display_steps': display_steps
+    })
 
     torch.manual_seed(seed)
     np.random.seed(seed)

@@ -3,7 +3,7 @@ Kaidi Xu, Hongge Chen, Sijia Liu, Pin Yu Chen, Tsui Wei Weng, Mingyi Hong, and X
 for graph neural networks: An optimization perspective. IJCAI International Joint Conference on Artificial
 Intelligence, 2019-Augus:3961–3967, 2019. ISSN10450823. doi: 10.24963/ijcai.2019/550.
 
-The Subsequent code build upon the implementation https://github.com/DSE-MSU/DeepRobust (under MIT License). We did 
+The Subsequent code build upon the implementation https://github.com/DSE-MSU/DeepRobust (under MIT License). We did
 not intent to unify the code style, programming paradigms, etc. with the rest of the code base.
 
 """

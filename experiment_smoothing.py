@@ -89,10 +89,14 @@ def calc_certification_ratio(smoothing_result: Dict[str, Any], idx_selected: np.
 
 
 @ex.automain
-def run(_config, dataset: str, sample_params: Dict[str, Any], n_samples_pre_eval: int, conf_alpha: float,
+def run(dataset: str, sample_params: Dict[str, Any], n_samples_pre_eval: int, conf_alpha: float,
         seed: int, batch_size: int, artifact_dir: str, smoothing_result_storage_type: str,
         model_storage_type: str, device: Union[str, int]):
-    logging.info(_config)
+    logging.info({
+        'dataset': dataset, 'sample_params': sample_params, 'n_samples_pre_eval': n_samples_pre_eval,
+        'conf_alpha': conf_alpha, 'seed': seed, 'artifact_dir': artifact_dir, 'model_storage_type': model_storage_type,
+        'smoothing_result_storage_type': smoothing_result_storage_type, 'device': device, 'batch_size': batch_size
+    })
 
     binary_attr = True
 

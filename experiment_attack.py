@@ -1,4 +1,3 @@
-import os
 import logging
 from typing import Any, Dict, Sequence, Union
 
@@ -6,7 +5,6 @@ import numpy as np
 from sacred import Experiment
 import seml
 import torch
-from tqdm import tqdm
 
 from rgnn.data import prep_graph, split
 from rgnn.fgsm import FGSM
@@ -50,7 +48,7 @@ def config():
     }
     binary_attr = False
     seed = 0
-    artifact_dir = 'cache_debug'
+    artifact_dir = 'cache'  # 'cache_debug'
     pert_adj_storage_type = 'attack'
     model_storage_type = 'pretrained'
     device = 0
@@ -58,10 +56,15 @@ def config():
 
 
 @ex.automain
-def run(_config, dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequence[float], binary_attr: bool,
+def run(dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequence[float], binary_attr: bool,
         surrogate_params: Dict[str, Any], seed: int, artifact_dir: str, pert_adj_storage_type: str,
         model_storage_type: str, device: Union[str, int], display_steps: int):
-    logging.info(_config)
+    logging.info({
+        'dataset': dataset, 'attack': attack, 'attack_params': attack_params, 'epsilons': epsilons,
+        'binary_attr': binary_attr, 'surrogate_params': surrogate_params, 'seed': seed,
+        'artifact_dir': artifact_dir, 'pert_adj_storage_type': pert_adj_storage_type,
+        'model_storage_type': model_storage_type, 'device': device, 'display_steps': display_steps
+    })
 
     binary_attr = False
 
@@ -110,7 +113,7 @@ def run(_config, dataset: str, attack: str, attack_params: Dict[str, Any], epsil
         else:
             adversary = FGSM(adj=adj, X=attr, labels=labels, model=gcn, idx_attack=idx_test, **attack_params)
 
-        tmp_epsilons = epsilons
+        tmp_epsilons = list(epsilons)
         if tmp_epsilons[0] != 0:
             tmp_epsilons.insert(0, 0)
 
@@ -140,7 +143,7 @@ def run(_config, dataset: str, attack: str, attack_params: Dict[str, Any], epsil
             model.eval()
 
             for eps, adj_perturbed in zip(epsilons, adj_per_eps):
-                # In case the model is non-deterministic to get the results either after attacking or after loading the matrices
+                # In case the model is non-deterministic to get the results either after attacking or after loading
                 torch.manual_seed(seed)
                 np.random.seed(seed)
 

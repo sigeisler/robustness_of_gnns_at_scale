@@ -519,8 +519,8 @@ def split(labels, n_per_class=20, seed=None):
     nc = labels.max() + 1
 
     split_train, split_val = [], []
-    for l in range(nc):
-        perm = np.random.permutation((labels == l).nonzero()[0])
+    for label in range(nc):
+        perm = np.random.permutation((labels == label).nonzero()[0])
         split_train.append(perm[:n_per_class])
         split_val.append(perm[n_per_class:2 * n_per_class])
 

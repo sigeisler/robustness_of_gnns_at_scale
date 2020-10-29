@@ -1,12 +1,12 @@
 seml:
+  name: neurips_attack
   db_collection: neurips_attack
   executable: experiment_attack.py
   conda_environment: neurips20
-  project_root_dir: .
+  project_root_dir: ../..
+  output_dir: seml/attack/output
 
 slurm:
-  name: neurips_attack
-  output_dir: seml/attack/output
   experiments_per_job: 1
   sbatch_options:
     gres: gpu:1       # num GPUs

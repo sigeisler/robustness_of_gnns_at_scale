@@ -1,11 +1,39 @@
 import torch
 
-from rgnn.means import (soft_weighted_medoid, soft_weighted_medoid_k_neighborhood,
+from rgnn.means import (_sparse_top_k, soft_weighted_medoid, soft_weighted_medoid_k_neighborhood,
                         weighted_dimwise_median, weighted_medoid, weighted_medoid_k_neighborhood)
 
 
 device = 0 if torch.cuda.is_available() else 'cpu'
 temperature = 1e-3
+
+
+class TestTopK():
+
+    def test_simple_example_cpu(self):
+        A = torch.tensor([[0.5, 0.3, 0, 0.4], [0.3, 0.2, 0, 0], [0, 0, 0.9, 0.3],
+                          [0.4, 0, 0.4, 0.4]], dtype=torch.float32).to_sparse()
+        topk_values, topk_indices = _sparse_top_k(A, 2, return_sparse=False)
+        assert torch.all(topk_values == torch.tensor([[0.5, 0.4], [0.3, 0.2], [0.9, 0.3], [0.4, 0.4]]))
+        assert torch.all(topk_indices[:-1] == torch.tensor([[0, 3], [0, 1], [2, 3]]))
+        topk_values, topk_indices = _sparse_top_k(A, 3, return_sparse=False)
+        assert torch.all(
+            topk_values == torch.tensor([[0.5, 0.4, 0.3], [0.3, 0.2, 0], [0.9, 0.3, 0], [0.4, 0.4, 0.4]])
+        )
+        assert torch.all(topk_indices[:-1] == torch.tensor([[0, 3, 1], [0, 1, -1], [2, 3, -1]]))
+
+    if torch.cuda.is_available():
+        def test_simple_example_cuda(self):
+            A = torch.tensor([[0.5, 0.3, 0, 0.4], [0.3, 0.2, 0, 0], [0, 0, 0.9, 0.3],
+                              [0.4, 0, 0.4, 0.4]], dtype=torch.float32).to_sparse().cuda()
+            topk_values, topk_indices = _sparse_top_k(A, 2, return_sparse=False)
+            assert torch.all(topk_values == torch.tensor([[0.5, 0.4], [0.3, 0.2], [0.9, 0.3], [0.4, 0.4]]).cuda())
+            assert torch.all(topk_indices[:-1] == torch.tensor([[0, 3], [0, 1], [2, 3]]).cuda())
+            topk_values, topk_indices = _sparse_top_k(A, 3, return_sparse=False)
+            assert torch.all(
+                topk_values == torch.tensor([[0.5, 0.4, 0.3], [0.3, 0.2, 0], [0.9, 0.3, 0], [0.4, 0.4, 0.4]]).cuda()
+            )
+            assert torch.all(topk_indices[:-1] == torch.tensor([[0, 3, 1], [0, 1, -1], [2, 3, -1]]).cuda())
 
 
 class TestWeightedMedoid():
