@@ -9,8 +9,8 @@ import torch
 from sparse_smoothing.prediction import predict_smooth_gnn
 from sparse_smoothing.cert import binary_certificate
 
-from rgnn.data import prep_graph, split
-from rgnn.io import Storage
+from rgnn_at_scale.data import prep_graph, split
+from rgnn_at_scale.io import Storage
 
 
 ex = Experiment()
@@ -46,6 +46,7 @@ def config():
     smoothing_result_storage_type = 'smoothing'
     model_storage_type = 'pretrained'
     device = 0
+    model_label = None
 
 
 def calc_certification_ratio(smoothing_result: Dict[str, Any], idx_selected: np.ndarray, labels: np.ndarray,
@@ -91,11 +92,12 @@ def calc_certification_ratio(smoothing_result: Dict[str, Any], idx_selected: np.
 @ex.automain
 def run(dataset: str, sample_params: Dict[str, Any], n_samples_pre_eval: int, conf_alpha: float,
         seed: int, batch_size: int, artifact_dir: str, smoothing_result_storage_type: str,
-        model_storage_type: str, device: Union[str, int]):
+        model_storage_type: str, device: Union[str, int], model_label: str):
     logging.info({
-        'dataset': dataset, 'sample_params': sample_params, 'n_samples_pre_eval': n_samples_pre_eval,
+        'dataset': dataset, 'sample_params': sample_params, 'n_samples_pre_eval': n_samples_pre_eval
         'conf_alpha': conf_alpha, 'seed': seed, 'artifact_dir': artifact_dir, 'model_storage_type': model_storage_type,
-        'smoothing_result_storage_type': smoothing_result_storage_type, 'device': device, 'batch_size': batch_size
+        'smoothing_result_storage_type': smoothing_result_storage_type, 'device': device, 'batch_size': batch_size,
+        'model_label': model_label,
     })
 
     binary_attr = True
@@ -113,13 +115,16 @@ def run(dataset: str, sample_params: Dict[str, Any], n_samples_pre_eval: int, co
     smoothing_params = dict(model_params)
     smoothing_params['sample_params'] = sample_params
 
-    storage = Storage(artifact_dir)
+    storage = Storage(artifact_dir, experiment=ex)
     smoothing_results = storage.find_artifacts(smoothing_result_storage_type, smoothing_params)
     smoothing_results = {
         result['params']['model_id']: result['artifact']
         for result
         in smoothing_results
     }
+
+    if model_label is not None and model_label:
+        model_params['label'] = model_label
     model_hyperparams_and_id = storage.find_models(model_storage_type, model_params, return_model_id=True)
 
     for model, hyperparams, id in model_hyperparams_and_id:

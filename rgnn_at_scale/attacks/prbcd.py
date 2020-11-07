@@ -1,0 +1,428 @@
+from copy import deepcopy
+import math
+from typing import Tuple
+
+from tqdm import tqdm
+from torch.nn import functional as F
+import numpy as np
+import torch
+import torch_sparse
+
+from rgnn_at_scale import utils
+from rgnn_at_scale.models import GCN
+
+"""
+    Topology Attack and Defense for Graph Neural Networks: An Optimization Perspective
+        https://arxiv.org/pdf/1906.04214.pdf
+    Tensorflow Implementation:
+        https://github.com/KaidiXu/GCN_ADV_Train
+"""
+
+
+class PRBCD(object):
+    """Sampled and hence scalable PGD attack for graph data.
+    """
+
+    def __init__(self,
+                 adj: torch.sparse.FloatTensor,
+                 X: torch.Tensor,
+                 labels: torch.Tensor,
+                 idx_attack: np.ndarray,
+                 model: GCN,
+                 loss_type: str = 'CE',  # 'CW', 'LeakyCW'  # 'CE', 'MCE', 'Margin'
+                 keep_heuristic: str = 'Gradient',  # 'InvWeightGradient' 'Gradient', 'WeightOnly'
+                 keep_weight: float = .1,
+                 lr_n_perturbations_factor: float = 0.1,
+                 display_step: int = 20,
+                 epochs: int = 400,
+                 fine_tune_epochs: int = 100,
+                 search_space_size: int = 1_000_000,
+                 search_space_dropout: float = 0,
+                 with_early_stropping: bool = True,
+                 do_synchronize: bool = False,
+                 eps: float = 1e-7,
+                 K: int = 20,
+                 **kwargs):
+
+        super().__init__()
+        self.device = X.device
+        self.X = X
+        self.model = deepcopy(model).to(self.device)
+        self.model.eval()
+        for p in self.model.parameters():
+            p.requires_grad = False
+        self.edge_index = adj.indices().cpu()
+        self.edge_weight = adj.values().cpu()
+        self.n = adj.shape[0]
+        self.n_possible_edges = self.n * (self.n - 1) // 2
+        self.d = X.shape[1]
+        self.labels = labels.to(self.device)
+        self.idx_attack = idx_attack
+        self.loss_type = loss_type
+        self.keep_heuristic = keep_heuristic
+        self.keep_weight = keep_weight
+        self.lr_n_perturbations_factor = lr_n_perturbations_factor
+        self.display_step = display_step
+        self.epochs = epochs
+        self.fine_tune_epochs = fine_tune_epochs
+        self.search_space_size = search_space_size
+        self.search_space_dropout = search_space_dropout
+        self.with_early_stropping = with_early_stropping
+        self.eps = eps
+        self.do_synchronize = do_synchronize
+        # TODO: Rename
+        self.K = K
+
+        self.adj_adversary = None
+        self.attr_adversary = None
+
+        self.current_search_space: torch.Tensor = None
+        self.modified_edge_index: torch.Tensor = None
+        self.modified_edge_weight_diff: torch.Tensor = None
+
+        if self.loss_type == 'CW':
+            self.lr_factor = .5
+        else:
+            self.lr_factor = 200.0
+        self.lr_factor *= max(math.log2(self.n_possible_edges / self.search_space_size), 1.)
+
+    def attack(self, n_perturbations, **kwargs):
+        assert self.search_space_size > n_perturbations, \
+            f'The search space size ({self.search_space_size}) must be ' \
+            + f'greater than the number of permutations ({n_perturbations})'
+        self.sample_search_space(n_perturbations)
+        best_loss = float('-Inf')
+        best_epoch = float('-Inf')
+
+        for epoch in tqdm(range(self.epochs + self.fine_tune_epochs)):
+            edge_index, edge_weight = self.get_modified_adj()
+
+            if self.do_synchronize:
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+
+            logits = F.log_softmax(self.model(data=self.X, adj=(edge_index, edge_weight)), dim=1)
+            loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
+
+            gradient = utils.grad_with_checkpoint(loss, self.modified_edge_weight_diff)[0]
+
+            if self.do_synchronize:
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+
+            if epoch % self.display_step == 0:
+                accuracy = (
+                    logits.argmax(-1)[self.idx_attack] == self.labels[self.idx_attack]
+                ).float().mean()
+                print(f'\nEpoch: {epoch} Loss: {loss.item()} Accuracy: {100 * accuracy.item():.3f} %\n')
+
+            if self.with_early_stropping and best_loss < loss:
+                best_loss = loss.detach()
+                best_epoch = epoch
+                best_search_space = self.current_search_space.clone().cpu()
+                best_edge_index = self.modified_edge_index.clone().cpu()
+                best_edge_weight_diff = self.modified_edge_weight_diff.detach().clone().cpu()
+
+            edge_weight = self.update_edge_weights(n_perturbations, epoch, gradient)[1]
+            self.projection(n_perturbations, edge_index, edge_weight)
+            if epoch < self.epochs - 1:
+                self.resample_search_space(n_perturbations, edge_index, edge_weight, gradient)
+            elif self.with_early_stropping and epoch == self.epochs - 1:
+                print(f'Loading search space of epoch {best_epoch} (loss={best_loss.item()}) for fine tuning\n')
+                self.current_search_space = best_search_space.to(self.device)
+                self.modified_edge_index = best_edge_index.to(self.device)
+                self.modified_edge_weight_diff = best_edge_weight_diff.to(self.device)
+                self.modified_edge_weight_diff.requires_grad = True
+
+        self.current_search_space = best_search_space.to(self.device)
+        self.modified_edge_index = best_edge_index.to(self.device)
+        self.modified_edge_weight_diff = best_edge_weight_diff.to(self.device)
+
+        edge_index = self.sample_edges(n_perturbations)[0]
+
+        self.adj_adversary = torch.sparse.FloatTensor(
+            edge_index,
+            torch.ones_like(edge_index[0], dtype=torch.float32),
+            (self.n, self.n)
+        ).coalesce().detach()
+        self.attr_adversary = self.X
+
+    def sample_edges(self, n_perturbations: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        best_loss = float('-Inf')
+        with torch.no_grad():
+            s = self.modified_edge_weight_diff.abs().detach()
+            s[s == self.eps] = 0
+            s = s.cpu().numpy()
+            while best_loss == float('-Inf'):
+                for i in range(self.K):
+                    sampled = np.random.binomial(1, s)
+
+                    if sampled.sum() > n_perturbations:
+                        continue
+                    pos_modified_edge_weight_diff = torch.from_numpy(sampled).to(self.device)
+                    self.modified_edge_weight_diff = torch.where(
+                        self.modified_edge_weight_diff > 0,
+                        pos_modified_edge_weight_diff,
+                        -pos_modified_edge_weight_diff
+                    ).float()
+                    edge_index, edge_weight = self.get_modified_adj()
+                    output = self.model(data=self.X, adj=(edge_index, edge_weight))
+                    loss = self.calculate_loss(output[self.idx_attack], self.labels[self.idx_attack])
+                    if best_loss < loss:
+                        best_loss = loss
+                        best_s = self.modified_edge_weight_diff.clone().cpu()
+            self.modified_edge_weight_diff.data.copy_(best_s.to(self.device))
+            edge_index, edge_weight = self.get_modified_adj(is_final=True)
+            is_edge_set = torch.isclose(edge_weight, torch.tensor(1.))
+            edge_index = edge_index[:, is_edge_set]
+            edge_weight = edge_weight[is_edge_set]
+        return edge_index, edge_weight
+
+    def calculate_loss(self, logits, labels):
+        if self.loss_type == 'CW':
+            second_best_class = logits.argsort(-1)[:, -2]
+            margin = (
+                logits[np.arange(logits.size(0)), labels]
+                - logits[np.arange(logits.size(0)), second_best_class]
+            )
+            loss = -torch.clamp(margin, min=0).mean()
+        elif self.loss_type == 'MCE':
+            not_flipped = logits.argmax(-1) == labels
+            loss = F.nll_loss(logits[not_flipped], labels[not_flipped])
+        # TODO: Is it worth trying? CW should be quite similar
+        # elif self.loss_type == 'Margin':
+        #    loss = F.multi_margin_loss(torch.exp(logits), labels)
+        else:
+            loss = F.nll_loss(logits, labels)
+        return loss
+
+    def match_search_space_on_edges(
+        self,
+        edge_index: torch.Tensor,
+        edge_weight: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        is_in_search_space = (edge_weight != 1) & (edge_index[0] < edge_index[1])
+        assert is_in_search_space.sum() == self.current_search_space.size(0), \
+            f'search space size mismatch: {is_in_search_space.sum()} vs. {self.current_search_space.size(0)}'
+        modified_edge_weight = edge_weight[is_in_search_space]
+        original_edge_weight = modified_edge_weight - self.modified_edge_weight_diff
+        does_original_edge_exist = torch.isclose(original_edge_weight, torch.tensor(1.))
+        # for source, dest in self.modified_edge_index[:, does_original_edge_exist].T:
+        #     weight = self.edge_weight[(self.edge_index[0] == source) & (self.edge_index[1] == dest)]
+        #     assert weight == 1, f'For edge ({source}, {dest}) the weight is not 1, it is {weight}'
+        return does_original_edge_exist, is_in_search_space
+
+    def projection(self, n_perturbations: int, edge_index: torch.Tensor, edge_weight: torch.Tensor) -> torch.Tensor:
+        does_original_edge_exist, is_in_search_space = self.match_search_space_on_edges(edge_index, edge_weight)
+
+        with torch.no_grad():
+            pos_modified_edge_weight_diff = torch.where(
+                does_original_edge_exist, -self.modified_edge_weight_diff, self.modified_edge_weight_diff
+            )
+            pos_modified_edge_weight_diff = PRBCD.project(n_perturbations, pos_modified_edge_weight_diff, self.eps)
+
+        self.modified_edge_weight_diff = torch.where(
+            does_original_edge_exist, -pos_modified_edge_weight_diff, pos_modified_edge_weight_diff
+        )
+        self.modified_edge_weight_diff.requires_grad = True
+
+    def handle_zeros_and_ones(self):
+        # Handling edge case to detect an unchanged edge via its value 1
+        self.modified_edge_weight_diff.data[
+            (self.modified_edge_weight_diff <= self.eps)
+            & (self.modified_edge_weight_diff >= -self.eps)
+        ] = self.eps
+        self.modified_edge_weight_diff.data[self.modified_edge_weight_diff >= 1 - self.eps] = 1 - self.eps
+        self.modified_edge_weight_diff.data[self.modified_edge_weight_diff <= -1 + self.eps] = -1 + self.eps
+
+    def get_modified_adj(self, is_final: bool = False):
+        if self.search_space_dropout > 0 and not is_final:
+            self.modified_edge_weight_diff.data = F.dropout(self.modified_edge_weight_diff.data)
+
+        if not is_final:
+            self.handle_zeros_and_ones()
+
+        if (
+            not self.modified_edge_weight_diff.requires_grad
+            or not hasattr(self.model, 'do_chunk')
+            or not self.model.do_chunk
+        ):
+            modified_edge_index, modified_edge_weight = utils.to_symmetric(
+                self.modified_edge_index, self.modified_edge_weight_diff, self.n
+            )
+            edge_index = torch.cat((self.edge_index.to(self.device), modified_edge_index), dim=-1)
+            edge_weight = torch.cat((self.edge_weight.to(self.device), modified_edge_weight))
+
+            edge_index, edge_weight = torch_sparse.coalesce(
+                edge_index,
+                edge_weight,
+                m=self.n,
+                n=self.n,
+                op='sum'
+            )
+        else:
+            from torch.utils import checkpoint
+
+            with torch.no_grad():
+                modified_edge_index, modified_edge_weight = utils.to_symmetric(
+                    self.modified_edge_index, self.modified_edge_weight_diff, self.n
+                )
+                edge_index = torch.cat((self.edge_index.to(self.device), modified_edge_index), dim=-1)
+                edge_weight = torch.cat((self.edge_weight.to(self.device), modified_edge_weight))
+
+                edge_index, edge_weight = torch_sparse.coalesce(
+                    edge_index,
+                    edge_weight,
+                    m=self.n,
+                    n=self.n,
+                    op='sum'
+                )
+
+            def fuse_edges_run(modified_edge_weight_diff: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+                modified_edge_index, modified_edge_weight = utils.to_symmetric(
+                    self.modified_edge_index, modified_edge_weight_diff, self.n
+                )
+                edge_index = torch.cat((self.edge_index.to(self.device), modified_edge_index), dim=-1)
+                edge_weight = torch.cat((self.edge_weight.to(self.device), modified_edge_weight))
+
+                edge_index, edge_weight = torch_sparse.coalesce(
+                    edge_index,
+                    edge_weight,
+                    m=self.n,
+                    n=self.n,
+                    op='sum'
+                )
+                return edge_weight
+
+            edge_weight = checkpoint.checkpoint(
+                fuse_edges_run,
+                self.modified_edge_weight_diff
+            )
+
+        return edge_index, edge_weight
+
+    def update_edge_weights(self, n_perturbations: int, epoch: int, gradient: torch.Tensor):
+        self.modified_edge_weight_diff = self.modified_edge_weight_diff.detach()
+
+        lr_factor = max(1., n_perturbations / self.n / 2 / self.lr_n_perturbations_factor) * self.lr_factor
+        lr = lr_factor / np.sqrt(max(0, epoch - self.epochs) + 1)
+        self.modified_edge_weight_diff.data.add_(lr * gradient)
+
+        return self.get_modified_adj()
+
+    @staticmethod
+    def project(n_perturbations: int, values: torch.tensor, eps: float = 0, inplace: bool = False):
+        if not inplace:
+            values = values.clone()
+
+        if torch.clamp(values, 0, 1).sum() > n_perturbations:
+            left = (values - 1).min()
+            right = values.max()
+            miu = PRBCD.bisection(values, left, right, n_perturbations)
+            values.data.copy_(torch.clamp(
+                values - miu, min=eps, max=1 - eps
+            ))
+        else:
+            values.data.copy_(torch.clamp(
+                values, min=eps, max=1 - eps
+            ))
+        return values
+
+    @staticmethod
+    def bisection(pos_modified_edge_weight_diff, a, b, n_perturbations, epsilon=1e-5):
+        def func(x):
+            return torch.clamp(pos_modified_edge_weight_diff - x, 0, 1).sum() - n_perturbations
+
+        miu = a
+        while ((b - a) >= epsilon):
+            miu = (a + b) / 2
+            # Check if middle point is root
+            if (func(miu) == 0.0):
+                break
+            # Decide the side to repeat the steps
+            if (func(miu) * func(a) < 0):
+                b = miu
+            else:
+                a = miu
+        return miu
+
+    def sample_search_space(self, n_perturbations: int = 0):
+        while True:
+            self.current_search_space = torch.randint(
+                self.n_possible_edges, (self.search_space_size,), device=self.device)
+            self.current_search_space = torch.unique(self.current_search_space, sorted=True)
+            self.modified_edge_index = PRBCD.linear_to_triu_idx(self.n, self.current_search_space)
+            self.modified_edge_weight_diff = torch.ones_like(
+                self.current_search_space, dtype=torch.float32, requires_grad=True)
+            self.modified_edge_weight_diff.data.mul_(self.eps)
+            if self.current_search_space.size(0) >= n_perturbations:
+                break
+
+    def resample_search_space(self, n_perturbations: int, edge_index: torch.Tensor,
+                              edge_weight: torch.Tensor, gradient: torch.Tensor):
+        does_original_edge_exist = self.match_search_space_on_edges(edge_index, edge_weight)[0]
+        if self.keep_heuristic == 'WeightOnly':
+            sorted_idx = torch.argsort(self.modified_edge_weight_diff.abs())
+            idx_keep = (self.modified_edge_weight_diff <= self.eps).sum().long()
+            if idx_keep < sorted_idx.size(0) // 2:
+                idx_keep = sorted_idx.size(0) // 2
+        else:
+            if self.keep_heuristic == 'InvWeightGradient':
+                gradient = gradient * 1 / self.modified_edge_weight_diff.abs()
+
+            attack_gradient = torch.where(does_original_edge_exist, -gradient, gradient)
+
+            keep_edges = self.modified_edge_weight_diff.abs() > self.keep_weight
+            if self.keep_weight is not None and self.keep_weight > 0 and keep_edges.sum() > 0:
+                if keep_edges.sum() < keep_edges.size(0):
+                    sorted_idx = torch.cat((keep_edges.nonzero().reshape(-1),
+                                            torch.argsort(attack_gradient[~keep_edges])))
+                else:
+                    sorted_idx = keep_edges.nonzero().squeeze()
+                n_keep_edges = keep_edges.sum()
+                idx_keep = (self.modified_edge_weight_diff.size(0) - n_keep_edges) // 2 + n_keep_edges
+            else:
+                sorted_idx = torch.argsort(attack_gradient)
+                idx_keep = sorted_idx.size(0) // 2
+
+        sorted_idx = sorted_idx[idx_keep:]
+        self.current_search_space = self.current_search_space[sorted_idx]
+        self.modified_edge_index = self.modified_edge_index[:, sorted_idx]
+        self.modified_edge_weight_diff.requires_grad = False
+        self.modified_edge_weight_diff = self.modified_edge_weight_diff[sorted_idx]
+
+        # Sample until enough edges were drawn
+        while True:
+            lin_index = torch.randint(self.n_possible_edges, (self.search_space_size -
+                                                              self.current_search_space.size(0),), device=self.device)
+            self.current_search_space, unique_idx = torch.unique(
+                torch.cat((self.current_search_space, lin_index)),
+                sorted=True,
+                return_inverse=True
+            )
+            self.modified_edge_index = PRBCD.linear_to_triu_idx(self.n, self.current_search_space)
+            # Merge existing weights with new edge weights
+            modified_edge_weight_diff_old = self.modified_edge_weight_diff.clone()
+            self.modified_edge_weight_diff = self.eps * torch.ones_like(self.current_search_space, dtype=torch.float32)
+            self.modified_edge_weight_diff[
+                unique_idx[:modified_edge_weight_diff_old.size(0)]
+            ] = modified_edge_weight_diff_old
+
+            if self.current_search_space.size(0) > n_perturbations:
+                break
+        self.modified_edge_weight_diff.requires_grad = True
+
+    @staticmethod
+    def linear_to_triu_idx(n: int, lin_idx: torch.Tensor) -> torch.Tensor:
+        row_idx = (
+            n
+            - 2
+            - torch.floor(torch.sqrt(-8 * lin_idx.double() + 4 * n * (n - 1) - 7) / 2.0 - 0.5)
+        ).long()
+        col_idx = (
+            lin_idx
+            + row_idx
+            + 1 - n * (n - 1) // 2
+            + (n - row_idx) * ((n - row_idx) - 1) // 2
+        )
+        return torch.stack((row_idx, col_idx))

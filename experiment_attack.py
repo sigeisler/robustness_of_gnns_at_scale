@@ -6,13 +6,12 @@ from sacred import Experiment
 import seml
 import torch
 
-from rgnn.data import prep_graph, split
-from rgnn.fgsm import FGSM
-from rgnn.io import Storage
-from rgnn.models import DenseGCN
-from rgnn.pgd import PGD
-from rgnn.train import train
-from rgnn.utils import accuracy
+from rgnn_at_scale.data import prep_graph, split
+from rgnn_at_scale.attacks import create_attack, SPARSE_ATTACKS
+from rgnn_at_scale.io import Storage
+from rgnn_at_scale.models import DenseGCN, GCN
+from rgnn_at_scale.train import train
+from rgnn_at_scale.utils import accuracy
 
 
 ex = Experiment()
@@ -49,20 +48,24 @@ def config():
     binary_attr = False
     seed = 0
     artifact_dir = 'cache'  # 'cache_debug'
-    pert_adj_storage_type = 'attack'
+    pert_adj_storage_type = 'attack_adj'
+    pert_attr_storage_type = 'attack_attr'
     model_storage_type = 'pretrained'
     device = 0
     display_steps = 10
+    model_label = None
 
 
 @ex.automain
 def run(dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequence[float], binary_attr: bool,
         surrogate_params: Dict[str, Any], seed: int, artifact_dir: str, pert_adj_storage_type: str,
-        model_storage_type: str, device: Union[str, int], display_steps: int):
+        pert_attr_storage_type: str, model_storage_type: str, device: Union[str, int], display_steps: int,
+        model_label: str):
     logging.info({
         'dataset': dataset, 'attack': attack, 'attack_params': attack_params, 'epsilons': epsilons,
         'binary_attr': binary_attr, 'surrogate_params': surrogate_params, 'seed': seed,
         'artifact_dir': artifact_dir, 'pert_adj_storage_type': pert_adj_storage_type,
+        'pert_attr_storage_type': pert_attr_storage_type, 'model_label': model_label,
         'model_storage_type': model_storage_type, 'device': device, 'display_steps': display_steps
     })
 
@@ -76,42 +79,54 @@ def run(dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequ
 
     results = []
 
-    attr, adj, labels = prep_graph(dataset, device=device, binary_attr=binary_attr)
+    data = prep_graph(dataset, device=device, binary_attr=binary_attr, return_original_split=dataset.startswith('ogbn'))
+    if len(data) == 3:
+        attr, adj, labels = data
+        idx_train, idx_val, idx_test = data.split(labels.cpu().numpy())
+    else:
+        attr, adj, labels, split = data
+        idx_train, idx_val, idx_test = split['train'], split['valid'], split['test']
     n_features = attr.shape[1]
     n_classes = int(labels.max() + 1)
 
-    idx_train, idx_val, idx_test = split(labels.cpu().numpy())
-
     params = dict(dataset=dataset, binary_attr=binary_attr, seed=seed, attack=attack, attack_params=attack_params)
-    storage = Storage(artifact_dir)
+    storage = Storage(artifact_dir, experiment=ex)
 
     adj_per_eps = []
+    attr_per_eps = []
     for epsilon in epsilons:
         if epsilon == 0:
             continue
-        pert_adj = storage.load_sparse_tensor(pert_adj_storage_type, {**params, **{'epsilon': epsilon}})
-        if pert_adj is None:
+
+        pert_adj = storage.load_artifact(pert_adj_storage_type, {**params, **{'epsilon': epsilon}})
+        pert_attr = storage.load_artifact(pert_attr_storage_type, {**params, **{'epsilon': epsilon}})
+        if pert_adj is None or pert_attr is None:
             # Due to the greedy fashion we only use the existing adjacency matrices if all do exist
             adj_per_eps = []
+            attr_per_eps = []
             break
-        else:
-            adj_per_eps.append(pert_adj)
+
+        adj_per_eps.append(pert_adj)
+        attr_per_eps.append(pert_attr)
 
     if len(adj_per_eps) == 0:
         torch.manual_seed(seed)
         np.random.seed(seed)
-        gcn = DenseGCN(n_classes=n_classes, n_features=n_features, **surrogate_params).to(device)
-        _ = train(model=gcn, attr=attr, adj=adj.to_dense(), labels=labels, idx_train=idx_train, idx_val=idx_val,
+        if attack in SPARSE_ATTACKS:
+            gcn = GCN(n_classes=n_classes, n_features=n_features, **surrogate_params).to(device)
+            adj_surrogate = adj
+        else:
+            gcn = DenseGCN(n_classes=n_classes, n_features=n_features, **surrogate_params).to(device)
+            adj_surrogate = adj.to_dense()
+        _ = train(model=gcn, attr=attr, adj=adj_surrogate, labels=labels, idx_train=idx_train, idx_val=idx_val,
                   display_step=display_steps, **surrogate_params['train_params'])
         gcn.eval()
         with torch.no_grad():
-            pred_logits_surr = gcn(attr, adj.to_dense())
+            pred_logits_surr = gcn(attr, adj_surrogate)
         logging.info(f'Test accuracy of surrogate: {accuracy(pred_logits_surr, labels, idx_test)}')
 
-        if attack == 'pgd':
-            adversary = PGD(adj=adj, X=attr, labels=labels, model=gcn, idx_attack=idx_test, **attack_params)
-        else:
-            adversary = FGSM(adj=adj, X=attr, labels=labels, model=gcn, idx_attack=idx_test, **attack_params)
+        adversary = create_attack(attack, adj=adj, X=attr, labels=labels,
+                                  model=gcn, idx_attack=idx_test, **attack_params)
 
         tmp_epsilons = list(epsilons)
         if tmp_epsilons[0] != 0:
@@ -128,26 +143,31 @@ def run(dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequ
             n_perturbations = int(round(eps2 * m)) - int(round(eps1 * m))
             adversary.attack(n_perturbations)
             adj_per_eps.append(adversary.adj_adversary.cpu())
+            attr_per_eps.append(adversary.attr_adversary.cpu())
 
-            storage.save_sparse_tensor(pert_adj_storage_type, {**params, **{'epsilon': eps2}}, adj_per_eps[-1])
+            storage.save_artifact(pert_adj_storage_type, {**params, **{'epsilon': eps2}}, adj_per_eps[-1])
+            storage.save_artifact(pert_attr_storage_type, {**params, **{'epsilon': eps2}}, attr_per_eps[-1])
 
     if epsilons[0] == 0:
         adj_per_eps.insert(0, adj.to('cpu'))
+        attr_per_eps.insert(0, attr.to('cpu'))
 
-    models_and_hyperparams = storage.find_models(model_storage_type,
-                                                 dict(dataset=dataset, binary_attr=binary_attr, seed=seed))
+    model_params = dict(dataset=dataset, binary_attr=binary_attr, seed=seed)
+    if model_label is not None and model_label:
+        model_params['label'] = model_label
+    models_and_hyperparams = storage.find_models(model_storage_type, model_params)
 
     with torch.no_grad():
         for model, hyperparams in models_and_hyperparams:
             model = model.to(device)
             model.eval()
 
-            for eps, adj_perturbed in zip(epsilons, adj_per_eps):
+            for eps, adj_perturbed, attr_perturbed in zip(epsilons, adj_per_eps, attr_per_eps):
                 # In case the model is non-deterministic to get the results either after attacking or after loading
                 torch.manual_seed(seed)
                 np.random.seed(seed)
 
-                pred_logits_target = model(attr, adj_perturbed.to(device))
+                pred_logits_target = model(attr_perturbed.to(device), adj_perturbed.to(device))
                 acc_test_target = accuracy(pred_logits_target, labels, idx_test)
                 results.append({
                     'label': hyperparams['label'],

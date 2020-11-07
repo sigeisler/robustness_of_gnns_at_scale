@@ -7,11 +7,11 @@ from sacred import Experiment
 import seml
 import torch
 
-from rgnn import data
-from rgnn.io import Storage
-from rgnn.models import create_model
-from rgnn.train import train
-from rgnn.utils import accuracy
+from rgnn_at_scale.data import prep_graph
+from rgnn_at_scale.io import Storage
+from rgnn_at_scale.models import create_model
+from rgnn_at_scale.train import train
+from rgnn_at_scale.utils import accuracy
 
 ex = Experiment()
 seml.setup_logger(ex)
@@ -56,8 +56,8 @@ def config():
 
 
 @ex.automain
-def run(dataset: str, model_params: Dict[str, Any], train_params: Dict[str, Any], binary_attr: bool,
-        seed: int, artifact_dir: str, model_storage_type: str, device: Union[str, int], display_steps: int):
+def run(dataset: str, model_params: Dict[str, Any], train_params: Dict[str, Any], binary_attr: bool, seed: int,
+        artifact_dir: str, model_storage_type: str, device: Union[str, int], display_steps: int):
     logging.info({
         'dataset': dataset, 'model_params': model_params, 'train_params': train_params, 'binary_attr': binary_attr,
         'seed': seed, 'artifact_dir': artifact_dir, 'model_storage_type': model_storage_type, 'device': device,
@@ -67,11 +67,15 @@ def run(dataset: str, model_params: Dict[str, Any], train_params: Dict[str, Any]
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    attr, adj, labels = data.prep_graph(dataset, device=device, binary_attr=binary_attr)
+    data = prep_graph(dataset, device, binary_attr=binary_attr, return_original_split=dataset.startswith('ogbn'))
+    if len(data) == 3:
+        attr, adj, labels = data
+        idx_train, idx_val, idx_test = data.split(labels.cpu().numpy())
+    else:
+        attr, adj, labels, split = data
+        idx_train, idx_val, idx_test = split['train'], split['valid'], split['test']
     n_features = attr.shape[1]
     n_classes = int(labels.max() + 1)
-
-    idx_train, idx_val, idx_test = data.split(labels.cpu().numpy())
 
     # Collect all hyperparameters of model
     hyperparams = dict(model_params)
@@ -94,7 +98,7 @@ def run(dataset: str, model_params: Dict[str, Any], train_params: Dict[str, Any]
     test_accuracy = accuracy(prediction, labels, idx_test)
     logging.info(f'Test accuracy is {test_accuracy} with seed {seed}')
 
-    storage = Storage(artifact_dir)
+    storage = Storage(artifact_dir, experiment=ex)
     params = dict(dataset=dataset, binary_attr=binary_attr, seed=seed, **hyperparams)
     model_path = storage.save_model(model_storage_type, params, model)
 

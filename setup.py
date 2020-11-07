@@ -37,13 +37,14 @@ install_requires = [
 ]
 
 setup(
-    name='rgnn',
+    name='rgnn_at_scale',
     version='1.0.0',
     description='Reliable Graph Neural Networks via Robust Aggregation / Message Passing',
     author='Simon Geisler, Daniel Zügner, Stephan Günnemann',
     author_email='geisler@in.tum.de',
-    packages=['rgnn'],
+    packages=['rgnn_at_scale'],
     install_requires=install_requires,
     zip_safe=False,
-    package_data={'rgnn': ['kernels/csrc/custom.cpp', 'kernels/csrc/custom_kernel.cu']}
+    package_data={'rgnn_at_scale': ['kernels/csrc/custom.cpp', 'kernels/csrc/custom_kernel.cu']},
+    include_package_data=True
 )

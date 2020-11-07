@@ -1,6 +1,16 @@
+import os
+
 from setuptools import setup
 
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension
+
+extra_compile_args = {
+    'cxx': [],
+    'nvcc': []
+}
+CC = os.environ.get("CC", None)
+if CC is not None:
+    extra_compile_args["nvcc"].append("-ccbin={}".format(CC))
 
 setup(
     name='kernels',
@@ -17,7 +27,8 @@ setup(
                 'csrc/custom.cpp',
                 'csrc/custom_kernel.cu'
             ],
-            extra_link_args=['-lcusparse', '-l', 'cusparse']
+            extra_link_args=['-lcusparse', '-l', 'cusparse'],
+            extra_compile_args=extra_compile_args
         )
     ],
     cmdclass={
