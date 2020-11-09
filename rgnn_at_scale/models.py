@@ -2,20 +2,22 @@
 """
 
 import collections
-from typing import Any, Dict, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import torch
 from torch import nn
+from torch.utils.checkpoint import checkpoint
 import torch_geometric
 from torch_geometric.nn import GCNConv
 from torch_geometric.data import Data
 from torch_scatter import scatter_add
-from torch_sparse import coalesce
+from torch_sparse import coalesce, SparseTensor
 
-from rgnn_at_scale.means import ROBUST_MEANS
+from rgnn_at_scale.aggregation import ROBUST_MEANS, chunked_message_and_aggregate
 from rgnn_at_scale import r_gcn
-from rgnn_at_scale.utils import get_approx_topk_ppr_matrix, get_ppr_matrix, get_truncated_svd, get_jaccard
+from rgnn_at_scale.utils import (get_approx_topk_ppr_matrix, get_ppr_matrix, get_truncated_svd, get_jaccard,
+                                 sparse_tensor_to_tuple, tuple_to_sparse_tensor)
 
 
 class ChainableGCNConv(GCNConv):
@@ -26,6 +28,11 @@ class ChainableGCNConv(GCNConv):
     ----------
     See https://pytorch-geometric.readthedocs.io/en/latest/modules/nn.html#module-torch_geometric.nn.conv.gcn
     """
+
+    def __init__(self, do_chunk: bool = False, n_chunks: int = 8, *input, **kwargs):
+        super().__init__(*input, **kwargs)
+        self.do_chunk = do_chunk
+        self.n_chunks = n_chunks
 
     def forward(self, arguments: Sequence[torch.Tensor] = None) -> torch.Tensor:
         """Predictions based on the input.
@@ -56,6 +63,13 @@ class ChainableGCNConv(GCNConv):
         if int(torch_geometric.__version__.split('.')[1]) < 6:
             embedding = super(ChainableGCNConv, self).update(embedding)
         return embedding
+
+    # TODO: Add docstring
+    def message_and_aggregate(self, adj_t: Union[torch.Tensor, SparseTensor], x: torch.Tensor) -> torch.Tensor:
+        if not self.do_chunk or not isinstance(adj_t, SparseTensor):
+            return super().message_and_aggregate(adj_t, x)
+        else:
+            return chunked_message_and_aggregate(adj_t, x, n_chunks=self.n_chunks, reduce=self.aggr)
 
 
 class GCN(nn.Module):
@@ -101,8 +115,11 @@ class GCN(nn.Module):
                  gdc_params: Optional[Dict[str, float]] = None,
                  svd_params: Optional[Dict[str, float]] = None,
                  jaccard_params: Optional[Dict[str, float]] = None,
-                 do_cache_adj_prep: bool = False,
-                 do_normalize_adj_once: bool = False,
+                 do_cache_adj_prep: bool = True,
+                 do_normalize_adj_once: bool = True,
+                 do_use_sparse_tensor: bool = True,
+                 do_checkpoint: bool = False,  # TODO: Doc string
+                 n_chunks: int = 8,
                  **kwargs):
         super().__init__()
         if not isinstance(n_filters, collections.Sequence):
@@ -111,28 +128,32 @@ class GCN(nn.Module):
             self.n_filters = list(n_filters)
         self.n_features = n_features
         self.n_classes = n_classes
-        self._activation = activation
-        self._dropout = dropout
-        self._do_omit_softmax = do_omit_softmax
-        self._with_batch_norm = with_batch_norm
-        self._gdc_params = gdc_params
-        self._svd_params = svd_params
-        self._jaccard_params = jaccard_params
-        self._do_cache_adj_prep = do_cache_adj_prep
-        self._do_normalize_adj_once = do_normalize_adj_once
-        self._adj_preped = None
+        self.activation = activation
+        self.dropout = dropout
+        self.do_omit_softmax = do_omit_softmax
+        self.with_batch_norm = with_batch_norm
+        self.gdc_params = gdc_params
+        self.svd_params = svd_params
+        self.jaccard_params = jaccard_params
+        self.do_cache_adj_prep = do_cache_adj_prep
+        self.do_normalize_adj_once = do_normalize_adj_once
+        self.do_use_sparse_tensor = do_use_sparse_tensor
+        self.do_checkpoint = do_checkpoint
+        self.n_chunks = n_chunks
+        self.adj_preped = None
         self.layers = self._build_layers()
 
     def _build_conv_layer(self, in_channels: int, out_channels: int):
-        return ChainableGCNConv(in_channels=in_channels, out_channels=out_channels)
+        return ChainableGCNConv(in_channels=in_channels, out_channels=out_channels,
+                                do_chunk=self.do_checkpoint, n_chunks=self.n_chunks)
 
     def _build_layers(self):
         modules = nn.ModuleList([
             nn.Sequential(collections.OrderedDict(
                 [(f'gcn_{idx}', self._build_conv_layer(in_channels=in_channels, out_channels=out_channels))]
-                + ([(f'bn_{idx}', torch.nn.BatchNorm1d(out_channels))] if self._with_batch_norm else [])
-                + [(f'activation_{idx}', self._activation),
-                   (f'dropout_{idx}', nn.Dropout(p=self._dropout))]
+                + ([(f'bn_{idx}', torch.nn.BatchNorm1d(out_channels))] if self.with_batch_norm else [])
+                + [(f'activation_{idx}', self.activation),
+                   (f'dropout_{idx}', nn.Dropout(p=self.dropout))]
             ))
             for idx, (in_channels, out_channels)
             in enumerate(zip([self.n_features] + self.n_filters[:-1], self.n_filters))
@@ -140,7 +161,7 @@ class GCN(nn.Module):
         idx = len(modules)
         modules.append(nn.Sequential(collections.OrderedDict([
             (f'gcn_{idx}', self._build_conv_layer(in_channels=self.n_filters[-1], out_channels=self.n_classes)),
-            (f'softmax_{idx}', nn.LogSoftmax(dim=1) if self._do_omit_softmax else nn.Identity())
+            (f'softmax_{idx}', nn.Identity() if self.do_omit_softmax else nn.LogSoftmax(dim=1))
         ])))
         return modules
 
@@ -154,7 +175,8 @@ class GCN(nn.Module):
         x, edge_idx, edge_weight = GCN.parse_forward_input(data, adj, attr_idx, edge_idx, n, d)
 
         # Perform preprocessing such as SVD, GDC or Jaccard
-        edge_idx, edge_weight = self._preprocess_adjacency_matrix(x, edge_idx, edge_weight)
+        edge_idx, edge_weight = self._cache_if_option_is_set(self._preprocess_adjacency_matrix,
+                                                             x, edge_idx, edge_weight)
 
         # Enforce that the input is contiguous
         x, edge_idx, edge_weight = self._ensure_contiguousness(x, edge_idx, edge_weight)
@@ -189,13 +211,17 @@ class GCN(nn.Module):
             x, edge_idx, edge_weight = data, adj._indices(), adj._values()
         return x, edge_idx, edge_weight
 
+    def release_cache(self):
+        self.adj_preped = None
+
     def _ensure_contiguousness(self,
                                x: torch.Tensor,
-                               edge_idx: torch.Tensor,
+                               edge_idx: Union[torch.Tensor, SparseTensor],
                                edge_weight: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
         if not x.is_sparse:
             x = x.contiguous()
-        edge_idx = edge_idx.contiguous()
+        if hasattr(edge_idx, 'contiguous'):
+            edge_idx = edge_idx.contiguous()
         if edge_weight is not None:
             edge_weight = edge_weight.contiguous()
         return x, edge_idx, edge_weight
@@ -203,57 +229,85 @@ class GCN(nn.Module):
     def _preprocess_adjacency_matrix(self,
                                      x: torch.Tensor,
                                      edge_idx: torch.Tensor,
-                                     edge_weight: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor]:
-        if self.training and self._adj_preped is not None:
-            return self._adj_preped
-
-        if self._gdc_params is not None:
-            if 'use_cpu' in self._gdc_params and self._gdc_params['use_cpu']:
+                                     edge_weight: Optional[torch.Tensor] = None
+                                     ) -> Tuple[Union[torch.Tensor, SparseTensor], Optional[torch.Tensor]]:
+        if self.gdc_params is not None:
+            if 'use_cpu' in self.gdc_params and self.gdc_params['use_cpu']:
                 edge_idx, edge_weight = get_approx_topk_ppr_matrix(
                     edge_idx,
                     x.shape[0],
-                    **self._gdc_params
+                    **self.gdc_params
                 )
             else:
                 adj = get_ppr_matrix(
                     torch.sparse.FloatTensor(edge_idx, torch.ones_like(edge_idx[0], dtype=torch.float32)),
-                    **self._gdc_params,
+                    **self.gdc_params,
                     normalize_adjacency_matrix=True
                 )
                 edge_idx, edge_weight = adj.indices(), adj.values()
                 del adj
-        elif self._svd_params is not None:
+        elif self.svd_params is not None:
             adj = get_truncated_svd(
                 torch.sparse.FloatTensor(
                     edge_idx,
                     torch.ones_like(edge_idx[0], dtype=torch.float32)
                 ),
-                **self._svd_params
+                **self.svd_params
             )
-            self.deactivate_normalization()
+            self._deactivate_normalization()
             edge_idx, edge_weight = adj.indices(), adj.values()
             del adj
-        elif self._jaccard_params is not None:
+        elif self.jaccard_params is not None:
             adj = get_jaccard(
                 torch.sparse.FloatTensor(
                     edge_idx,
                     torch.ones_like(edge_idx[0], dtype=torch.float32)
                 ),
                 x,
-                **self._jaccard_params
+                **self.jaccard_params
             ).coalesce()
             edge_idx, edge_weight = adj.indices(), adj.values()
             del adj
+        if self.do_checkpoint and (x.requires_grad or edge_weight.requires_grad):
+            if not self.do_use_sparse_tensor:
+                raise NotImplementedError('Checkpointing is only implemented in combination with sparse tensor input')
+            # Currently (1.6.0) PyTorch does not support return arguments of `checkpoint` that do not require gradient.
+            # For this reason we need to execute the code twice (due to checkpointing in fact three times...)
+            adj = [checkpoint(
+                lambda edge_weight: sparse_tensor_to_tuple(self._convert_and_normalize(x, edge_idx, edge_weight)[0])[0],
+                edge_weight
+            )]
+            with torch.no_grad():
+                adj.extend(sparse_tensor_to_tuple(self._convert_and_normalize(x, edge_idx, edge_weight)[0])[1:])
+            return tuple_to_sparse_tensor(*adj), None
+        else:
+            return self._convert_and_normalize(x, edge_idx, edge_weight)
+
+    def _cache_if_option_is_set(self,
+                                callable: Callable[[Any], Any],
+                                *inputs) -> Any:
+        if self.training and self.adj_preped is not None:
+            return self.adj_preped
+        else:
+            adj_preped = callable(*inputs)
 
         if (
             self.training
-            and self._do_cache_adj_prep
-            and (self._gdc_params is not None or self._svd_params is not None or self._jaccard_params is not None)
+            and self.do_cache_adj_prep
+            and (self.gdc_params is not None or self.svd_params is not None or self.jaccard_params is not None
+                 or self.do_normalize_adj_once or self.do_use_sparse_tensor)
         ):
-            self._adj_preped = (edge_idx, edge_weight)
+            self.adj_preped = adj_preped
 
-        if self._do_normalize_adj_once:
-            self.deactivate_normalization()
+        return adj_preped
+
+    def _convert_and_normalize(self,
+                               x: torch.Tensor,
+                               edge_idx: torch.Tensor,
+                               edge_weight: Optional[torch.Tensor] = None
+                               ) -> Tuple[Union[torch.Tensor, SparseTensor], Optional[torch.Tensor]]:
+        if self.do_normalize_adj_once:
+            self._deactivate_normalization()
 
             row, col = edge_idx
             deg = scatter_add(edge_weight, col, dim=0, dim_size=x.shape[0])
@@ -261,9 +315,16 @@ class GCN(nn.Module):
             deg_inv_sqrt.masked_fill_(deg_inv_sqrt == float('inf'), 0)
             edge_weight = deg_inv_sqrt[row] * edge_weight * deg_inv_sqrt[col]
 
+        if self.do_use_sparse_tensor:
+            if hasattr(SparseTensor, 'from_edge_index'):
+                adj = SparseTensor.from_edge_index(edge_idx, edge_weight, sparse_sizes=2 * x.shape[:1])
+            else:
+                adj = SparseTensor(row=edge_idx[0], col=edge_idx[1], value=edge_weight, sparse_sizes=2 * x.shape[:1])
+            edge_idx = adj
+            edge_weight = None
         return edge_idx, edge_weight
 
-    def deactivate_normalization(self):
+    def _deactivate_normalization(self):
         for layer in self.layers:
             layer[0].normalize = False
 
@@ -294,7 +355,7 @@ class RGNNConv(ChainableGCNConv):
     def message_and_aggregate(self, adj_t) -> torch.Tensor:
         return NotImplemented
 
-    def propagate(self, edge_index: torch.Tensor, size=None, **kwargs) -> torch.Tensor:
+    def propagate(self, edge_index: Union[torch.Tensor, SparseTensor], size=None, **kwargs) -> torch.Tensor:
         x = kwargs['x']
         edge_weights = kwargs['norm'] if 'norm' in kwargs else kwargs['edge_weight']
         A = torch.sparse.FloatTensor(edge_index, edge_weights).coalesce()
@@ -335,7 +396,7 @@ class RGNN(GCN):
                  **kwargs):
         self._mean_kwargs = dict(mean_kwargs)
         self._mean = mean
-        self._do_omit_softmax = do_omit_softmax
+        self.do_omit_softmax = do_omit_softmax
         super().__init__(**kwargs)
 
     def _build_conv_layer(self, in_channels: int, out_channels: int):
@@ -407,13 +468,13 @@ class DenseGCN(nn.Module):
         self.n_features = n_features
         self.n_filters = n_filters
         self.n_classes = n_classes
-        self._activation = activation
-        self._dropout = dropout
+        self.activation = activation
+        self.dropout = dropout
         self.layers = nn.ModuleList([
             nn.Sequential(collections.OrderedDict([
                 ('gcn_0', DenseGraphConvolution(in_channels=n_features,
                                                 out_channels=n_filters)),
-                ('activation_0', self._activation),
+                ('activation_0', self.activation),
                 ('dropout_0', nn.Dropout(p=dropout))
             ])),
             nn.Sequential(collections.OrderedDict([
@@ -423,7 +484,7 @@ class DenseGCN(nn.Module):
             ]))
         ])
 
-    @staticmethod
+    @ staticmethod
     def normalize_dense_adjacency_matrix(adj: torch.Tensor) -> torch.Tensor:
         """Normalizes the adjacency matrix as proposed for a GCN by Kipf et al. Moreover, it only uses the upper triangular
         matrix of the input to obtain the right gradient towards the undirected adjacency matrix.

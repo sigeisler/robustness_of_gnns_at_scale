@@ -1,0 +1,753 @@
+
+\documentclass{article} % For LaTeX2e
+\usepackage{iclr2021_conference,times}
+
+% Optional math commands from https://github.com/goodfeli/dlbook_notation.
+\input{math_commands.tex}
+
+\usepackage{hyperref}
+\usepackage{url}
+
+\usepackage{algorithm}                  % algorithms
+\usepackage{algorithmic}                % algorithms
+\usepackage{multirow}                   % mulirows
+\usepackage{booktabs}                   % pandas
+\usepackage{graphicx}                   % figures and so on
+\usepackage{nicefrac}                   % compact symbols for 1/2, etc.
+\usepackage{wrapfig}                    % wrapfigure
+\usepackage{pgfplots}
+\usepackage{subfig}
+
+
+\newcommand{\adj}{\mA}
+\newcommand{\weight}{\mW}
+\newcommand{\features}{\mX}
+\newcommand{\featset}{\sX}
+\newcommand{\softout}{\vs}
+\newcommand{\neighbors}{\sN}
+\newcommand{\lone}{\text{L}_1}
+\newcommand{\pertm}{\tilde{\mX}_\epsilon}
+\newcommand{\pertmset}{\tilde{\sX}_\epsilon}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{proposition}{Proposition}
+\newtheorem{corollary}{Corollary}
+\newtheorem{lemma}{Lemma}
+\newenvironment{proof}{}{$\square$}
+
+\providecommand*\theoremautorefname{Theorem}
+\providecommand*\propositionautorefname{Proposition}
+\providecommand*\corollaryautorefname{Corollary}
+\providecommand*\lemmaautorefname{Lemma}
+
+\renewcommand{\equationautorefname}{Eq.}
+\renewcommand{\figureautorefname}{Fig.}
+\newcommand{\algorithmautorefname}{Algorithm}
+\renewcommand{\sectionautorefname}{\S}
+\renewcommand{\subsectionautorefname}{\S}
+\renewcommand{\appendixautorefname}{\S}
+
+\newcommand{\dz}[1]{\textcolor{violet}{(DZ: #1)}}
+\newcommand{\sg}[1]{\textcolor{blue}{(SG: #1)}}
+\newcommand{\todo}[1]{\textcolor{red}{(Todo: #1)}}
+
+\DeclareMathOperator*{\minimize}{minimize}
+\DeclareMathOperator*{\maximize}{maximize}
+
+\graphicspath{ {./assets/} }
+
+
+%\title{Adversarial Attacks and Defenses for Graph Neural Networks on Real World Graphs}
+\title{Robust Graph Neural Networks at Scale}
+
+% Authors must not appear in the submitted version. They should be hidden
+% as long as the \iclrfinalcopy macro remains commented out below.
+% Non-anonymous submissions will be rejected without review.
+
+\author{Antiquus S.~Hippocampus, Natalia Cerebro \& Amelie P. Amygdale \thanks{ Use footnote for providing further information
+about author (webpage, alternative address)---\emph{not} for acknowledging
+funding agencies.  Funding acknowledgements go at the end of the paper.} \\
+Department of Computer Science\\
+Cranberry-Lemon University\\
+Pittsburgh, PA 15213, USA \\
+\texttt{\{hippo,brain,jen\}@cs.cranberry-lemon.edu} \\
+\And
+Ji Q. Ren \& Yevgeny LeNet \\
+Department of Computational Neuroscience \\
+University of the Witwatersrand \\
+Joburg, South Africa \\
+\texttt{\{robot,net\}@wits.ac.za} \\
+\AND
+Coauthor \\
+Affiliation \\
+Address \\
+\texttt{email}
+}
+
+% The \author macro works with any number of authors. There are two commands
+% used to separate the names and addresses of multiple authors: \And and \AND.
+%
+% Using \And between authors leaves it to \LaTeX{} to determine where to break
+% the lines. Using \AND forces a linebreak at that point. So, if \LaTeX{}
+% puts 3 of 4 authors names on the first line, and the last on the second
+% line, try using \AND instead of \And before the third author name.
+
+\newcommand{\fix}{\marginpar{FIX}}
+\newcommand{\new}{\marginpar{NEW}}
+
+%\iclrfinalcopy % Uncomment for camera-ready version, but NOT for submission.
+\begin{document}
+
+
+\maketitle
+
+\begin{abstract}
+
+Adversarial robustness for Graph Neural Networks (GNNs) has become exceedingly important due to the popularity and diverse applications of GNNs. Specifically, structure perturbations have proven to be challenging to defend against. Moreover, designing attacks is not straight-forward due to the discrete optimization domain. One of the most effective defense strategies is to use a robust estimator for the aggregation of the message passing operation, and most robust estimators are known to be computationally demanding. In this work, we leverage recent advances in differentiable sorting for robust aggregation in message passing that scales linearly with the neighborhood size. The increased scalability enables us to apply our defense to real-world graphs orders of magnitude larger than previously done. However, existing adversarial attacks typically require a dense adjacency matrix and can therefore only be applied to small graphs. For this reason, in addition to the scalable robust aggregation function, we propose two attacks based on first-order optimization that do not require a dense adjacency matrix and, hence, can be used on graphs 2.5 orders of magnitude larger than previously evaluated.
+
+\end{abstract}
+
+
+\section{Introduction} % Open
+
+Due to the very promising computational cost for our proposed defense we strive for an evaluation on larger graphs than Cora, Citeseer or Pubmed~\todo{cite}. For larger graphs there are basically no appropriate attacks available (one of the rare peer-reviewed exceptions is e.g.~Dice~\citep{Waniek2018} which is a blackbox attack). Most attacks do either solve a discrete optimization problem over all possible edges or require a gradient towards all possible entries in the adjacency matrix and, hence, often come with the worst case space complexity of \(\mathcal{O}(n^2)\). Please note that many attacks can be adapted to a minibatching setup where a minibatch corresponds to a subgraph. However, even for realistic mini-batch size of e.g.~100k nodes, current attacks are doomed to fail. To attack a small dataset such as PubMed (19717 nodes) typically more than 20GB are required to attack a GNN using a dense adjacency matrix. We argue that such memory requirements are impractical and hinder practitioners to assess adversarial robustness.
+
+Contributions:
+\begin{itemize}
+   \item Scalable defense: Soft Median
+   \item Scalable attacks: Greedy attacks (FSGM, KDD Cup), sampled PGD
+   \item We are the first to systematically study the behavior on (a) large graph(s)
+\end{itemize}
+
+\clearpage
+\section{Related Work and Preliminaries} % Simon
+
+Throughout this work, we use the formulation in~\autoref{eq:mean-how-powerfull} for the message passing operation:
+\begin{equation}\label{eq:mean-how-powerfull}
+  \mathbf{h}^{(l)}_v = \sigma^{(l)} \left( \text{AGGREGATE}^{(l)} \left \{ \left( \adj_{vu}, \mathbf{h}^{(l-1)}_u \weight^{(l)} \right), \forall \, u\in \neighbors(v) \cup v \right \} \right)
+\end{equation}
+
+Defenses and Attack SotA
+-> None of the methods really scale or at least it has not been shown (neither for defenses and attacks)
+
+Robust Statistics. It is very common that robust estimators are costly during inference and adversarial training is costly during training.
+
+Exception KDD Cup (600k nodes graph)
+
+\begin{wrapfigure}[8]{L}{0.5\textwidth}
+  \vspace{-22pt}
+  \begin{minipage}{0.5\textwidth}
+    \begin{algorithm}[H]
+	\caption{R-BCD}
+	\label{algo:rbcd}
+	\begin{algorithmic}
+		\STATE Choose \(\vx_0 \in \R^d\)
+		\FOR{\(k \in \{1,2, \dots, K\}\)}
+		\STATE Draw random indices \(\vi_k \in \{0, 1, \dots, n\}^b\)
+		\STATE \(\vx_{k} \leftarrow \vx_{k-1} - \alpha_{k-1} \nabla_{\vi_{k-1}} \mathcal{L}(\vx_{k-1})\)
+		\ENDFOR
+	\end{algorithmic}
+    \end{algorithm}
+ \end{minipage}
+\end{wrapfigure}
+
+Especially in a big data setting the cost to calculate the gradient towards all variables for first order optimization can be prohibitively high. For this reason coordinate descent has gained importance in machine learning and large scale optimization~\citep{Wright2015}. \citet{Nesterov2012} proposed (and analyzed the convergence) of Randomized Block Coordinate Descent (R-BCD) considering unconstrained and constrained optimization (see~\autoref{algo:rbcd}). In R-BCD only a subset of variables is optimized at a time and, hence, only the gradients towards those variables are required. In many cases this allows for lower memory footprint and in some settings its accelerated version even converges faster than standard fast gradient methods~\citep{Nesterov2017}.
+
+\section{Defense}
+
+For the sake of clarity, here some remarks about the used notation. We denote the number of nodes with \(n\) and number of edges in the clean graph with \(m\). Moreover, use the the set notation for an adjacency matrix of a graph \(\sA\) interchangeably with its matrix representation \(\mA\). The same hold for the set of features \(\sX\) and its matrix equivalent \(\mX\). Moreover, given a clean adjacency matrix \(\sA\) and perturbed adjacency matrix \(\tilde{\sA}\), we define the perturbation \(\sP\) (the set of added or removed edges) via the exclusive or relationship \(\sA \oplus \sP = \tilde{\sA}\).
+
+
+\[
+\argmin_{x_i \in X} \| x_i - median(X) \|_p
+\]
+
+\[
+\argmin_{x_i \in X} \| x_i - \bar{x} \|_p
+\]
+
+Somewhat similar to a Gaussian:
+\[
+\exp_{x_i \in X} \| x_i - \bar{x} \|_p / T
+\]
+
+\textbf{Planned structure:}
+\begin{itemize}
+   \item Derivation: From Soft Medoid via SoftSort to Soft Median
+   \item Using the Soft Median within GNNs: What properties do we need (weighting)
+   \item Alternative motivation: somewhat similar to a Gaussian / Kernel density estimate
+   %\item Properties: especially orthogonal affine equivariance (Not sure if we need that)
+   \item Complexity Analysis
+   \item Robustness properties: i.e. breakdown down % Simon
+\end{itemize}
+
+
+We build upon the very recent defence Soft Medoid GDC \todo{Geisler et al 2020}. Our method Soft Median performs similarly to Soft Medoid with better complexity that enables us to scale bigger graphs. Our aggregation utilizes a distance based heuristic to discard outliers where we weight each sample $\vx \in \R^d$ depending on its euclidean distance to the component-wise median of the sample vector $\vx$. This limits the influence of outlier samples, resulting in a robust aggregation function.
+
+\subsection{Method} % Hakan
+
+The recent work by \todo{Geisler et al 2020} has shown that introducing soft and differentiable aggregation can help GNNs to increase their robustness. In our method, we propose the aggregation function \(t_{\text{Soft Median}}\) as: 
+\begin{equation}\label{eq:softmedian}
+    t_{\text{Soft Median}}(\features) = \hat{\softout}^\top\features = \sum_{i=1}^n \hat{\softout}_i \features_{i,:} \approx \argmin_{\vx \in \featset} \| \vx - \bar{\vx} \|,  
+\end{equation}
+
+where component-wise median \(\bar{\vx} = \argmin_{\bar{\vx} \in \R^d} \sum_{i=1}^n \|\bar{\vx} - \features_{i,:}\|_1 \) and the weights \(0 \leq \hat{\softout}_i \leq 1, \sum_i \hat{\softout}_i = 1\) are obtained via softmax based method where we are utilizing the euclidean distances to the sample's component-wise median $\bar{\vx}$ as:
+
+\begin{equation}\label{eq:softmaxdist}
+    \hat{\softout}_i
+    = softmax{\left(-\frac{1}{T} \vd \right )}_i = \frac{\exp{\left(-\frac{1}{T} \evd_i \right )}}{\sum_{j=1 }^n \exp{\left (-\frac{1}{T} \evd_j \right )}} \text{,~where}~\evd_k = \|\features_{k,:} - \bar{\vx}\|
+\end{equation}
+
+
+ In \(t_{\text{Soft Median}}\), we calculate a weighted mean of the neighbouring nodes' features $\vx \in \featset$ where the weightings $\hat{\softout}$ on $\vx \in \featset$  depends on their distances to the sample mean $\bar{\vx}$. Whereas the closer to the mean samples with smaller residual have bigger weights, the more distant ones with bigger residuals have weights close to zero which results in a aggregation function that is that is robust to distant samples.
+ 
+ Temperature parameter $T$ controls the steepness of the weight distribution $\hat{\softout}$ between the neighbors. In the extreme case as $T\to0$, the weight for the smallest residual sample go towards one, resulting with $\argmin_{\vx \in \featset} \| \vx - \bar{\vx} \|_p$. In the other extreme temperature as $T\to\inf$, we have the equally distributed weights where we output $\bar{\vx}$, and have an aggregation function equivalent to a mean. 
+ 
+ Our suggested relaxation for $\argmin_{\vx \in \featset} \| \vx - \bar{\vx} \|$ is motivated by a very recent work of \todo{prillo et al 2020 softsort paper} where they propose a softsort operator that uses softmax of negative pairwise distances resulting with a approximate permutation matrix. Whereas the suggested softsort was operating on scalars, in Soft Residuals we extended their work on multidimensional features using the euclidean distance between the vectors, and we avoided quadratic complexity of the pairwise distances by only calculating the distances to $\bar{\vx}$.
+
+\textbf{Soft Median as a Probability Density Function}
+Our proposed method Soft Median is strongly connected to the multivariate Gaussian distribution. For k samples $\features_{1,:}, \features_{2,:} \dots \features_{k,:}$ and $\features_{i,:} \in \R^d$, the sample weights $\hat{\softout}$ generated by Soft Median are scalar multiple of probability density function(pdf) of the Multivariate Gaussian with mean $\vmu$ and covariance matrix $\mSigma$ as:
+\begin{equation}\label{eq: softouts as PDF}
+    \hat{\softout}_i = \hat{c} \times f_\mX(\features_{i,:}) =  \hat{c} \times \frac {\exp \left(-{\frac {1}{2}}(\features_{i,:} -\vmu)^{\mathrm {T} }\mSigma ^{-1}(\features_{i,:}-\vmu)\right)}{\sqrt {(2\pi )^{d}| \mSigma |}}\,,
+\end{equation}
+where $f_\mX(\vx)$ is pdf and the scalar $\hat{c} =1 /  \sum_{i=1}^k f_\mX(\features_{i,:})$ so that we have $\sum_{i=1}^k \hat{\softout} = 1$.
+
+One challenge that we have was making the pdf $f_\mX$ to extend to cases where we have off distribution adversarial samples. When there is out distribution adversarial samples, a sample average as mean holds significant weaknesses as they can be perturbed arbitrarily with a single outlier. To overcome this possible weakness in the pdf we are using the component-wise median as the mean $\vmu$ of the Multivariate Gaussian. As the sample mean, also sample covariance have the same weaknesses against adversarial samples especially in the case we have a smaller sample size. To avoid this obstacle we used spherical covariance where we have $\mSigma = T/2 \times \mI$. This also comes with the benefit of straight forward inverse calculation as $\mSigma^{-1} = 2/T \times \mI$ which keeps the aggregation operations complexity linear w.r.t the sample size.
+Using the pdf $f_\mX$ with $\vmu = \bar{\vx}$ and $\mSigma = T/2 \times \mI$, we have:
+\begin{equation}\label{IT IS DSQUARE :(}
+    -{\frac {1}{2}}(\features_{i,:} -\vmu)^{\mathrm {T} }\mSigma ^{-1}(\features_{i,:}-\vmu) =  -{\frac {1}{2}}{\frac {2}{T}}(\features_{i,:} -\bar{\vx})^{\mathrm {T} }\mI (\features_{i,:}-\bar{\vx}) = -\frac{1}{T}\vd^2
+\end{equation}
+
+\todo{This story above also does not hold because of the $d^2$  at the end of \autoref{IT IS DSQUARE :(}. We needed $d$ there for the \autoref{eq: softouts as PDF} to hold. One alternative is that I can rewrite as a pdf of a exponential distribution where we have $x = \text{distance to component-wise median}$ but I am not sure how much sense it makes... Or changing the covariance to $\mSigma = d_i * T/2 \times \mI$ will somewhat save the equations but I guess that also makes no sense to use a sample specific covariance matrix in the pde}
+
+
+\textbf{From Soft Medoid to Soft Residuals}
+  Soft Medoid is proven to be an effective defence strategy against adversarial attacks where the aggregation function contributes to model's robustness via introducing an additional weighting $\hat{\softout}$ on $\vx \in \featset$. Despite its robustness, Soft Medoid had quadratic complexity in the respective $\hat{\softout}_{\text{Soft Medoid}}$ calculation as:
+
+\begin{equation}\label{eq:softoutsoftmedoid}
+    \hat{\softout}_{\text{Soft Medoid}}
+    = softmax{\left(-\frac{1}{T} \hat{\vd} \right )}\text{,~where}~\hat{\evd_{k}} = \sum_{q=1}^n \|\features_{k,:} - \features_{q,:}\| 
+\end{equation}
+When calculating the $\hat{\softout}_{\text{Soft Medoid}}$, Soft Medoid relies on the cumulative distance to all other node features therefore needs pairwise distance calculation which has quadratic complexity w.r.t. the sample size. In Soft Median we are introducing an additional heuristic where we only calculate the distance to the sample mean, therefore decreasing the complexity of the algorithm to linear w.r.t the neighborhood size. Hence, we can scale to bigger graphs.
+
+Despite the gain in complexity, the two aggregation are tightly connected. The heuristics employed in Soft Median can be seen as a relaxation of Soft Medoid's aggregation function. If we relax $\hat{\evd_k}$ of Soft Medoid by moving the l2 norm $\sum_{q}^n \eva_k\|\features_{k,:} - \features_{q,:}\|$ to outside of the sum as $\|\sum_{q}^n \eva_k(\features_{k,:} - \features_{q,:})\|$ we approximately get $\evd_r$ as in the Soft Median with the assumptions $\sum_{q=1}^n\eva_q \approx 1$ and component-wise median is approximately equals the weighted mean.
+
+\begin{equation}\label{eq:distrelaxsoftmedoid}
+    \begin{aligned}
+    \tilde{\evd_k}  &= \|\sum_{q=1}^n \eva_q(\features_{k,:} - \features_{q,:})\| \\
+    &= \|(\sum_{q=1}^n \eva_q(\features_{k,:}) - (\sum_{q=1}^n \eva_q\features_{q,:})\| \\
+    &\approx \|\features_{k,:} - \bar{\vx}\| = \evr
+    \end{aligned}
+\end{equation}
+
+%\begin{equation}\label{eq:softmaxdistsoftmedoid}
+%    -\frac{1}{T} \|\sum_{\evx_j = 1}^n\evx_j - \evx_i\| = -\frac{N}{T} \|\evx_i - \bar{\vx}\| 
+%\end{equation}
+
+\textbf{Soft Median in GNN}
+So far we did not include \(\adj\) matrix to our aggregation function. In the Weighted Soft Median(WSM), where we also utilize the adjacency weights $\va$ coming from the message passing operation, we have:
+\begin{equation}\label{eq:WSR}
+    \tilde{t}_{\text{WSM}}(\features, \va) = c({\softout} \circ \va)^\top\features 
+\end{equation}
+
+\begin{equation}\label{eq:softoutweighted}
+    {\softout}_i 
+    = \frac{\exp{\left(-\frac{1}{T} \|\evx_i - \tilde{\vx}\| \right )}}{\sum_{\evx_j \in \featset} \exp{\left (-\frac{1}{T} \|\evx_j - \bar{\vx}\| \right )}}\,,
+\end{equation}
+where $\va$ is the non negative col weights of adjacency matrix $\adj$,  $ c = sum\{\textbf{a}\} / sum\{{\softout} \circ \va\} $, and $\tilde{\vx}$ is the weighted component-wise median.\todo{formally define weighted component-wise median} 
+
+In aggregation $\tilde{t}_{\text{WSM}}(\features, \textbf{a})$, in additional to the weights $\softout$ that we generated using the residuals, we have edge weights provided by the message passing operation. So to take account of that, when we calculate the euclidian distances as using distance to the weighted component-wise median $\tilde{\vx}$. Similar to the change in weighted component-wise median calculation, we are applying a reweighting on top of the $\va$ as $c({\softout} \circ \va)$ where we elementwise multiply 2 weight vectors $\va$ and $\softout$, and then rescale with the scalar $c$ so that have the same scale for adjacency weights as before.
+
+In \autoref{eq:mean-how-powerfull}, we use Weighted Soft Median as the AGGREGATE function. For the node $v$ in layer $l$, $\features$ in the $\tilde{t}_{\text{WSR}}$ represents stacked embeddings $\{\mathbf{h}^{(l-1)}_u \weight^{(l)}, \forall \, u\in \neighbors(v) \cup v\} $ and $\va$   represents the stacked adjacency weights $\{\emA_{v,u}, u\in \neighbors(v) \cup v\}$. In $\tilde{t}_{\text{WSR}}$ we are outputting a weighted average of neighboring nodes' features where the weighting depends on the edge weights $\va$ and the calculated distances for each neighboring node.
+
+Our sparse matrix implementation of Weighted Soft Medians has linear complexity w.r.t the neighbourhood size and layer's width therefore we have total complexity of $\mathcal{O}(\sum_{v=1}^n \text{deg}(v)\times \text{width}(l))$. This yields to the time and space complexity of $\mathcal{O}( m\times\text{width}(l)$, where $m$ is the number of edges in $\adj$.
+
+
+
+\textbf{Robustness.} Naturally, the question arises what are the properties especially w.r.t.~robustness of our proposed aggregation for deep learning. Many metrics have been proposed that capture robustness with different flavours. One of the most widely used properties is the break down point. The (finite-sample) breakdown point captures the minimal fraction \(\epsilon = \nicefrac{m}{n}\) so that the result of the location estimator \(t(\features)\) can be arbitrarily placed~\citep{Donoho1983} (here \(m\) denotes the number of perturbed examples):
+%
+\begin{equation}\label{eq:breakdown}
+  \epsilon^*(t, \features) = \min_{1 \le m \le n} \left \{ \frac{m}{n}: \sup_{\pertm} \|t(\features)-t(\pertm)\| = \infty \right \}
+\end{equation}
+%
+Following Theorem 1 of~\todo{cite}, our proposed Soft Median comes with the best possible breakdown point as we state formally in \autoref{theorem:softmedianbreakdown}. Our proof includes 2 parts where in the first part we show the sample's component-wise median is bounded by the $n$ dimensional hypercube created by the clean points. And in the second part we show the output of the aggregation is bounded by the sample's component-wise median.
+%For the subsequent proof we use the fact that the proposed estimator is orthogonal affine equivariant. I.e.~\(t_{\text{Soft Median}}(\mR \features + \vv) = \mR \, t_{\text{Soft Median}}(\features) + \vv\) with the orthogonal matrix \(\mR\). Thus, we may assume w.l.o.g. that the data is centered such that \(t_{\text{Soft Median}}(\features) = \bm{0}\). In other words, the breakdown point of an orthogonal affine equivariant estimator does not change for shifted and rotated the data~\citet{Lopuhaa1991}.
+
+\begin{theorem}\label{theorem:softmedianbreakdown}
+  Let \(\featset = \{ \mathbf{\mathbf{x}}_1, \dots, \mathbf{\mathbf{x}}_n\} \) be a collection of points in \(\mathbb{R}^d\) with finite coordinates and temperature \(T \in [0, \infty) \). Then the Soft Median location estimator (\autoref{eq:softmedian}) has the finite sample breakdown point of \(\epsilon^*(t_{\text{Soft Median}}, \features) = \nicefrac{1}{n} \lfloor \nicefrac{(n+1)}{2}\rfloor \) (asymptotically \( \lim_{n \to \infty} \epsilon^*(t_{\text{Soft Median}}, \features) = 0.5 \)).
+\end{theorem}
+
+\begin{proof}\textit{Proof}\label{proof:actual_soft_median}
+For clean set we have the component-wise median as the dimension wise median of $d$ dimension where we have $\ceil{n/2}$ values lower and higher than the median element. By adding $m$ elements each element wise median can move at most by $\ceil{m/2}$ element and since we have $m<n$ we conclude the resulting component-wise median $\bar{\vx}$ is still inside the hypercube that is constructed using the clean points. Moreover, the farther the perturbed points are away from the clean points the greater the distance to the median (as long as \(\epsilon < 0.5\)) and, hence, the lesser their weights. Due to the properties of the exponential function, if the perturbed points move to infinity the weights of the perturbed points approaches zero, i.e.~\(\lim_{p\to\infty} p \exp{(-\nicefrac{p}{T})} = 0\). On the contrary, the distance of the clean points to the median does not change for a sufficiently large magnitude of the perturbed samples.
+
+\iffalse
+    In the second part of the proof, we first show the perturbation that is done by a each sample is bounded. We can reformulate each sample point as $\tilde{\vx} = \bar{\vx} + \vp$, where $\vp =\tilde{\vx} - \bar{\vx}$. Considering our aggregation function is a weighted mean of each sample point as in \autoref{eq:softmedian}, the shift each perturbed sample point can cause w.r.t to the sample component-wise median $\hat{\vx}$ is limited by $ \tilde{s}\vp$ where $\tilde{s}$ is the weight sample $x$ gets.
+    
+    For a single sample $\tilde{\vx} \in \pertm$ we have the relative perturbation as:
+    \begin{equation}
+        \tilde{s}\vp = \frac{\exp{\left(-\frac{1}{T} \tilde{d} \right )}\vp}{\sum_{j=1 }^n \exp{\left (-\frac{1}{T} \evd_j \right )}}\,,
+    \end{equation}
+    where $\tilde{d}=\|\tilde{\vx} - \hat{\vx}\|$ and $\evd_j=\|\features_{j,:} - \hat{\vx}\|$.For the $\features_{i,:} \neq \tilde{\vx}$ the $\exp{\left (-\frac{1}{T} \evd_j \right )}$ is independent of $\tilde{\vx}$ and we can reformulate their cumulative sum to constant $c$ to simplify the equation. Therefore having:
+    \begin{equation}\label{eq:relativeshift}
+        \tilde{s}\vp = \frac{\exp{\left(-\frac{1}{T} \tilde{d} \right )}\vp}{\exp{\left(-\frac{1}{T} \|p\| \right )} + c} = \frac{\vp}{1 + c\exp(\frac{1}{T}\|\vp\|)} = \frac{\|p\|}{1 + c\exp(\frac{1}{T}\|\vp\|)} \hat{\vp}\,,
+    \end{equation}
+    where $\hat{p}$ is the unit vector in the direction of $\vp$.
+    
+    In \autoref{eq:relativeshift} when we calculate the relative shift w.r.t the $\bar{x}$, whereas our numerator increases linearly w.r.t the $\|p\|$, the denominator exponentially increases w.r.t the $\|p\|$. Therefore:
+    \begin{equation}
+        \lim_{\|p\| \to \inf} \tilde{s}\vp = 0
+    \end{equation}
+    
+    Calculating the maximum possible perturbation is also possible as we get the maximum possible shift for the $\vp$ where $\frac{\partial \tilde{s}\vp}{\partial \vp} = 0$. Although it is an interesting calculation, this is out of the scope of this paper as proving the existence of a bound is enough for the proof. In the case there we have $m$ perturbation the euclidean norm of the $m$ perturbations is still bounded by the cumulative sum of the norm of each perturbation and therefore we still have a bounded error. Proof is complete
+\fi
+\end{proof}
+
+\todo{Argue about bounded robustness}.
+
+\begin{wrapfigure}[20]{r}{.5\textwidth}
+  \centering
+  \vspace{-28pt}
+  \hbox{\hspace{15pt} \resizebox{0.9\linewidth}{!}{\input{assets/empirical_bias_legend.pgf}}}
+  \vspace{-14pt}
+  \makebox[\linewidth][c]{
+  \(\begin{array}{cc}
+    \subfloat[]{\resizebox{0.50\linewidth}{!}{\input{assets/empirical_abs_bias.pgf}}} & 
+    \subfloat[]{\resizebox{0.5\linewidth}{!}{\input{assets/empirical_relative_bias.pgf}}} \\
+  \end{array}\)
+  }
+  \caption{Empirical bias \(B(\epsilon)\) for the second layer of a GDC~\citep{Klicpera2019a} network. (a) shows the absolute bias for PGD attack with a budget of changing \(\epsilon=0.25\) edges, and (b) the relative bias over the weighted mean of a GDC. We use for all estimator a temperature of \(T=0.2\)\label{fig:empbiascurve}}
+\end{wrapfigure}
+\todo{Reference Figure}
+
+\todo{Conclude that the proposed defense is great. We will provide further experiments later. However, the we are going to focus on scalability.}
+
+\begin{table}
+\centering
+\caption{Summary of accumulated certificates and the average certifiable radius for the different architectures and correct predictions. For error, we refer to~\autoref{sec:appendix_fullresultstable}.}
+\label{tab:results}
+\resizebox{\linewidth}{!}{
+    \begin{tabular}{llccccccccc}
+    \toprule
+                             & \textbf{Attack} & \multicolumn{3}{l}{\textbf{Accum. certificates}} & \multicolumn{2}{l}{\textbf{Ave. add. radius}} & \multicolumn{2}{l}{\textbf{Ave. del. radius}} &  \textbf{Accuracy} \\
+                             &   &              \textbf{A.\&d.} &      \textbf{Add} &     \textbf{Del.} &           \textbf{A.\&d.} &      \textbf{Add} &           \textbf{A.\&d.} & \multicolumn{2}{l}{\textbf{Del.}} \\
+        & \textbf{Architecture} &                              &                   &                   &                           &                   &                           &                   &                    \\
+    \midrule
+    \multirow{14}{*}{\rotatebox{90}{Cora ML}} & SVD GCN &                         0.90 &              0.07 &              2.46 &                      0.02 &              0.09 &                      1.23 &              3.22 &              0.761 \\
+                             & Jaccard GCN &                         1.81 &              0.21 &              4.31 &                      0.12 &              0.25 &                      2.10 &              5.28 &              0.813 \\
+                             & RGCN &                         1.48 &              0.16 &              3.88 &                      0.11 &              0.22 &                      1.94 &              5.12 &              0.763 \\
+                             & Soft Medoid GDC ($T=1.0$) &                         4.54 &              0.54 &              4.69 &                      0.76 &              0.69 &                      5.07 &              5.76 &              0.814 \\
+                             & Soft Medoid GDC ($T=0.5$) &                         5.50 &              0.64 &              4.78 &                      1.32 &              0.86 &                      6.08 &              6.07 &              0.786 \\
+                             & Soft Medoid GDC ($T=0.2$) &                \textbf{5.96} &     \textbf{0.69} &              4.86 &             \textbf{1.61} &     \textbf{0.95} &             \textbf{6.63} &     \textbf{6.45} &              0.758 \\
+                             & Soft Residual GDC ($T=1.0$) &                         3.06 &              0.40 &              4.63 &                      0.31 &              0.48 &                      3.40 &              5.53 &     \textbf{0.839} \\
+                             & Soft Residual GDC ($T=0.5$) &                         3.70 &              0.49 &              4.73 &                      0.49 &              0.60 &                      4.05 &              5.67 &  \underline{0.835} \\
+                             & Soft Residual GDC ($T=0.2$) &                         4.67 &              0.58 &              4.80 &                      0.91 &              0.71 &                      5.07 &              5.83 &              0.811 \\
+                             & Soft Residual GDC ($T=0.1$) &                         4.72 &              0.55 &              4.75 &                      0.94 &              0.70 &                      5.23 &              6.00 &              0.797 \\
+                             & Soft Median GDC ($T=1.0$) &                         3.63 &              0.49 &              4.73 &                      0.44 &              0.59 &                      4.01 &              5.63 &     \textbf{0.839} \\
+                             & Soft Median GDC ($T=0.5$) &                         4.70 &               NaN &              4.82 &                      0.84 &               NaN &                      4.97 &              5.84 &              0.833 \\
+                             & Soft Median GDC ($T=0.2$) &             \underline{5.70} &              0.66 &     \textbf{4.90} &          \underline{1.43} &              0.86 &                      6.07 &              6.06 &              0.804 \\
+                             & Soft Median GDC ($T=0.1$) &                         5.69 &  \underline{0.67} &  \underline{4.89} &                      1.37 &  \underline{0.89} &          \underline{6.32} &  \underline{6.40} &              0.769 \\
+    \cline{1-10}
+    \multirow{14}{*}{\rotatebox{90}{Citeseer}} & SVD GCN &                         0.50 &              0.00 &              2.11 &                      0.01 &              0.00 &                      0.84 &              3.28 &              0.621 \\
+                             & Jaccard GCN &                         1.23 &              0.11 &              3.80 &                      0.07 &              0.17 &                      1.74 &              5.46 &              0.699 \\
+                             & RGCN &                         1.00 &              0.08 &              3.26 &                      0.05 &              0.13 &                      1.53 &              4.95 &              0.664 \\
+                             & Soft Medoid GDC ($T=1.0$) &                         2.33 &              0.28 &              3.97 &                      0.16 &              0.41 &                      3.18 &              5.58 &              0.709 \\
+                             & Soft Medoid GDC ($T=0.5$) &                         3.32 &              0.42 &              4.03 &                      0.36 &              0.61 &                      4.49 &              5.71 &              0.705 \\
+                             & Soft Medoid GDC ($T=0.2$) &             \underline{4.52} &  \underline{0.57} &              4.17 &          \underline{0.92} &     \textbf{0.86} &             \textbf{5.94} &  \underline{6.07} &              0.691 \\
+                             & Soft Residual GDC ($T=1.0$) &                         1.59 &              0.19 &              3.96 &                      0.10 &              0.28 &                      2.18 &              5.55 &              0.713 \\
+                             & Soft Residual GDC ($T=0.5$) &                         2.03 &              0.28 &              3.98 &                      0.17 &              0.41 &                      2.75 &              5.65 &              0.704 \\
+                             & Soft Residual GDC ($T=0.2$) &                         3.03 &              0.43 &              4.20 &                      0.43 &              0.60 &                      3.87 &              5.88 &              0.713 \\
+                             & Soft Residual GDC ($T=0.1$) &                         3.76 &              0.48 &              4.30 &                      0.70 &              0.69 &                      4.67 &  \underline{6.07} &              0.707 \\
+                             & Soft Median GDC ($T=1.0$) &                         2.10 &              0.26 &              4.09 &                      0.16 &              0.36 &                      2.81 &              5.68 &              0.721 \\
+                             & Soft Median GDC ($T=0.5$) &                         2.93 &              0.40 &              4.22 &                      0.34 &              0.55 &                      3.79 &              5.84 &              0.724 \\
+                             & Soft Median GDC ($T=0.2$) &                         4.43 &  \underline{0.57} &  \underline{4.41} &                      0.86 &  \underline{0.79} &                      5.37 &              6.05 &     \textbf{0.728} \\
+                             & Soft Median GDC ($T=0.1$) &                \textbf{4.67} &     \textbf{0.61} &     \textbf{4.47} &             \textbf{0.98} &     \textbf{0.86} &          \underline{5.74} &     \textbf{6.14} &  \underline{0.726} \\
+    \bottomrule
+    \end{tabular}
+}
+\end{table}
+
+\clearpage
+\section{Attacks} % Simon
+
+Due to the lack of suitable attacks for real world graphs to evaluate our defense, we identify the necessity to research scalable attacks for GNNs. For this purpose, we argue that combinatorial approaches easily become computationally infeasible and, thus, rely on first order optimization that drives the advances in large scale deep learning and as well for GNNs. We decide for two basic strategies. First, in~\autoref{sec:attackkdd}, we introduce a scalable attack that greedily adds new edges. For this we extend one of the strongest attacks of the KDD Cup 2020. Thereafter, we propose salable, randomized attacks (FSGM and PGD~\citet{Xu2019a}) for perturbing the structure of a given graph.
+
+\subsection{Adding Adversarial Nodes}\label{sec:attackkdd}
+
+Without the need of any sampling, it is possible to solve
+\begin{equation}\label{eq:gang}
+    \maximize_{\adj^\prime, \features^\prime} \mathcal{L}(f_{\theta}(\adj | \adj^\prime, \features | \features^\prime))
+\end{equation}
+an additional space complexity of \(\mathcal{O}(m)\) (on top of the complexity of the attacked model; in the following we will neglect this fact). With \(\adj | \adj^\prime\) we denote the addition of extra rows/columns and with \(\features | \features^\prime\) the concatenation of the attributes of the new nodes. To create unnoticeable attacks we add further constraints, e.g. to limit the edge degree of the adersarially added nodes.
+
+Our greedy approach adds one node (or a small group of nodes) at a time to the sparse adjacency matrix and connects it to every other node with edge weight zero. Subsequently, we perform a constrained gradient based optimization to determine the best edges with a given budget. 
+%As proposed by~\todo{cite KDD Cup?!}, we go with a greedy FSGM-like approach and in each iteration we add the top \(k\) edges. 
+The initial features are sampled randomly and then are optimized via PGD, after the edges of a new nodes are determined. In~\autoref{algo:gang}, we give a formal definition without edge cases for bounded continuous features (\(L_\infty\)-ball).
+
+\begin{algorithm}[h]
+	\caption{Greedy Adversarial Node Generation (GANG)}
+	\label{algo:gang}
+	\begin{algorithmic}
+		\STATE {\bfseries Input:} adjacency matrix \(\adj\), feature matrix \(\features\), GNN \(f_{\theta}(\adj, \features)\)
+		%\STATE {\bfseries Parameter:} node budget \(\Delta_n\), edge budget \(\Delta_e\), step size \(s_e\), steps of optimizing features \(s_x\)
+		\STATE Initialize empty \(\adj^\prime\) and \(\features^\prime\)
+		\FOR{\(k \in \{1, \dots, \Delta_n\}\)}
+		\STATE \(\adj^\prime \leftarrow\) concatenate new node to \(\adj^\prime\) (empty row and column)
+		\STATE \(\features^\prime \leftarrow\) concatenate \(\features^\prime\) a random vector \(\tilde{\vx}_k \sim \Pi_{|x| \le x_{\max}}(\mathcal{N}(0, \sigma_n^2))\)
+		\FOR{\(j \in \{0, \dots, \Delta_e / s_e\}\)}
+		\STATE \(\hat{\vy} \leftarrow f_{\theta}(\adj | \adj^\prime, \features | \features^\prime)\)
+		\STATE \(l \leftarrow \nabla \mathcal{L}(\hat{\vy}, \vy)\) for \(k\)-th added node and if \(\hat{\vy} = \vy\)
+		\STATE \(\adj^\prime \leftarrow\) add \(s_e\) edges to \(\adj^\prime\) according to the top \(s_e\) values of \(l\)
+		\ENDFOR
+						
+		%\STATE \(l \leftarrow \nabla \mathcal{L}(f_{\theta}(\tilde{\adj}, \tilde{\features}), \vy)\) for \(i\)-th added node
+		%\STATE \(\tilde{\adj} \leftarrow\) remove between \(s_e\) and \(2s_e\) from \(\tilde{\adj}\) according to the lowest \(s_e\) values of \(l\)
+						
+		\FOR{\(j \in \{1, \dots, s_x\}\)}
+		\STATE \(\features^\prime \leftarrow \Pi_{\|\features^\prime\|_\infty \le \max(\mX)}(\tilde{\features} + \alpha_x \nabla_{\features^\prime} \mathcal{L}(f_{\theta}(\adj | \adj^\prime, \features | \features^\prime))\)
+		\ENDFOR
+		\ENDFOR
+	\end{algorithmic}
+\end{algorithm}
+
+
+\begin{wrapfigure}[18]{r}{.65\textwidth}
+  \centering
+  \vspace{-15pt}
+  \hbox{\hspace{15pt} \resizebox{0.9\linewidth}{!}{\input{assets/global_gang_cora_ml_0.1_node_degree_legend.pgf}}}
+  \vspace{-14pt}
+  \makebox[\linewidth][c]{
+  \(\begin{array}{cc}
+    \subfloat[]{\resizebox{0.5\linewidth}{!}{\input{assets/global_gang_cora_ml_0.1_node_degree_no_legend.pgf}}} & 
+    \subfloat[]{\resizebox{0.5\linewidth}{!}{\input{assets/global_gang_cora_ml_0.25_node_degree_no_legend.pgf}}} \\
+  \end{array}\)
+  }
+  \caption{Influence on the perturbed accuracy of the degree of adversarially added nodes. (a) show the perturbed accuracy with a budget of changing \(\epsilon=0.1\) edges, and (b) for \(\epsilon=0.25\).\label{fig:gangnodeeffectiveness}}
+\end{wrapfigure}
+
+In~\autoref{fig:gangnodeeffectiveness} we analyze the influence of the degree of the added nodes via this method. Surprisingly, we find that especially prepossessing of the adjacency matrix are very effective defenses depending on the node degree. We test GDC~\cite{Klicpera2019a} (i.e.~personalized page rank) and a low-rank SVD approximation~\cite{Entezari2020} of the adjacency matrix are effective attacks. SVD is a strong defense against low-degree nodes and personalized page rank is particularly strong against high degree nodes.
+
+Note that all proposed attacks could be easily complemented with further methods such as integrated gradients~\citep{Wu2019}. Moreover, there exists a closed form solution~\citep{Zugner2018, Wang2018AttackGC} for updating the symmetrically normalized adjacency matrix (as proposed by~\citet{Kipf2017}) after inserting or deleting an edge. However, since this is not the bottle neck for the extended attack and especially does not allow for a better complexity, we decide to keep the algorithms as simple as possible. Empirically PGD seems to be stronger than the greedy FSGM. Hence, instead of the greedy approach, one could try to use PGD for selecting the edges as well. In case even one dense row requires too much memory, we suggest to use the approach of the upcoming section (seamlessly adapts to minibatch training).
+
+\subsection{Perturbing the Adjacency Matrix}\label{sec:prbcd}
+
+In this section we are going to discuss the case where the attack vector is to perturb the existing graph structure:
+%
+\begin{equation}\label{eq:pgd}
+    \maximize_{\substack{\sP,\\\text{s.t.}\, |\sP| < \Delta}} \mathcal{L}(f_{\theta}(\sA \oplus \sP, \featset))
+\end{equation}
+%
+With the limited budget \(\Delta\) for unperceivable attacks, the resulting perturbation set \(\sP\) will be very sparse but the possibilities grow with \(\mathcal{O}(n^n)\) (for \(\Delta \lll n^2\)).  %Actually n^2^{min(\Delta, n^2-\Delta)}
+Note that in the following we interpret each possible entry in the perturbation set \(\sP\) as one dimension of our optimization problem. Using R-BCD to optimize towards the dense adjacency matrix still has a complexity of \(\mathcal{O}(n^2)\) and is on of the main reasons why scaling adversarial attacks for GNNs is challenging.
+
+To mitigate this, we make use of the fact that the solution is going to be sparse and the assumption that many close-to-optimal perturbation sets \(\sP\) exist. Moreover, given a set of potential edge additions or deletions, we must be able to determine (heuristically) which candidates are likely part of a close-to-optimal perturbation set. In~\autoref{fig:randomblocksizeinfluence}, we analyze the influence of the random block size on the perturbed accuracy. We see that for a sufficiently ``search space'' our method performs comparable to its dense equivalent. Surprisingly in some settings we even outperform the baseline. Perhaps this is due to the random restarts of the resampled fraction of the search space.
+
+\begin{wrapfigure}[26]{r}{.4\textwidth}
+%\begin{figure}
+  \centering
+  \vspace{-15pt}
+  \hbox{%\hspace{15pt}
+  \resizebox{1\linewidth}{!}{\input{assets/global_sampled_pgd_cora_ml_block_size_legend.pgf}}
+  }
+  %\vspace{-14pt}
+  \resizebox{1\linewidth}{!}{
+     \input{assets/global_sampled_pgd_cora_ml_block_size_no_legend.pgf}
+  }
+  \caption{We perform the proposed PR-BCD (solid lines) to obtain a perturbed adjacency matrix with the fraction of perturbed edges \(\epsilon=0.25\) (i.e. \(\Delta=1995\) edges). We only use 50 epochs in which we resample the search space and subsequently fine tune (fixed block/coordinates) for another 250 epochs. The dashed line show the performance of vanilla PGD~\citep{Xu2019a}.\label{fig:randomblocksizeinfluence}}
+\end{wrapfigure}
+
+We propose to use the heuristics \(h(\vx, \nabla \mathcal{L}(\sP))\) to decide which part of the random block we keep and which part we resample randomly. That is, we keep elements that have a large magnitude \(\vp\) and the remaining upper half sorted by the gradient \(\nabla \mathcal{L}(\sP))\). With all this in mind, we can view the underlying problem as a combination of \(L_0\)-norm Projected Gradient Descent and a special case of Randomized Block Coordinate Descent (R-BCD). Despite these modification we simply call our method in the following Projected and Randomized Block Coordinate Descent (PR-BCD) and. We give a formal definition of the algorithm in~\autoref{algo:prbcd}.
+ 
+As proposed by~\citet{Xu2019a}, \(\vp\) is interpreted as the probability mass for each potential entry in the perturbation set \(\sP\) and is used in the end to sample the final edge additions/removals. In each epoch \(e \in \{1,2, \dots, E\}\), this probability mass \(\vp\) is used as edge weight. The project function adjusts the probability mass such that \(\E[\text{Bernoulli}(\vp)] = \sum_{i \in b} \evp_i \approx \Delta\). If using an undirected graph, the potential edges are restricted to the the upper/lower triangular \(n \times n\) matrix. In our experiments we also employ early stopping such that we take the result of the epoch with highest loss \(\mathcal{L}\). For details about the projection and the final sampling, we refer to~\citet{Xu2019a}.
+ 
+\begin{algorithm}[h]
+	\caption{Projected and Randomized Block Coordinate Descent (PR-BCD)}
+	\label{algo:prbcd}
+	\begin{algorithmic}
+	\STATE Choose \(\vp_0 \in \R^d\)
+	\STATE Draw random indices \(\vi_0 \in \{0, 1, \dots, N\}^b\)
+	\FOR{\(k \in \{1,2, \dots, K\}\)}
+	    \STATE \(\vp_{k} \leftarrow \vp_{k-1} + \alpha_{k-1} \nabla_{\vi_{k-1}} \mathcal{L}(\vp_{k-1})\)
+	    \STATE Projection \(\vp_{k} \leftarrow \Pi_{\|\vp_{k}\|_0 < \Delta} (\vp_{k})\)
+	    \STATE \(\vi_{k} \leftarrow \vi_{k-1}\)
+	    \IF{\(e \le E_{\text{resample}}\)}
+	        \STATE \(\text{mask}_{\text{resample}} \leftarrow h(\vp_{k}, \nabla_{\vi_{k-1}} \mathcal{L}(\vp_{k-1}))\)
+	        \STATE Resample indices \(\vi_{k}[\text{mask}_{\text{resample}}] \in \{0, 1, \dots, N\}^{|\text{mask}_{\text{resample}}|}\)
+	    \ENDIF
+	\ENDFOR
+    \STATE Return \(\tilde{\sA}\) via sampling the edge add / rem.~w.r.t.~\(\text{Bernoulli}(\vp_{K})\) 
+	\end{algorithmic}
+\end{algorithm}
+
+An alternative strategy would be do a targeted attack (perturbing a single node`s output). Then we essentially have the same complexity considerations as in~\autoref{sec:attackkdd}. Despite it is an interesting attack as well (e.g.~used by~\citet{Zugner2018}), such an attack is out of scope of this work.
+
+\section{Scaling GNNs for Adversarial Attacks}\label{sec:scalegnns}
+
+Calculating the gradient towards the features or the weights of the (sparse) adjacency matrix typically comes with a comparable memory footprint as training with autograd frameworks such as PyTorch or Tensorflow. However, we typically want to add elements to the adjacency matrix and also the attack introduces some overhead. This highlights the need for a practical solution especially if we want to scale to larger graphs. 
+
+Certainly, using of the recent sampling techniques~\todo{Reference} would help to scale graph neural networks also in the context of adversarial attacks. Note that sampling, thresholding or using the top \(k\) elements is typically not differentiable, i.e.~the gradient towards the neglected elements is zero. Besides the potentially changed characteristics of the attacked model, such strategies are suitable to a limited extent for first order optimization of the features or edge weights. In contrast we notice that most operations in modern GNNs only depend on the neighborhood size (e.g.~a row in the adjacency matrix). As proposed by~\citep{Chen} the gradient is obtainable with sublinear memory cost via checkpointing. Specifically, we chunk some operations (e.g. matrix multiplication) within the message passing step to successfully scale to larger graphs. As we show in \todo{Reference} this helps to attack a model that already uses almost the entire available memory.
+
+%Of course this trick also has its limitations since we need to fit the features and the adjacency matrix into the memory. Moreover, the remaining memory should also of decent size that we can perform attacks efficiently (lets assume around 50\% of the GPU should be still available). Once the graphs is big enough such that this requirement is not fulfilled anymore, the only viable option is to somewhat chunk or sample (\todo{References?}) the graph. 
+
+Empirically, we show that as long as the model for the entire fits into memory we can employ this strategy. For larger graphs, one could introduce another layer of PR-BCD and only attack a subset of target nodes / labels at a time (naturally this requires a smart way to partition the graph~\todo{Reference?!}). Scaling even further, once even all the required information for a single neighborhood in a message passing steps does not fit into memory anymore, a distributed setup is perhaps inevitable due to the time cost.
+
+\section{Empirical Evaluation}\label{sec:empirical}
+
+In the following we preset our experiments to show the effectiveness and scalability of our proposed defense and attacks. We first introduce our setup in~\autoref{sec:empiricalsetup}. In~\autoref{sec:empiricalcommon}, we compare our methods to the current State of the Art. \autoref{sec:empiricalscale} concludes this section with our experiments on real-world datasets.
+
+\subsection{Setup}\label{sec:empiricalsetup}
+
+\textbf{Defenses.} We benchmark our defense based on the Soft Median aggregation to the other state of the art defenses of~\todo{Soft Medoid Paper}~\citep{Entezari2020, Wu2019, Zhu2019}. For the Soft Medoid GDC we use the temperature \(T=0.5\) as it is a good compromise between accuracy and robustness. The SVD GCN~\citep{Entezari2020} uses a (dense) low-rank approximation of the adjacency matrix to filter adversarial perturbations. RGCN~\citep{Zhu2019} models the neighborhood aggregation via Gaussian distribution to filter outliers and Jaccard GCN~\citep{Wu2019} filters edges based on attribute dissimilarity. In~\autoref{sec:empiricalcommon} we show the generality of our defense by equipping the very recent PPRGo~\todo{cite} architecture with our Soft Median. For the used hyperparameter we refer to~\autoref{sec:appendix_hyperparams}.
+
+\textbf{Certification.} For an thorough comparison to the Soft Medoid GDC we also apply Randomized Smoothing introduced by~\citep{Bojchevski2020}. Randomizes smoothing is a probabilistic black box certification technique and applicable to every model. Informally, an ensemble of models is created via random perturbations of the input data according to some randomization scheme. Subsequently based on the frequency of class prediction one can assign a probabilistic certificate for a certain perturbation budget (often referred to as radius). For more details we refer to the respective paper~\citep{Bojchevski2020}. We follow the setup in~\todo{Soft Medoid Paper} and certify for (a) addition or deletion of edges, (b) only deletion, (c) only addition.
+
+\textbf{Attacks.} Following~\todo{Soft Medoid Paper}, we use the targeted Nettack~\citep{Zugner2018}, global PGD~\citep{Xu2019a} and the global greedy FSGM~\todo{Soft Medoid Paper} attack. We complement these attacks with the salable attacks GANG (see~\autoref{sec:attackkdd}), PR-BCD and the greedy FSGM R-BCD (see~\autoref{sec:prbcd}). For hyperparameters see~\autoref{sec:appendix_hyperparams}.
+
+\textbf{Datasets.} In~\autoref{sec:empiricalcommon} we use Cora, Citeseer and Pubmed~\todo{cite} for comparing against the other state of the art defenses. Subsequently, in~\autoref{sec:empiricalscale}, we use two graphs for node prediction of of the recent Open Graph Benchmark~\todo{cite}. Thus, in comparison to Pubmed, we scale all the preceding work by around 2.5 orders of magnitude (number of nodes) or by factor 15,000 if counting the possible entires in the adjacency matrix (see~\autoref{tab:datasets}). For Cora, Citeseer and PubMed we use an 11GB GeForce GTX 1080 Ti and we run all other experiments on a 32GB Tesla V100.
+
+\begin{table}
+\centering
+\caption{Statistics of the used datasets. For the dense adjacency matrix we assume that each elements is represented by 4 bytes. In the sparse case we use two 8 byte integer pointers and a 4 bytes float value.}
+\label{tab:datasets}
+\resizebox{\linewidth}{!}{
+    \begin{tabular}{lrrrrrr}
+    \toprule
+    {} & \textbf{\#Nodes $n$} & \textbf{\#Edges $e$} & \textbf{\#Features $d$} & \textbf{\#Possible edges} & \textbf{Size (dense)} & \textbf{Size (sparse)} \\
+    \textbf{Dataset}     &                      &                      &                         &                           &                         &                          \\
+    \midrule
+    \textbf{Cora ML}     &                2,810 &               15,962 &                   2,879 &                 7.896E+06 &                31.58 MB &                319.24 kB \\
+    \textbf{Citeseer}    &                2,110 &                7,336 &                   3,703 &                 4.452E+06 &                17.81 MB &                146.72 kB \\
+    \textbf{PubMed}      &               19,717 &               88,648 &                     500 &                 3.888E+08 &                 1.56 GB &                  1.77 MB \\
+    \textbf{arXiv}       &              169,343 &            1,166,243 &                     128 &                 2.868E+10 &               114.71 GB &                 23.32 MB \\
+    \textbf{Products}    &            2,449,029 &          123,718,280 &                     100 &                 5.998E+12 &                23.99 TB &                  2.47 GB \\
+    \textbf{Papers 100M} &          111,059,956 &        1,615,685,872 &                     128 &                 1.233E+16 &                49.34 PB &                 32.31 GB \\
+    \bottomrule
+    \end{tabular}
+}
+\end{table}
+
+
+
+\subsection{Classical Datasets for Adversarial Robustness}\label{sec:empiricalcommon}
+
+In this section we present our results on Cora, Citeseer and PubMed. First, in~\todo{Table} we compare against the Soft Medoid GDC via the average certifiable radius of the correctly predicted nodes. \todo{Table} summarizes the perturbed accuracy for the different attacks and various perturbation budgets.
+
+\begin{table}
+\centering
+\caption{Perturbed accuracy for the global attacks on Cora ML, Citeseer and PubMed. \(\epsilon\) denotes the fraction of edges perturbed (relative to the clean graph). The last column contains the clean accuracy.}
+\label{tab:global}
+\resizebox{\linewidth}{!}{
+    \begin{tabular}{llccccccccccccc}
+    \toprule
+                           & \textbf{Attack} & \multicolumn{2}{l}{Dice} & \multicolumn{2}{l}{FSGM} & \multicolumn{2}{l}{FSGM R-BCD} & \multicolumn{2}{l}{GANG} & \multicolumn{2}{l}{PGD} & \multicolumn{2}{l}{PR-BCD} &  \textbf{Accuracy} \\
+                           & \textbf{Fraction of perturbed edges} $\boldsymbol{\epsilon}$ &                0.1 &               0.25 &                0.1 &               0.25 &                0.1 &               0.25 &                0.1 &               0.25 &                0.1 &               0.25 &                0.1 & \multicolumn{2}{l}{0.25} \\
+      & \textbf{Architecture} &                    &                    &                    &                    &                    &                    &                    &                    &                    &                    &                    &                    &                    \\
+    \midrule
+    \multirow{16}{*}{\rotatebox{90}{Cora ML}} & Vanilla GCN &              0.812 &              0.785 &              0.733 &              0.651 &              0.767 &              0.710 &              0.721 &              0.643 &              0.735 &              0.649 &              0.721 &              0.619 &              0.829 \\
+                           & Vanilla GDC &              0.811 &              0.789 &              0.722 &              0.648 &              0.761 &              0.706 &              0.764 &              0.713 &              0.730 &              0.648 &              0.712 &              0.626 &              0.833 \\
+                           & SVD GCN &              0.749 &              0.710 &              0.751 &              0.682 &              0.754 &              0.702 &              0.773 &              0.762 &              0.732 &              0.653 &              0.731 &              0.635 &              0.777 \\
+                           & Jaccard GCN &              0.801 &              0.777 &              0.731 &              0.658 &              0.762 &              0.707 &              0.764 &              0.730 &              0.731 &              0.649 &              0.720 &              0.628 &              0.819 \\
+                           & RGCN &              0.782 &              0.752 &              0.719 &              0.649 &              0.736 &              0.682 &              0.724 &              0.641 &              0.720 &              0.642 &              0.711 &              0.630 &              0.804 \\
+                           & Soft Medoid GDC ($T=1.0$) &              0.818 &              0.801 &              0.739 &              0.679 &              0.769 &              0.724 &              0.799 &              0.782 &              0.741 &              0.662 &              0.737 &              0.664 &              0.832 \\
+                           & Soft Medoid GDC ($T=0.5$) &              0.813 &              0.796 &              0.750 &              0.697 &              0.772 &              0.731 &              0.786 &              0.776 &              0.746 &              0.672 &              0.750 &              0.690 &              0.824 \\
+                           & Soft Medoid GDC ($T=0.2$) &              0.787 &              0.777 &              0.753 &              0.713 &              0.762 &              0.732 &              0.753 &              0.746 &              0.749 &  \underline{0.694} &              0.756 &  \underline{0.729} &              0.801 \\
+                           & Soft Residual GDC ($T=1.0$) &              0.820 &              0.801 &              0.738 &              0.672 &              0.769 &              0.715 &              0.790 &              0.769 &              0.738 &              0.655 &              0.728 &              0.647 &              0.835 \\
+                           & Soft Residual GDC ($T=0.5$) &     \textbf{0.822} &  \underline{0.805} &              0.744 &              0.680 &              0.772 &              0.721 &  \underline{0.802} &  \underline{0.788} &              0.744 &              0.662 &              0.736 &              0.664 &     \textbf{0.838} \\
+                           & Soft Residual GDC ($T=0.2$) &              0.820 &     \textbf{0.806} &              0.757 &              0.698 &  \underline{0.775} &              0.728 &              0.794 &              0.779 &              0.750 &              0.674 &              0.750 &              0.695 &  \underline{0.836} \\
+                           & Soft Residual GDC ($T=0.1$) &              0.814 &              0.803 &     \textbf{0.765} &  \underline{0.719} &     \textbf{0.776} &     \textbf{0.736} &              0.741 &              0.733 &  \underline{0.756} &              0.691 &     \textbf{0.766} &              0.725 &              0.826 \\
+                           & Soft Median GDC ($T=1.0$) &              0.819 &              0.802 &              0.743 &              0.677 &              0.763 &              0.709 &              0.798 &              0.779 &              0.742 &              0.660 &              0.734 &              0.658 &              0.835 \\
+                           & Soft Median GDC ($T=0.5$) &  \underline{0.821} &     \textbf{0.806} &              0.750 &              0.690 &              0.768 &              0.715 &     \textbf{0.804} &     \textbf{0.789} &              0.746 &              0.668 &              0.745 &              0.681 &              0.835 \\
+                           & Soft Median GDC ($T=0.2$) &              0.816 &              0.802 &  \underline{0.761} &              0.708 &              0.771 &              0.724 &              0.773 &              0.760 &              0.751 &              0.681 &  \underline{0.758} &              0.710 &              0.825 \\
+                           & Soft Median GDC ($T=0.1$) &              0.799 &              0.783 &     \textbf{0.765} &     \textbf{0.727} &              0.771 &  \underline{0.733} &              0.749 &              0.744 &     \textbf{0.759} &     \textbf{0.703} &     \textbf{0.766} &     \textbf{0.736} &              0.812 \\
+    \cline{1-15}
+    \multirow{16}{*}{\rotatebox{90}{Citeseer}} & Vanilla GCN &              0.696 &              0.678 &              0.636 &              0.554 &              0.665 &              0.612 &              0.675 &              0.621 &              0.638 &              0.552 &              0.642 &              0.570 &              0.710 \\
+                           & Vanilla GDC &              0.686 &              0.666 &              0.620 &              0.544 &              0.660 &              0.613 &              0.671 &              0.631 &              0.625 &              0.538 &              0.635 &              0.561 &              0.709 \\
+                           & SVD GCN &              0.622 &              0.582 &              0.627 &              0.566 &              0.618 &              0.248 &              0.629 &              0.577 &              0.615 &              0.557 &              0.587 &              0.519 &              0.643 \\
+                           & Jaccard GCN &              0.700 &              0.683 &              0.657 &              0.593 &              0.670 &              0.630 &  \underline{0.705} &  \underline{0.697} &              0.653 &              0.580 &              0.660 &              0.606 &              0.712 \\
+                           & RGCN &              0.700 &              0.675 &              0.644 &              0.565 &              0.669 &              0.615 &              0.665 &              0.594 &              0.642 &              0.556 &              0.644 &              0.579 &     \textbf{0.719} \\
+                           & Soft Medoid GDC ($T=1.0$) &              0.699 &              0.686 &              0.648 &              0.592 &              0.671 &              0.632 &              0.699 &              0.688 &              0.645 &              0.574 &              0.670 &              0.630 &              0.709 \\
+                           & Soft Medoid GDC ($T=0.5$) &              0.704 &              0.694 &              0.663 &              0.620 &              0.677 &              0.647 &              0.699 &              0.691 &              0.656 &              0.601 &              0.680 &              0.652 &              0.709 \\
+                           & Soft Medoid GDC ($T=0.2$) &              0.687 &              0.679 &              0.664 &              0.640 &              0.669 &              0.649 &              0.685 &              0.676 &              0.660 &              0.626 &              0.669 &              0.654 &              0.695 \\
+                           & Soft Residual GDC ($T=1.0$) &              0.694 &              0.677 &              0.639 &              0.573 &              0.666 &              0.619 &              0.681 &              0.651 &              0.637 &              0.558 &              0.653 &              0.600 &              0.712 \\
+                           & Soft Residual GDC ($T=0.5$) &              0.695 &              0.684 &              0.647 &              0.590 &              0.668 &              0.631 &              0.690 &              0.672 &              0.643 &              0.575 &              0.664 &              0.622 &              0.702 \\
+                           & Soft Residual GDC ($T=0.2$) &  \underline{0.707} &              0.699 &              0.670 &              0.634 &              0.683 &              0.652 &              0.704 &              0.695 &              0.668 &              0.619 &              0.687 &              0.667 &  \underline{0.713} \\
+                           & Soft Residual GDC ($T=0.1$) &              0.706 &  \underline{0.700} &  \underline{0.681} &  \underline{0.662} &  \underline{0.686} &  \underline{0.664} &              0.702 &              0.695 &  \underline{0.685} &  \underline{0.653} &  \underline{0.693} &  \underline{0.684} &              0.710 \\
+                           & Soft Median GDC ($T=1.0$) &              0.698 &              0.683 &              0.646 &              0.586 &              0.667 &              0.629 &              0.686 &              0.664 &              0.641 &              0.570 &              0.664 &              0.618 &              0.709 \\
+                           & Soft Median GDC ($T=0.5$) &              0.700 &              0.692 &              0.661 &              0.615 &              0.675 &              0.643 &              0.697 &              0.680 &              0.652 &              0.597 &              0.677 &              0.648 &              0.708 \\
+                           & Soft Median GDC ($T=0.2$) &              0.701 &              0.694 &              0.676 &              0.652 &              0.684 &  \underline{0.664} &              0.700 &              0.692 &              0.675 &              0.643 &              0.690 &              0.675 &              0.708 \\
+                           & Soft Median GDC ($T=0.1$) &     \textbf{0.710} &     \textbf{0.703} &     \textbf{0.696} &     \textbf{0.678} &     \textbf{0.694} &     \textbf{0.682} &     \textbf{0.706} &     \textbf{0.703} &     \textbf{0.696} &     \textbf{0.677} &     \textbf{0.700} &     \textbf{0.691} &              0.712 \\
+    \cline{1-15}
+    \multirow{15}{*}{\rotatebox{90}{PubMed}} & Vanilla GCN &              0.748 &              0.715 &                  - &                  - &              0.692 &              0.605 &              0.664 &              0.513 &                  - &                  - &              0.677 &              0.582 &              0.772 \\
+                           & Vanilla GDC &              0.753 &              0.716 &                  - &                  - &              0.695 &              0.608 &              0.708 &              0.651 &                  - &                  - &              0.678 &              0.593 &              0.780 \\
+                           & Jaccard GCN &              0.746 &              0.713 &                  - &                  - &              0.692 &              0.605 &              0.666 &              0.517 &                  - &                  - &              0.677 &              0.582 &              0.770 \\
+                           & RGCN &              0.718 &              0.682 &                  - &                  - &              0.663 &              0.591 &     \textbf{0.764} &     \textbf{0.765} &                  - &                  - &              0.660 &              0.584 &              0.744 \\
+                           & Soft Medoid GDC ($T=1.0$) &              0.763 &              0.738 &                  - &                  - &              0.704 &              0.625 &  \underline{0.747} &  \underline{0.742} &                  - &                  - &              0.699 &              0.631 &              0.780 \\
+                           & Soft Medoid GDC ($T=0.5$) &              0.763 &              0.742 &                  - &                  - &              0.705 &              0.635 &              0.723 &              0.719 &                  - &                  - &              0.710 &              0.658 &              0.776 \\
+                           & Soft Medoid GDC ($T=0.2$) &              0.751 &              0.737 &                  - &                  - &              0.704 &              0.653 &              0.703 &              0.701 &                  - &                  - &              0.717 &              0.689 &              0.760 \\
+                           & Soft Residual GDC ($T=1.0$) &              0.762 &              0.735 &                  - &                  - &              0.702 &              0.622 &              0.724 &              0.694 &                  - &                  - &              0.695 &              0.624 &              0.778 \\
+                           & Soft Residual GDC ($T=0.5$) &              0.763 &              0.740 &                  - &                  - &              0.704 &              0.629 &              0.742 &              0.730 &                  - &                  - &              0.702 &              0.641 &              0.775 \\
+                           & Soft Residual GDC ($T=0.2$) &              0.764 &     \textbf{0.746} &                  - &                  - &              0.709 &              0.644 &              0.735 &              0.738 &                  - &                  - &              0.713 &              0.667 &              0.778 \\
+                           & Soft Residual GDC ($T=0.1$) &              0.762 &     \textbf{0.746} &                  - &                  - &  \underline{0.715} &  \underline{0.664} &              0.709 &              0.716 &                  - &                  - &     \textbf{0.724} &  \underline{0.690} &              0.776 \\
+                           & Soft Median GDC ($T=1.0$) &  \underline{0.765} &              0.740 &                  - &                  - &              0.709 &              0.631 &              0.692 &              0.629 &                  - &                  - &              0.701 &              0.635 &  \underline{0.781} \\
+                           & Soft Median GDC ($T=0.5$) &     \textbf{0.767} &     \textbf{0.746} &                  - &                  - &              0.711 &              0.640 &              0.705 &              0.666 &                  - &                  - &              0.710 &              0.654 &     \textbf{0.782} \\
+                           & Soft Median GDC ($T=0.2$) &              0.762 &     \textbf{0.746} &                  - &                  - &              0.713 &              0.655 &              0.695 &              0.683 &                  - &                  - &              0.718 &              0.678 &              0.775 \\
+                           & Soft Median GDC ($T=0.1$) &              0.756 &  \underline{0.744} &                  - &                  - &     \textbf{0.717} &     \textbf{0.672} &              0.667 &              0.665 &                  - &                  - &  \underline{0.723} &     \textbf{0.695} &              0.765 \\
+    \bottomrule
+    \end{tabular}
+}
+\end{table}
+
+\begin{table}
+\centering
+\caption{Targeted attack in the same setup as the evasion Nettack attack~\citep{Zuegner2018}. We report the average margin and the failure rate of the attack (higher is better).}
+\label{tab:nettack}
+\begin{tabular}{llcc}
+\toprule
+                         &                             & \multicolumn{2}{c}{\textbf{Nettack}} \\
+                         &                             &    \textbf{Margin} &  \textbf{Fail. r.} \\
+\midrule
+\multirow{11}{*}{\rotatebox{90}{Cora ML}} & Vanilla GCN &             -0.414 &              0.181 \\
+                         & Vanilla GDC &             -0.482 &              0.150 \\
+                         & SVD GCN &              0.213 &  \underline{0.640} \\
+                         & Jaccard GCN &             -0.462 &              0.258 \\
+                         & RGCN &              0.003 &              0.350 \\
+                         & Soft Medoid GDC ($T=1.0$) &              0.067 &              0.500 \\
+                         & Soft Medoid GDC ($T=0.5$) &              0.031 &              0.425 \\
+                         & Soft Medoid GDC ($T=0.2$) &     \textbf{0.291} &     \textbf{0.675} \\
+                         & Soft Residual GDC ($T=1.0$) &             -0.103 &              0.392 \\
+                         & Soft Residual GDC ($T=0.5$) &             -0.028 &              0.425 \\
+                         & Soft Residual GDC ($T=0.2$) &  \underline{0.221} &              0.575 \\
+\cline{1-4}
+\multirow{11}{*}{\rotatebox{90}{Citeseer}} & Vanilla GCN &             -0.557 &              0.025 \\
+                         & Vanilla GDC &             -0.507 &              0.050 \\
+                         & SVD GCN &             -0.000 &              0.510 \\
+                         & Jaccard GCN &             -0.430 &              0.167 \\
+                         & RGCN &             -0.054 &              0.408 \\
+                         & Soft Medoid GDC ($T=1.0$) &             -0.016 &              0.400 \\
+                         & Soft Medoid GDC ($T=0.5$) &              0.242 &  \underline{0.625} \\
+                         & Soft Medoid GDC ($T=0.2$) &  \underline{0.334} &     \textbf{0.675} \\
+                         & Soft Residual GDC ($T=1.0$) &             -0.038 &              0.442 \\
+                         & Soft Residual GDC ($T=0.5$) &              0.092 &              0.500 \\
+                         & Soft Residual GDC ($T=0.2$) &     \textbf{0.344} &  \underline{0.625} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\todo{Empirical table}
+
+\textbf{Discussion.} \todo{We see bla bla}
+
+\todo{Influence of node degree of adversarially added nodes.} \todo{We see bla bla}
+
+\todo{Figure Accuracy vs Degree}
+
+\subsection{Adversarial Attacks and Defenses at Scale}\label{sec:empiricalscale}
+
+\textbf{OGB Arxiv.} 
+
+\begin{figure}
+  \centering
+  \vspace{-15pt}
+  \hbox{\hspace{15pt} \resizebox{0.9\linewidth}{!}{\input{assets/global_gang_cora_ml_0.1_node_degree_legend.pgf}}}
+  \vspace{-14pt}
+    \resizebox{\linewidth}{!}{
+  \(\begin{array}{cccc}
+    \subfloat[]{\resizebox{0.25\linewidth}{!}{\input{assets/global_dice_ogbn-arxiv_acc_no_legend.pgf}}} &
+    \subfloat[]{\resizebox{0.25\linewidth}{!}{\input{assets/global_sampled_fsgm_ogbn-arxiv_acc_no_legend.pgf}}} & 
+    \subfloat[]{\resizebox{0.25\linewidth}{!}{\input{assets/global_gang_ogbn-arxiv_acc_no_legend.pgf}}} & 
+    \subfloat[]{\resizebox{0.25\linewidth}{!}{\input{assets/global_sampled_pgd_ogbn-arxiv_acc_no_legend.pgf}}} \\
+  \end{array}\)
+  }
+  \caption{Influence on the perturbed accuracy of the degree of adversarially added nodes. (a) show the perturbed accuracy with a budget of changing \(\epsilon=0.1\) edges, and (b) for \(\epsilon=0.25\).\label{fig:gangnodeeffectiveness}}
+\end{figure}
+
+\todo{Table of timings}
+
+\textbf{OGB Products.} 
+
+\todo{Table}
+
+\section{Conclusion}\label{sec:conclusion} % Open
+
+\todo{Scale}
+
+It seems to be easier to defend against adversarially added nodes than edge additions or deletions within the existing graph structure. Moreover, we believe that adding new nodes is more realistic than edding edges between existing nodes and, hence, this setting should be studied more in future work.
+
+\bibliography{references.bib}
+\bibliographystyle{iclr2021_conference}
+
+
+\appendix
+\section{Appendix}
+You may include other additional sections here.
+
+\subsection{Hyperparameters}\label{sec:appendix_hyperparams}
+
+\subsection{Old wrong proof}
+
+
+\begin{proof}\textit{Proof}\label{proof:wrong_old}
+    As discussed, we may choose w.l.o.g.~\(t_{\text{Soft Median}}(\features) = \bm{0}\). Let \( \pertmset \) be decomposable such that \(\pertmset = \pertmset^{(\text{clean})} \cup \pertmset^{(\text{pert.})} \). As pointed out by~\cite{Croux2002}, the worst-case perturbation is obtained when \(\pertmset^{(\text{pert.})}\) is a point mass. Using the property of orthogonal/rotation equivariance, we pick \(\tilde{\mathbf{x}}_i = [\begin{matrix}p & 0 & \cdots & 0\end{matrix}]^\top, \forall \tilde{\mathbf{x}}_i \in \pertmset^{(\text{pert.})}\) w.l.o.g.
+    
+    In the following we ask for the minimum fraction of outliers \(\epsilon\) for which  \(\lim_{p \to \infty} \|t_{\text{Soft Median}}(\pertm)\| < \infty\) does not hold anymore (see~\autoref{eq:softmedian} and~\autoref{eq:softmaxdist}):
+    \begin{equation}\label{eq:proof1}
+        \begin{aligned}
+        \lim_{p \to \infty} t_{\text{Soft Median}}(\pertm) 
+        &= \lim_{p \to \infty} \sum_{\evx_i \in \pertmset} \hat{\softout}_i \evx_i \\
+        &= \sum_{\evx_i \in \pertmset^{(\text{clean})}} \lim_{p \to \infty} \hat{\softout}_i \evx_i + \sum_{\evx_i \in \pertmset^{(\text{pert.})}} \lim_{p \to \infty} \hat{\softout}_i \tilde\evx_i \\
+        &= \sum_{\evx_i \in \pertmset^{(\text{clean})}} \Bigg[ \lim_{p \to \infty} \underbrace{\frac{1}{\hat{\softout}_i \evx_i}}_{C_i} \Bigg]^{-1} + \sum_{\evx_i \in \pertmset^{(\text{pert.})}} \Bigg[ \lim_{p \to \infty} \underbrace{\frac{1}{\hat{\softout}_i \tilde{\evx}_i}}_{P_i} \Bigg]^{-1} \\
+        \end{aligned}
+    \end{equation}
+    %
+    Subsequently, we need to solve the intermediate limits (using~\autoref{eq:softmaxdist})
+    \begin{equation}\label{eq:proof2}
+        \begin{aligned}
+         \lim_{p \to \infty} C_i 
+         &= \lim_{p \to \infty} \frac{\sum_{\evx_j \in \pertmset} \exp{\left (-\frac{1}{T} \|\evx_j - \bar{\vx}\| \right )}}{\exp{\left(-\frac{1}{T} \|\evx_i - \bar{\vx}\| \right )} \evx_i } \\
+         &= \sum_{\evx_j \in \pertmset^{(\text{clean})}} \lim_{p \to \infty} \frac{ \exp{\left (-\frac{1}{T} \|\evx_j - \bar{\vx}\| \right )}}{\exp{\left(-\frac{1}{T} \|\evx_i - \bar{\vx}\| \right )} \evx_i } + \sum_{\evx_j \in 
+         + \pertmset^{(\text{pert.})}} \lim_{p \to \infty} \frac{ \exp{\left (-\frac{1}{T} \|\tilde{\evx}_j - \bar{\vx}\| \right )}}{\exp{\left(-\frac{1}{T} \|\evx_i - \bar{\vx}\| \right )} \evx_i } \\
+         %&= \sum_{\evx_j \in \pertmset^{(\text{clean})}} \lim_{p \to \infty} \frac{ \exp(\frac{1}{T}) \exp{\left( -\|\evx_j - \bar{\vx}\| + \|\evx_i - \bar{\vx}\| \right)  }}{\evx_i } + \sum_{\evx_j \in \pertmset^{(\text{pert.})}} \lim_{p \to \infty} \frac{ \exp{\left (-\frac{1}{T} \|\tilde{\evx}_j - \bar{\vx}\| \right )}}{\exp{\left(-\frac{1}{T} \|\evx_i - \bar{\vx}\| \right )} \evx_i } \\
+         %&= \sum_{\evx_j \in \pertmset^{(\text{clean})}} \frac{ \exp{\left (-\frac{1}{T} \|\evx_j - \bar{\vx}\| \right )}}{\exp{\left(-\frac{1}{T} \|\evx_i - \bar{\vx}\| \right )} \evx_i } + \sum_{\evx_j \in \pertmset^{(\text{pert.})}} \lim_{p \to \infty} \frac{ \exp(\frac{1}{T}) \exp{\left( -\|\tilde{\evx}_j - \bar{\vx}\| + \|\evx_i - \bar{\vx}\| \right)  }}{\evx_i } \\        
+        &= \sum_{\evx_j \in \pertmset^{(\text{clean})}} \frac{ \exp{\left (-\frac{1}{T} \|\evx_j - \bar{\vx}\| \right )}}{\exp{\left(-\frac{1}{T} \|\evx_i - \bar{\vx}\| \right )} \evx_i } + \sum_{\evx_j \in \pertmset^{(\text{pert.})}}  \frac{\exp(\frac{1}{T})}{\evx_i } \lim_{p \to \infty} \exp{\Big( \underbrace{-\|\tilde{\evx}_j - \bar{\vx}\| + \|\evx_i - \bar{\vx}\|}_{=-\infty,\;\;\text{if} |\pertmset^{(\text{clean})}| > |\pertmset^{(\text{pert.})}|} \Big)  } \\  
+        &= \sum_{\evx_j \in \pertmset^{(\text{clean})}} \frac{ \exp{\left (-\frac{1}{T} \|\evx_j - \bar{\vx}\| \right )}}{\exp{\left(-\frac{1}{T} \|\evx_i - \bar{\vx}\| \right )} \evx_i } \\
+        \end{aligned} 
+    \end{equation}
+    and
+    \begin{equation}\label{eq:proof3}
+        \begin{aligned}
+         \lim_{p \to \infty} P_i 
+         &= \lim_{p \to \infty} \frac{\sum_{\evx_j \in \pertmset} \exp{\left (-\frac{1}{T} \|\evx_j - \bar{\vx}\| \right )}}{\exp{\left(-\frac{1}{T} \|\tilde{\evx}_i - \bar{\vx}\| \right )} \tilde{\evx}_i } \\
+         &= \sum_{\evx_j \in \pertmset^{(\text{clean})}} \lim_{p \to \infty} \frac{ \exp{\left (-\frac{1}{T} \|\evx_j - \bar{\vx}\| \right )}}{\exp{\left(-\frac{1}{T} \|\tilde{\evx}_i - \bar{\vx}\| \right )} \tilde{\evx}_i } + \sum_{\evx_j \in 
+         + \pertmset^{(\text{pert.})}} \lim_{p \to \infty} \frac{ \exp{\left (-\frac{1}{T} \|\tilde{\evx}_j - \bar{\vx}\| \right )}}{\exp{\left(-\frac{1}{T} \|\tilde{\evx}_i - \bar{\vx}\| \right )} \tilde{\evx}_i } \\
+         &=  \frac{ \exp(\frac{1}{T})}{\tilde{\evx}_i } \Bigg[ \sum_{\evx_j \in \pertmset^{(\text{clean})}} \lim_{p \to \infty} \exp{\Big( \underbrace{-\|\evx_j - \bar{\vx}\| + \|\tilde{\evx}_i - \bar{\vx}\|}_{=\infty,\;\;\text{if} |\pertmset^{(\text{clean})}| > |\pertmset^{(\text{pert.})}|} \Big)  } \\
+         & \hspace{55pt} + \sum_{\evx_j \in \pertmset^{(\text{pert.})}}  \lim_{p \to \infty} \exp{\Big( \underbrace{-\|\tilde{\evx}_j - \bar{\vx}\| + \|\tilde{\evx}_i - \bar{\vx}\|}_{=0} \Big)  } \Bigg]\\
+         &= \frac{ \exp(\frac{1}{T})}{\tilde{\evx}_i } \cdot \infty \\
+         &= \vec{\infty}\;. \\
+        \end{aligned} 
+    \end{equation}
+    %
+    Last, we need to plug in the intermediate results of~\autoref{eq:proof2} and~\autoref{eq:proof3} into~\autoref{eq:proof1}:
+    \begin{equation}\label{eq:proof1}
+        \begin{aligned}
+        \lim_{p \to \infty} t_{\text{Soft Median}}(\pertm) 
+        &= \sum_{\evx_i \in \pertmset^{(\text{clean})}} \Bigg[ \lim_{p \to \infty} \sum_{\evx_j \in \pertmset^{(\text{clean})}} \frac{ \exp{\left (-\frac{1}{T} \|\evx_j - \bar{\vx}\| \right )}}{\exp{\left(-\frac{1}{T} \|\evx_i - \bar{\vx}\| \right )} \evx_i } \Bigg]^{-1} + \sum_{\evx_i \in \pertmset^{(\text{pert.})}} \underbrace{\Bigg[ \lim_{p \to \infty} \infty \Bigg]^{-1}}_{=0} \\
+        &= \sum_{\evx_i \in \pertmset^{(\text{clean})}} \lim_{p \to \infty} \sum_{\evx_j \in \pertmset^{(\text{clean})}} \frac{\exp{\left(-\frac{1}{T} \|\evx_i - \bar{\vx}\| \right )} }{ \exp{\left (-\frac{1}{T} \|\evx_j - \bar{\vx}\| \right )}} \evx_i \\
+        \end{aligned}
+    \end{equation}
+    Hence, \(\lim_{p \to \infty} \|t_{\text{Soft Median}}(\pertm)\| < \infty\)! The proof is complete.
+\end{proof}
+
+For intermediate results and the used laws for limits we refer to the appendix~\todo{Reference}.
+
+\todo{Move from here}
+For solving several limits throughout our proofs, we make use of the following limit laws:
+\begin{itemize}
+    \item Law of addition: \(\lim_{x \to a} \left[f(x) + g(x)\right] = \lim_{x \to a}f(x) + \lim_{x \to a}g(x)\)
+    \item Law of multiplication: \(\lim_{x \to a} \left[f(x) g(x)\right] = \left(\lim_{x \to a}f(x)\right) \left(\lim_{x \to a}g(x)\right)\)
+    \item Law of division: \(\lim_{x \to a} \nicefrac{f(x)}{g(x)} =  \nicefrac{\lim_{x \to a}f(x)}{\lim_{x \to a}g(x)}\)\quad(if \(\lim_{x \to a}g(x) \ne 0\))
+    \item Power law: \(\lim_{x \to a} \left[f(x)\right]^b = \left[\lim_{x \to a} f(x)\right]^b\)
+    \item Composition law: \(\lim_{x \to a} f(g(x)) = f(\lim_{x \to a}g(x))\)\quad(if \(f(x)\) is continuous)
+\end{itemize}
+Further, note that a limit of a vector-valued function is evaluated element-wise. With \(\lim_{x \to \infty} f(x)\) we denote the limit towards positive infinity \(x \to +\infty\).
+\todo{Move until here}
+
+\end{document}

@@ -48,8 +48,8 @@ def config():
     binary_attr = False
     seed = 0
     artifact_dir = 'cache'  # 'cache_debug'
-    pert_adj_storage_type = 'attack_adj'
-    pert_attr_storage_type = 'attack_attr'
+    pert_adj_storage_type = 'evasion_transfer_attack_adj'
+    pert_attr_storage_type = 'evasion_transfer_attack_attr'
     model_storage_type = 'pretrained'
     device = 0
     display_steps = 10
@@ -79,7 +79,7 @@ def run(dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequ
 
     results = []
 
-    data = prep_graph(dataset, device=device, binary_attr=binary_attr, return_original_split=dataset.startswith('ogbn'))
+    data = prep_graph(dataset, device='cpu', binary_attr=binary_attr, return_original_split=dataset.startswith('ogbn'))
     if len(data) == 3:
         attr, adj, labels = data
         idx_train, idx_val, idx_test = data.split(labels.cpu().numpy())
@@ -89,7 +89,8 @@ def run(dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequ
     n_features = attr.shape[1]
     n_classes = int(labels.max() + 1)
 
-    params = dict(dataset=dataset, binary_attr=binary_attr, seed=seed, attack=attack, attack_params=attack_params)
+    params = dict(dataset=dataset, binary_attr=binary_attr, seed=seed, attack=attack,
+                  surrogate_params=surrogate_params, attack_params=attack_params)
     storage = Storage(artifact_dir, experiment=ex)
 
     adj_per_eps = []
@@ -118,15 +119,18 @@ def run(dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequ
         else:
             gcn = DenseGCN(n_classes=n_classes, n_features=n_features, **surrogate_params).to(device)
             adj_surrogate = adj.to_dense()
-        _ = train(model=gcn, attr=attr, adj=adj_surrogate, labels=labels, idx_train=idx_train, idx_val=idx_val,
-                  display_step=display_steps, **surrogate_params['train_params'])
+        train(model=gcn, attr=attr.to(device), adj=adj_surrogate.to(device), labels=labels.to(device),
+              idx_train=idx_train, idx_val=idx_val, display_step=display_steps, **surrogate_params['train_params'])
         gcn.eval()
+        if hasattr(gcn, 'release_cache'):
+            gcn.release_cache()
         with torch.no_grad():
-            pred_logits_surr = gcn(attr, adj_surrogate)
-        logging.info(f'Test accuracy of surrogate: {accuracy(pred_logits_surr, labels, idx_test)}')
+            pred_logits_surr = gcn(attr.to(device), adj_surrogate.to(device))
+        logging.info(f'Test accuracy of surrogate: {accuracy(pred_logits_surr, labels.to(device), idx_test)}')
+        del pred_logits_surr
 
         adversary = create_attack(attack, adj=adj, X=attr, labels=labels,
-                                  model=gcn, idx_attack=idx_test, **attack_params)
+                                  model=gcn, idx_attack=idx_test, device=device, **attack_params)
 
         tmp_epsilons = list(epsilons)
         if tmp_epsilons[0] != 0:

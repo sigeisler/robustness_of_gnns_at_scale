@@ -1,11 +1,13 @@
 from typing import Union
 
+from .dice import DICE
 from .fgsm import FGSM
 from .gang import GANG
 from .greedy_rbcd import GreedyRBCD
+from .pgd import PGD
 from .prbcd import PRBCD
-ATTACK_TYPE = Union[FGSM, GANG, GreedyRBCD, PRBCD]
-SPARSE_ATTACKS = [GANG.__name__, GreedyRBCD.__name__, PRBCD.__name__]
+ATTACK_TYPE = Union[DICE, FGSM, GANG, GreedyRBCD, PGD, PRBCD]
+SPARSE_ATTACKS = [GANG.__name__, GreedyRBCD.__name__, PRBCD.__name__, DICE.__name__]
 
 
 def create_attack(attack: str, **kwargs) -> ATTACK_TYPE:

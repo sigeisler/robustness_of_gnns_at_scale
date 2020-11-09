@@ -1,0 +1,57 @@
+seml:
+  name: rgnn_at_scale_attack_evasion_transfer
+  db_collection: rgnn_at_scale_attack_evasion_transfer
+  executable: experiment_attack_evasion_transfer.py
+  conda_environment: rgnn_at_scale
+  project_root_dir: ../..
+  output_dir: seml/attack_evasion_transfer/output
+
+slurm:
+  experiments_per_job: 1
+  sbatch_options:
+    gres: gpu:1       # num GPUs
+    mem: 32G          # memory
+    cpus-per-task: 4  # num cores
+    time: 1-00:00     # max time, D-HH:MM
+    partition: gpu_large
+
+fixed:
+  epsilons: [0, 0.1]
+  surrogate_params:
+    n_filters: 64
+    dropout: 0.5
+    do_checkpoint: True
+    n_chunks: 64
+    train_params:
+      lr: 1e-2
+      weight_decay: 1e-3
+      patience: 100
+      max_epochs: 3000
+  artifact_dir: cache
+  pert_adj_storage_type: attack
+  model_storage_type: pretrained
+  device: 0
+  binary_attr: False
+
+  dataset: ogbn-products
+
+grid:
+  seed:
+    type: choice
+    options:
+      # - 0
+      - 1
+      # - 5
+
+greedy_rbcd:
+  fixed:
+    attack: GreedyRBCD
+
+prbcd:
+  fixed:
+    attack: PRBCD
+    attack_params:
+      keep_heuristic: WeightOnly
+      search_space_size: 15_000_000
+      do_synchronize: True
+

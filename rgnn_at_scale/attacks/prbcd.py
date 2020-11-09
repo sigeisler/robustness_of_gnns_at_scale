@@ -1,6 +1,6 @@
 from copy import deepcopy
 import math
-from typing import Tuple
+from typing import Tuple, Union
 
 from tqdm import tqdm
 from torch.nn import functional as F
@@ -29,6 +29,7 @@ class PRBCD(object):
                  labels: torch.Tensor,
                  idx_attack: np.ndarray,
                  model: GCN,
+                 device: Union[str, int, torch.device],
                  loss_type: str = 'CE',  # 'CW', 'LeakyCW'  # 'CE', 'MCE', 'Margin'
                  keep_heuristic: str = 'Gradient',  # 'InvWeightGradient' 'Gradient', 'WeightOnly'
                  keep_weight: float = .1,
@@ -45,7 +46,7 @@ class PRBCD(object):
                  **kwargs):
 
         super().__init__()
-        self.device = X.device
+        self.device = device
         self.X = X
         self.model = deepcopy(model).to(self.device)
         self.model.eval()
@@ -95,13 +96,14 @@ class PRBCD(object):
         best_epoch = float('-Inf')
 
         for epoch in tqdm(range(self.epochs + self.fine_tune_epochs)):
+            self.modified_edge_weight_diff.requires_grad = True
             edge_index, edge_weight = self.get_modified_adj()
 
             if self.do_synchronize:
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
 
-            logits = F.log_softmax(self.model(data=self.X, adj=(edge_index, edge_weight)), dim=1)
+            logits = self.model(data=self.X.to(self.device), adj=(edge_index, edge_weight))
             loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
 
             gradient = utils.grad_with_checkpoint(loss, self.modified_edge_weight_diff)[0]
@@ -113,8 +115,8 @@ class PRBCD(object):
             if epoch % self.display_step == 0:
                 accuracy = (
                     logits.argmax(-1)[self.idx_attack] == self.labels[self.idx_attack]
-                ).float().mean()
-                print(f'\nEpoch: {epoch} Loss: {loss.item()} Accuracy: {100 * accuracy.item():.3f} %\n')
+                ).float().mean().item()
+                print(f'\nEpoch: {epoch} Loss: {loss.item()} Accuracy: {100 * accuracy:.3f} %\n')
 
             if self.with_early_stropping and best_loss < loss:
                 best_loss = loss.detach()
@@ -123,16 +125,22 @@ class PRBCD(object):
                 best_edge_index = self.modified_edge_index.clone().cpu()
                 best_edge_weight_diff = self.modified_edge_weight_diff.detach().clone().cpu()
 
-            edge_weight = self.update_edge_weights(n_perturbations, epoch, gradient)[1]
-            self.projection(n_perturbations, edge_index, edge_weight)
-            if epoch < self.epochs - 1:
-                self.resample_search_space(n_perturbations, edge_index, edge_weight, gradient)
-            elif self.with_early_stropping and epoch == self.epochs - 1:
-                print(f'Loading search space of epoch {best_epoch} (loss={best_loss.item()}) for fine tuning\n')
-                self.current_search_space = best_search_space.to(self.device)
-                self.modified_edge_index = best_edge_index.to(self.device)
-                self.modified_edge_weight_diff = best_edge_weight_diff.to(self.device)
-                self.modified_edge_weight_diff.requires_grad = True
+            with torch.no_grad():
+                self.modified_edge_weight_diff.requires_grad = False
+                edge_weight = self.update_edge_weights(n_perturbations, epoch, gradient)[1]
+                self.projection(n_perturbations, edge_index, edge_weight)
+                if epoch < self.epochs - 1:
+                    self.resample_search_space(n_perturbations, edge_index, edge_weight, gradient)
+                elif self.with_early_stropping and epoch == self.epochs - 1:
+                    print(f'Loading search space of epoch {best_epoch} (loss={best_loss.item()}) for fine tuning\n')
+                    self.current_search_space = best_search_space.to(self.device)
+                    self.modified_edge_index = best_edge_index.to(self.device)
+                    self.modified_edge_weight_diff = best_edge_weight_diff.to(self.device)
+                    self.modified_edge_weight_diff.requires_grad = True
+
+            del logits
+            del loss
+            del gradient
 
         self.current_search_space = best_search_space.to(self.device)
         self.modified_edge_index = best_edge_index.to(self.device)
@@ -166,7 +174,7 @@ class PRBCD(object):
                         -pos_modified_edge_weight_diff
                     ).float()
                     edge_index, edge_weight = self.get_modified_adj()
-                    output = self.model(data=self.X, adj=(edge_index, edge_weight))
+                    output = self.model(data=self.X.to(self.device), adj=(edge_index, edge_weight))
                     loss = self.calculate_loss(output[self.idx_attack], self.labels[self.idx_attack])
                     if best_loss < loss:
                         best_loss = loss
@@ -215,16 +223,14 @@ class PRBCD(object):
     def projection(self, n_perturbations: int, edge_index: torch.Tensor, edge_weight: torch.Tensor) -> torch.Tensor:
         does_original_edge_exist, is_in_search_space = self.match_search_space_on_edges(edge_index, edge_weight)
 
-        with torch.no_grad():
-            pos_modified_edge_weight_diff = torch.where(
-                does_original_edge_exist, -self.modified_edge_weight_diff, self.modified_edge_weight_diff
-            )
-            pos_modified_edge_weight_diff = PRBCD.project(n_perturbations, pos_modified_edge_weight_diff, self.eps)
+        pos_modified_edge_weight_diff = torch.where(
+            does_original_edge_exist, -self.modified_edge_weight_diff, self.modified_edge_weight_diff
+        )
+        pos_modified_edge_weight_diff = PRBCD.project(n_perturbations, pos_modified_edge_weight_diff, self.eps)
 
         self.modified_edge_weight_diff = torch.where(
             does_original_edge_exist, -pos_modified_edge_weight_diff, pos_modified_edge_weight_diff
         )
-        self.modified_edge_weight_diff.requires_grad = True
 
     def handle_zeros_and_ones(self):
         # Handling edge case to detect an unchanged edge via its value 1
@@ -244,8 +250,8 @@ class PRBCD(object):
 
         if (
             not self.modified_edge_weight_diff.requires_grad
-            or not hasattr(self.model, 'do_chunk')
-            or not self.model.do_chunk
+            or not hasattr(self.model, 'do_checkpoint')
+            or not self.model.do_checkpoint
         ):
             modified_edge_index, modified_edge_weight = utils.to_symmetric(
                 self.modified_edge_index, self.modified_edge_weight_diff, self.n
@@ -263,21 +269,6 @@ class PRBCD(object):
         else:
             from torch.utils import checkpoint
 
-            with torch.no_grad():
-                modified_edge_index, modified_edge_weight = utils.to_symmetric(
-                    self.modified_edge_index, self.modified_edge_weight_diff, self.n
-                )
-                edge_index = torch.cat((self.edge_index.to(self.device), modified_edge_index), dim=-1)
-                edge_weight = torch.cat((self.edge_weight.to(self.device), modified_edge_weight))
-
-                edge_index, edge_weight = torch_sparse.coalesce(
-                    edge_index,
-                    edge_weight,
-                    m=self.n,
-                    n=self.n,
-                    op='sum'
-                )
-
             def fuse_edges_run(modified_edge_weight_diff: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
                 modified_edge_index, modified_edge_weight = utils.to_symmetric(
                     self.modified_edge_index, modified_edge_weight_diff, self.n
@@ -285,6 +276,7 @@ class PRBCD(object):
                 edge_index = torch.cat((self.edge_index.to(self.device), modified_edge_index), dim=-1)
                 edge_weight = torch.cat((self.edge_weight.to(self.device), modified_edge_weight))
 
+                # FIXME: This seems to be the current bottle neck. Maybe change to merge of sorted lists
                 edge_index, edge_weight = torch_sparse.coalesce(
                     edge_index,
                     edge_weight,
@@ -292,18 +284,31 @@ class PRBCD(object):
                     n=self.n,
                     op='sum'
                 )
-                return edge_weight
+                return edge_index, edge_weight
+
+            # Due to bottleneck...
+            if len(self.edge_weight) > 100_000_000:
+                device = self.device
+                self.device = 'cpu'
+                self.modified_edge_index = self.modified_edge_index.to(self.device)
+                edge_index, edge_weight = fuse_edges_run(self.modified_edge_weight_diff.cpu())
+                self.device = device
+                self.modified_edge_index = self.modified_edge_index.to(self.device)
+                return edge_index.to(self.device), edge_weight.to(self.device)
+
+            # Currently (1.6.0) PyTorch does not support return arguments of `checkpoint` that do not require gradient.
+            # For this reason we need to execute the code twice (due to checkpointing in fact three times...)
+            with torch.no_grad():
+                edge_index = fuse_edges_run(self.modified_edge_weight_diff)[0]
 
             edge_weight = checkpoint.checkpoint(
-                fuse_edges_run,
+                lambda *input: fuse_edges_run(*input)[1],
                 self.modified_edge_weight_diff
             )
 
         return edge_index, edge_weight
 
     def update_edge_weights(self, n_perturbations: int, epoch: int, gradient: torch.Tensor):
-        self.modified_edge_weight_diff = self.modified_edge_weight_diff.detach()
-
         lr_factor = max(1., n_perturbations / self.n / 2 / self.lr_n_perturbations_factor) * self.lr_factor
         lr = lr_factor / np.sqrt(max(0, epoch - self.epochs) + 1)
         self.modified_edge_weight_diff.data.add_(lr * gradient)
@@ -388,7 +393,6 @@ class PRBCD(object):
         sorted_idx = sorted_idx[idx_keep:]
         self.current_search_space = self.current_search_space[sorted_idx]
         self.modified_edge_index = self.modified_edge_index[:, sorted_idx]
-        self.modified_edge_weight_diff.requires_grad = False
         self.modified_edge_weight_diff = self.modified_edge_weight_diff[sorted_idx]
 
         # Sample until enough edges were drawn
@@ -410,7 +414,6 @@ class PRBCD(object):
 
             if self.current_search_space.size(0) > n_perturbations:
                 break
-        self.modified_edge_weight_diff.requires_grad = True
 
     @staticmethod
     def linear_to_triu_idx(n: int, lin_idx: torch.Tensor) -> torch.Tensor:

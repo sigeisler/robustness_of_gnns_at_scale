@@ -1,8 +1,10 @@
 seml:
-  name: neurips_train
-  db_collection: neurips_train
+  name: rgnn_at_scale_train
+  db_collection: rgnn_at_scale_train
   executable: experiment_train.py
-  conda_environment: neurips20
+  conda_environment: rgnn_at_scale
+  project_root_dir: ../..
+  output_dir: seml/train/output
 
 slurm:
   experiments_per_job: 1

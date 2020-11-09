@@ -2,6 +2,7 @@
 towards increasing the loss.
 """
 from copy import deepcopy
+from typing import Union
 
 import numpy as np
 import torch
@@ -33,14 +34,15 @@ class FGSM():
                  labels: torch.Tensor,
                  idx_attack: np.ndarray,
                  model: DenseGCN,
+                 device: Union[str, int, torch.device],
                  **kwargs):
         super().__init__()
         assert adj.device == X.device, 'The device of the features and adjacency matrix must match'
-        self.device = X.device
-        self.original_adj = adj.to_dense()
+        self.device = device
+        self.original_adj = adj.to_dense().to(device)
         self.adj = self.original_adj.clone().requires_grad_(True)
-        self.X = X
-        self.labels = labels
+        self.X = X.to(device)
+        self.labels = labels.to(device)
         self.idx_attack = idx_attack
         self.model = deepcopy(model).to(self.device)
         self.attr_adversary = None

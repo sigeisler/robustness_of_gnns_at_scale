@@ -1,7 +1,9 @@
+"""TODO: Do better"""
+
 from copy import deepcopy
 import math
 import random
-from typing import Optional
+from typing import Optional, Union, Tuple
 
 from tqdm.auto import tqdm
 import numpy as np
@@ -25,6 +27,7 @@ class GANG():
                  labels: torch.Tensor,
                  idx_attack: np.ndarray,
                  model: GCN,
+                 device: Union[str, int, torch.device],
                  display_step: int = 20,
                  node_budget: int = 500,
                  edge_budget: int = 500,
@@ -42,9 +45,10 @@ class GANG():
                  feature_dedicated_iterations: int = 10,
                  stop_optimizing_if_label_flipped: bool = True,
                  edge_with_random_reverse: bool = True,
-                 **kwargs):
+                 do_synchronize: bool = False,
+                 ** kwargs):
         super().__init__()
-        self.device = X.device
+        self.device = device
         self.model = deepcopy(model).to(self.device)
         self.model.eval()
         for p in self.model.parameters():
@@ -54,7 +58,7 @@ class GANG():
         self.edge_weight = adj.values()
         self.n = adj.shape[0]
         self.d = X.shape[1]
-        self.labels_test = labels[idx_attack]
+        self.labels_attack = labels[idx_attack].to(self.device)
         self.idx_attack = idx_attack
         self.display_step = display_step
         self.node_budget = node_budget
@@ -74,6 +78,7 @@ class GANG():
         self.feature_dedicated_iterations = feature_dedicated_iterations
         self.stop_optimizing_if_label_flipped = stop_optimizing_if_label_flipped
         self.edge_with_random_reverse = edge_with_random_reverse
+        self.do_synchronize = do_synchronize
         assert self.edge_budget % self.edge_step_size == 0,\
             f'edge budget ({self.edge_budget}) must be dividable by the step size ({self.edge_step_size})'
 
@@ -88,14 +93,14 @@ class GANG():
             node_budget = (n_perturbations // self.edge_budget) + 1
             edge_budget = self.edge_budget
 
-        features = self.X
-        edge_index = self.edge_index
-        edge_weight = self.edge_weight
+        features = self.X.to(self.device)
+        edge_index = self.edge_index.to(self.device)
+        edge_weight = self.edge_weight.to(self.device)
 
         if self.feature_do_use_seeds:
-            n_classes = max(self.labels_test) + 1
+            n_classes = max(self.labels_attack) + 1
             feature_seeds = [
-                features[self.labels_test[self.labels_test == c]].mean(0)
+                features[self.labels_attack[self.labels_attack == c]].mean(0)
                 for c
                 in range(n_classes)
             ]
@@ -143,6 +148,9 @@ class GANG():
                 n_steps += 2
 
             for j in range(n_steps):
+                if self.do_synchronize:
+                    torch.cuda.empty_cache()
+                    torch.cuda.synchronize()
 
                 if self.do_monitor_time:
                     time_start = torch.cuda.Event(enable_timing=True)
@@ -153,35 +161,55 @@ class GANG():
 
                     time_start.record()
 
-                combined_edge_index = torch.cat((edge_index, new_edge_idx), dim=-1)
-                combined_edge_weight = torch.cat((edge_weight, new_edge_weight))
-                combined_features = torch.cat((features, new_features))
+                if (
+                    not hasattr(self.model, 'do_checkpoint')
+                    or not self.model.do_checkpoint
+                ):
+                    symmetric_edge_index, symmetric_edge_weight = GANG.fuse_adjacency_matrices(
+                        edge_index, edge_weight, new_edge_idx, new_edge_weight, m=next_node, n=next_node, op='mean'
+                    )
+                else:
+                    from torch.utils import checkpoint
 
-                symmetric_edge_index = torch.cat(
-                    (combined_edge_index, torch.flip(combined_edge_index, dims=[1, 0])), dim=-1
-                )
-                symmetric_edge_weight = torch.cat([combined_edge_weight, torch.flip(combined_edge_weight, dims=[0])])
-                symmetric_edge_index, symmetric_edge_weight = torch_sparse.coalesce(
-                    symmetric_edge_index,
-                    symmetric_edge_weight,
-                    m=next_node,
-                    n=next_node,
-                    op='mean'
-                )
+                    # Due to bottleneck...
+                    if len(self.edge_weight) > 100_000_000:
+                        symmetric_edge_index, symmetric_edge_weight = GANG.fuse_adjacency_matrices(
+                            edge_index.cpu(), edge_weight.cpu(), new_edge_idx.cpu(), new_edge_weight.cpu(),
+                            m=next_node, n=next_node, op='mean'
+                        )
+                        symmetric_edge_index = symmetric_edge_index.to(self.device)
+                        symmetric_edge_weight = symmetric_edge_weight.to(self.device)
+                    else:
+                        # Currently (1.6.0) PyTorch does not support return arguments of `checkpoint` that do not require
+                        # gradient. For this reason we need to execute the code twice (due to checkpointing in fact
+                        # three times...)
+                        with torch.no_grad():
+                            symmetric_edge_index = GANG.fuse_adjacency_matrices(
+                                edge_index, edge_weight, new_edge_idx, new_edge_weight, m=next_node, n=next_node, op='mean'
+                            )[0]
+
+                        symmetric_edge_weight = checkpoint.checkpoint(
+                            lambda new_edge_weight: GANG.fuse_adjacency_matrices(
+                                edge_index, edge_weight, new_edge_idx, new_edge_weight, m=next_node, n=next_node, op='mean'
+                            )[1],
+                            new_edge_weight
+                        )
+
+                combined_features = torch.cat((features, new_features))
 
                 if self.do_monitor_time:
                     time_symm.record()
 
                 logits = self.model(data=combined_features, adj=(symmetric_edge_index, symmetric_edge_weight))
                 if self.stop_optimizing_if_label_flipped:
-                    not_yet_flipped_mask = logits[self.idx_attack].argmax(-1) == self.labels_test
+                    not_yet_flipped_mask = logits[self.idx_attack].argmax(-1) == self.labels_attack
                     if not_yet_flipped_mask.sum() > 0:
                         loss = F.cross_entropy(logits[self.idx_attack][not_yet_flipped_mask],
-                                               self.labels_test[not_yet_flipped_mask])
+                                               self.labels_attack[not_yet_flipped_mask])
                     else:
-                        loss = F.cross_entropy(logits[self.idx_attack], self.labels_test)
+                        loss = F.cross_entropy(logits[self.idx_attack], self.labels_attack)
                 else:
-                    loss = F.cross_entropy(logits[self.idx_attack], self.labels_test)
+                    loss = F.cross_entropy(logits[self.idx_attack], self.labels_attack)
 
                 if self.do_monitor_time:
                     time_forward.record()
@@ -225,32 +253,25 @@ class GANG():
 
                 if j % self.display_step == 0:
                     accuracy = (
-                        logits.argmax(-1)[self.idx_attack] == self.labels_test
+                        logits.argmax(-1)[self.idx_attack] == self.labels_attack
                     ).float().mean()
                     print(f'Adversarial node {i} after adding {j + 1} edges, the accuracy is {100 * accuracy:.3f} %')
 
             new_edge_idx = new_edge_idx[:, new_edge_weight == 1]
             new_edge_weight = new_edge_weight[new_edge_weight == 1]
 
-            combined_edge_index = torch.cat((edge_index, new_edge_idx), dim=-1)
-            combined_edge_weight = torch.cat((edge_weight, new_edge_weight)).detach()
+            symmetric_edge_index, symmetric_edge_weight = GANG.fuse_adjacency_matrices(
+                edge_index, edge_weight, new_edge_idx, new_edge_weight.detach(), m=next_node, n=next_node, op='max'
+            )
 
-            symmetric_edge_index = torch.cat(
-                (combined_edge_index, torch.flip(combined_edge_index, dims=[1, 0])), dim=-1
-            )
-            symmetric_edge_weight = torch.cat([combined_edge_weight, torch.flip(combined_edge_weight, dims=[0])])
-            symmetric_edge_index, symmetric_edge_weight = torch_sparse.coalesce(
-                symmetric_edge_index,
-                symmetric_edge_weight,
-                m=next_node,
-                n=next_node,
-                op='max'
-            )
+            if self.do_synchronize:
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
 
             if self.feature_dedicated_iterations is not None:
                 optimizer = torch.optim.Adam((new_features,), lr=self.feature_lr)
                 accuracy = (
-                    logits.argmax(-1)[self.idx_attack] == self.labels_test
+                    logits.argmax(-1)[self.idx_attack] == self.labels_attack
                 ).float().mean()
                 print(f'Adversarial node {i} before optimizing the features, we have an accuracy '
                       f'of {100 * accuracy:.3f} %')
@@ -266,7 +287,7 @@ class GANG():
                     combined_features = torch.cat((features, new_features))
 
                     logits = self.model(data=combined_features, adj=(symmetric_edge_index, symmetric_edge_weight))
-                    loss = F.cross_entropy(logits[self.idx_attack], self.labels_test)
+                    loss = F.cross_entropy(logits[self.idx_attack], self.labels_attack)
 
                     optimizer.zero_grad()
                     (-loss).backward()
@@ -294,9 +315,9 @@ class GANG():
                                 data=combined_features,
                                 adj=(symmetric_edge_index, symmetric_edge_weight)
                             )
-                            loss = F.cross_entropy(logits[self.idx_attack], self.labels_test)
+                            loss = F.cross_entropy(logits[self.idx_attack], self.labels_attack)
                             accuracy = (
-                                logits.argmax(-1)[self.idx_attack] == self.labels_test
+                                logits.argmax(-1)[self.idx_attack] == self.labels_attack
                             ).float().mean()
                             if accuracy < best_accuracy:
                                 best_loss = loss
@@ -308,9 +329,9 @@ class GANG():
                     data=torch.cat((features, new_features)),
                     adj=(symmetric_edge_index, symmetric_edge_weight)
                 )
-                loss = F.cross_entropy(logits[self.idx_attack], self.labels_test)
+                loss = F.cross_entropy(logits[self.idx_attack], self.labels_attack)
                 accuracy = (
-                    logits.argmax(-1)[self.idx_attack] == self.labels_test
+                    logits.argmax(-1)[self.idx_attack] == self.labels_attack
                 ).float().mean()
                 print(f'Adversarial node {i} after optimizing the features, we have an accuracy '
                       f'of {100 * accuracy:.3f} %')
@@ -336,3 +357,17 @@ class GANG():
         # self.X = self.attr_adversary
         # self.edge_index = edge_index
         # self.edge_weight = edge_weight.detach()
+
+    @staticmethod
+    def fuse_adjacency_matrices(edge_index: torch.Tensor, edge_weight: torch.Tensor,
+                                modified_edge_index: torch.Tensor, modified_edge_weight_diff: torch.Tensor,
+                                n: int, m: int, op: str = 'sum') -> Tuple[torch.Tensor, torch.Tensor]:
+        modified_edge_index, modified_edge_weight = utils.to_symmetric(
+            modified_edge_index, modified_edge_weight_diff, n
+        )
+        edge_index = torch.cat((edge_index, modified_edge_index), dim=-1)
+        edge_weight = torch.cat((edge_weight, modified_edge_weight))
+
+        # FIXME: This seems to be the current bottle neck. Maybe change to merge of sorted lists
+        edge_index, edge_weight = torch_sparse.coalesce(edge_index, edge_weight, m=n, n=n, op='sum')
+        return edge_index, edge_weight

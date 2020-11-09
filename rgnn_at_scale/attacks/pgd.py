@@ -7,6 +7,7 @@ The Subsequent code build upon the implementation https://github.com/DSE-MSU/Dee
 not intent to unify the code style, programming paradigms, etc. with the rest of the code base.
 
 """
+from typing import Union
 
 import numpy as np
 import torch
@@ -45,16 +46,18 @@ class PGD(object):
                  labels: torch.Tensor,
                  idx_attack: np.ndarray,
                  model: DenseGCN,
+                 device: Union[str, int, torch.device],
                  epochs: int = 200,
                  epsilon: float = 1e-5,
                  loss_type: str = 'CE',
                  **kwargs):
         assert adj.device == X.device, 'The device of the features and adjacency matrix must match'
-        self.X = X
-        self.adj = adj
+        self.device = device
+        self.X = X.to(device)
+        self.adj = adj.to(device)
         if self.adj.is_sparse:
             self.adj = self.adj.to_dense()
-        self.labels = labels
+        self.labels = labels.to(device)
         self.idx_attack = idx_attack
         self.model = model
         self.epochs = epochs

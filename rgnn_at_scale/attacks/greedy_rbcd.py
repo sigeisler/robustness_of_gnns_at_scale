@@ -30,6 +30,7 @@ class GreedyRBCD(PRBCD):
                          labels=labels, idx_attack=idx_attack, eps=eps, **kwargs)
         self.edge_index = self.edge_index.to(self.device)
         self.edge_weight = self.edge_weight.to(self.device)
+        self.X = self.X.to(self.device)
 
         self.epochs = epochs
 

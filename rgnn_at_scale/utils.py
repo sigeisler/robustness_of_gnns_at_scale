@@ -30,6 +30,21 @@ def grad_with_checkpoint(outputs: Union[torch.Tensor, Sequence[torch.Tensor]],
     return grad_outputs
 
 
+def sparse_tensor_to_tuple(adj: torch_sparse.SparseTensor) -> Tuple[torch.Tensor, ...]:
+    s = adj.storage
+    return (s.value(), s.row(), s.rowptr(), s.col(), s.colptr(),
+            s.csr2csc(), s.csc2csr(), torch.tensor(s.sparse_sizes()))
+
+
+def tuple_to_sparse_tensor(edge_weight: torch.Tensor, row: torch.Tensor, rowptr: torch.Tensor,
+                           col: torch.Tensor, colptr: torch.Tensor, csr2csc: torch.Tensor,
+                           csc2csr: torch.Tensor, sparse_size: torch.Tensor) -> torch_sparse.SparseTensor:
+    sp_st = torch_sparse.SparseStorage(row=row, rowptr=rowptr, col=col, colptr=colptr, csr2csc=csr2csc, csc2csr=csc2csr,
+                                       value=edge_weight, sparse_sizes=sparse_size.tolist(), is_sorted=True)
+    sparse_tensor = torch_sparse.SparseTensor.from_storage(sp_st)
+    return sparse_tensor
+
+
 def get_ppr_matrix(adjacency_matrix: torch.Tensor,
                    alpha: float = 0.15,
                    k: int = 32,
