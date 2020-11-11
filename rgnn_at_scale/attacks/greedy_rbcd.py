@@ -43,7 +43,6 @@ class GreedyRBCD(PRBCD):
         else:
             steps = [1] * n_perturbations
 
-        original_search_spacer_size = self.search_space_size
         for step_size in tqdm(steps):
             self.sample_search_space(step_size)
             edge_index, edge_weight = self.get_modified_adj()
@@ -62,7 +61,6 @@ class GreedyRBCD(PRBCD):
             add_edge_index = self.modified_edge_index[:, topk_edge_index]
             add_edge_weight = edge_weight_factor[topk_edge_index]
             n_newly_added = int(add_edge_weight.sum().item())
-            self.search_space_size -= n_newly_added
 
             add_edge_index, add_edge_weight = utils.to_symmetric(add_edge_index, add_edge_weight, self.n)
             add_edge_index = torch.cat((self.edge_index, add_edge_index), dim=-1)
@@ -77,13 +75,6 @@ class GreedyRBCD(PRBCD):
             self.edge_weight = edge_weight[is_one_mask]
             self.edge_weight = torch.ones_like(self.edge_weight)
             assert self.edge_index.size(1) == self.edge_weight.size(0)
-
-            if self.search_space_size == 0:
-                warnings.warn("Search space smaller than perturbation budget! Aborting!")
-                break
-
-        # Set to original value for next invocation of attack
-        self.search_space_size = original_search_spacer_size
 
         self.adj_adversary = torch.sparse.FloatTensor(
             self.edge_index,

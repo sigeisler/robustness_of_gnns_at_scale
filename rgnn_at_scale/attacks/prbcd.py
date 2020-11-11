@@ -1,3 +1,4 @@
+from collections import defaultdict
 from copy import deepcopy
 import math
 from typing import Tuple, Union
@@ -94,6 +95,7 @@ class PRBCD(object):
         self.sample_search_space(n_perturbations)
         best_loss = float('-Inf')
         best_epoch = float('-Inf')
+        self.attack_statistics = defaultdict(list)
 
         for epoch in tqdm(range(self.epochs + self.fine_tune_epochs)):
             self.modified_edge_weight_diff.requires_grad = True
@@ -129,6 +131,9 @@ class PRBCD(object):
                 self.modified_edge_weight_diff.requires_grad = False
                 edge_weight = self.update_edge_weights(n_perturbations, epoch, gradient)[1]
                 self.projection(n_perturbations, edge_index, edge_weight)
+
+                self._append_attack_statistics(loss.item(), accuracy)
+
                 if epoch < self.epochs - 1:
                     self.resample_search_space(n_perturbations, edge_index, edge_weight, gradient)
                 elif self.with_early_stropping and epoch == self.epochs - 1:
@@ -429,3 +434,9 @@ class PRBCD(object):
             + (n - row_idx) * ((n - row_idx) - 1) // 2
         )
         return torch.stack((row_idx, col_idx))
+
+    def _append_attack_statistics(self, loss, accuracy):
+        self.attack_statistics['loss'].append(loss)
+        self.attack_statistics['accuracy'].append(accuracy)
+        self.attack_statistics['nonzero_weights'].append((self.modified_edge_weight_diff.abs() > self.eps).sum().item())
+        self.attack_statistics['expected_perturbations'].append(self.modified_edge_weight_diff.sum().item())

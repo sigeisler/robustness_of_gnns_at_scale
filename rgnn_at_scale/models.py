@@ -67,9 +67,9 @@ class ChainableGCNConv(GCNConv):
     # TODO: Add docstring
     def message_and_aggregate(self, adj_t: Union[torch.Tensor, SparseTensor], x: torch.Tensor) -> torch.Tensor:
         if not self.do_chunk or not isinstance(adj_t, SparseTensor):
-            return super().message_and_aggregate(adj_t, x)
+            return super(ChainableGCNConv, self).message_and_aggregate(adj_t, x)
         else:
-            return chunked_message_and_aggregate(adj_t, x, n_chunks=self.n_chunks, reduce=self.aggr)
+            return chunked_message_and_aggregate(adj_t, x, n_chunks=self.n_chunks)
 
 
 class GCN(nn.Module):
@@ -353,13 +353,21 @@ class RGNNConv(ChainableGCNConv):
         self._mean_kwargs = mean_kwargs
 
     def message_and_aggregate(self, adj_t) -> torch.Tensor:
-        return NotImplemented
+        raise NotImplementedError
 
     def propagate(self, edge_index: Union[torch.Tensor, SparseTensor], size=None, **kwargs) -> torch.Tensor:
         x = kwargs['x']
-        edge_weights = kwargs['norm'] if 'norm' in kwargs else kwargs['edge_weight']
-        A = torch.sparse.FloatTensor(edge_index, edge_weights).coalesce()
-        return self._mean(A, x, **self._mean_kwargs)
+        if not isinstance(edge_index, SparseTensor):
+            edge_weights = kwargs['norm'] if 'norm' in kwargs else kwargs['edge_weight']
+            A = torch.sparse.FloatTensor(edge_index, edge_weights).coalesce()
+            return self._mean(A, x, **self._mean_kwargs)
+
+        def aggregate(edge_index: SparseTensor, x: torch.Tensor):
+            return self._mean(edge_index.to_torch_sparse_coo_tensor(), x, **self._mean_kwargs)
+        if self.do_chunk:
+            return chunked_message_and_aggregate(edge_index, x, n_chunks=self.n_chunks, aggregation_function=aggregate)
+        else:
+            return aggregate(edge_index, x)
 
 
 class RGNN(GCN):

@@ -270,6 +270,7 @@ def get_jaccard(adjacency_matrix: torch.Tensor, features: torch.Tensor, threshol
     return modified_adj
 
 
+# TODO: This name is confusing as it only adds remaining self loops and converts the adjacency matrix zu symmetric
 def normalize_adjacency_matrix(edge_index: torch.Tensor, edge_weight: torch.Tensor, n: int, op='mean') -> torch.tensor:
     """
     For calculating $\hat{A} = 𝐷^{−\frac{1}{2}} 𝐴 𝐷^{−\frac{1}{2}}$.

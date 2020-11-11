@@ -7,7 +7,7 @@ from sacred import Experiment
 import seml
 import torch
 
-from rgnn_at_scale.data import prep_graph
+from rgnn_at_scale.data import prep_graph, split
 from rgnn_at_scale.io import Storage
 from rgnn_at_scale.models import create_model
 from rgnn_at_scale.train import train
@@ -67,13 +67,12 @@ def run(dataset: str, model_params: Dict[str, Any], train_params: Dict[str, Any]
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    data = prep_graph(dataset, device, binary_attr=binary_attr, return_original_split=dataset.startswith('ogbn'))
-    if len(data) == 3:
-        attr, adj, labels = data
-        idx_train, idx_val, idx_test = data.split(labels.cpu().numpy())
+    graph = prep_graph(dataset, device, binary_attr=binary_attr, return_original_split=dataset.startswith('ogbn'))
+    attr, adj, labels = graph[:3]
+    if len(graph) == 3:
+        idx_train, idx_val, idx_test = split(labels.cpu().numpy())
     else:
-        attr, adj, labels, split = data
-        idx_train, idx_val, idx_test = split['train'], split['valid'], split['test']
+        idx_train, idx_val, idx_test = graph[3]['train'], graph[3]['valid'], graph[3]['test']
     n_features = attr.shape[1]
     n_classes = int(labels.max() + 1)
 

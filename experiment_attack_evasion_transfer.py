@@ -79,13 +79,12 @@ def run(dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequ
 
     results = []
 
-    data = prep_graph(dataset, device='cpu', binary_attr=binary_attr, return_original_split=dataset.startswith('ogbn'))
-    if len(data) == 3:
-        attr, adj, labels = data
-        idx_train, idx_val, idx_test = data.split(labels.cpu().numpy())
+    graph = prep_graph(dataset, device, binary_attr=binary_attr, return_original_split=dataset.startswith('ogbn'))
+    attr, adj, labels = graph[:3]
+    if len(graph) == 3:
+        idx_train, idx_val, idx_test = split(labels.cpu().numpy())
     else:
-        attr, adj, labels, split = data
-        idx_train, idx_val, idx_test = split['train'], split['valid'], split['test']
+        idx_train, idx_val, idx_test = graph[3]['train'], graph[3]['valid'], graph[3]['test']
     n_features = attr.shape[1]
     n_classes = int(labels.max() + 1)
 
@@ -172,7 +171,7 @@ def run(dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequ
                 np.random.seed(seed)
 
                 pred_logits_target = model(attr_perturbed.to(device), adj_perturbed.to(device))
-                acc_test_target = accuracy(pred_logits_target, labels, idx_test)
+                acc_test_target = accuracy(pred_logits_target, labels.to(device), idx_test)
                 results.append({
                     'label': hyperparams['label'],
                     'epsilon': eps,

@@ -55,3 +55,15 @@ prbcd:
       search_space_size: 15_000_000
       do_synchronize: True
 
+gang:
+  fixed:
+    attack: GANG
+    attack_params:
+      edge_with_random_reverse: False
+      edge_step_size: 25_000
+      edge_budget: 25_000
+      do_synchronize: True
+
+dice:
+  fixed:
+    attack: DICE
