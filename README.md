@@ -32,7 +32,7 @@ Consider citing our work via:
 ```
 
 ## TL;DR
-Execute from this repositories root directory:
+Execute from this repository's root directory:
 
 ```bash
 conda install pytorch==1.6.0 torchvision torchaudio cudatoolkit=10.1 -c pytorch
