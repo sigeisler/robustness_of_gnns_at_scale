@@ -15,10 +15,10 @@ def system(command: str):
     logging.info(output)
 
 
-system(f'pip install torch-scatter==latest+{cuda_v} -f https://pytorch-geometric.com/whl/torch-{torch_v}.html')
-system(f'pip install torch-sparse==latest+{cuda_v} -f https://pytorch-geometric.com/whl/torch-{torch_v}.html')
-system(f'pip install torch-cluster==latest+{cuda_v} -f https://pytorch-geometric.com/whl/torch-{torch_v}.html')
-system(f'pip install torch-spline-conv==latest+{cuda_v} -f https://pytorch-geometric.com/whl/torch-{torch_v}.html')
+system(f'pip install torch-scatter -f https://pytorch-geometric.com/whl/torch-{torch_v}+{cuda_v}.html')
+system(f'pip install torch-sparse -f https://pytorch-geometric.com/whl/torch-{torch_v}+{cuda_v}.html')
+system(f'pip install torch-cluster -f https://pytorch-geometric.com/whl/torch-{torch_v}+{cuda_v}.html')
+system(f'pip install torch-spline-conv -f https://pytorch-geometric.com/whl/torch-{torch_v}+{cuda_v}.html')
 
 install_requires = [
     'filelock',
