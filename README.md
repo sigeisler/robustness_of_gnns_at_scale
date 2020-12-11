@@ -32,7 +32,8 @@ Consider citing our work via:
 ```
 
 ## TL;DR
-Execute
+Execute from this repositories root directory:
+
 ```bash
 conda install pytorch==1.6.0 torchvision torchaudio cudatoolkit=10.1 -c pytorch
 pip install -r requirements.txt
@@ -40,6 +41,7 @@ pip install .
 
 pip install ./kernels
 conda install gmpy2 statsmodels
+git submodule update --init --recursive
 pip install ./sparse_smoothing
 ```
 for setting the project up. Run for the results on empirical robustness (takes about 4 minutes with a GPU):
@@ -86,6 +88,13 @@ If you want to run the randomized smoothing experiments you need to install the 
 ```bash
 conda install gmpy2 statsmodels
 pip install ./sparse_smoothing
+```
+
+Note: To run `pip install ./sparse_smoothing` you'll need to recursively clone the `sparse_smoothing` repository as well.
+
+Either by directly cloning this repository with the additional `--recursive` flag or alternatively after you've already cloned it with:
+```
+git submodule update --init --recursive
 ```
 
 In case the installation of `gmpy` fails please check out their [installation guide](https://gmpy2.readthedocs.io/en/latest/intro.html#installation).
