@@ -3,7 +3,7 @@ import json
 import logging
 import os
 
-from rgnn.local import setup_logging, build_configs_and_run
+from rgnn_at_scale.local import setup_logging, build_configs_and_run
 
 
 parser = argparse.ArgumentParser(
