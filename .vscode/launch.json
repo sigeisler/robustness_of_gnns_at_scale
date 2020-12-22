@@ -57,8 +57,8 @@
                 //"dataset=ogbn-arxiv",
                 "dataset=cora_ml",
                 // "surrogate_params={\"model\": \"GCN\", \"n_filters\": [256, 256], \"dropout\": 0.5, \"do_cache_adj_prep\": True, \"do_use_sparse_tensor\": True, \"do_normalize_adj_once\": True, \"do_checkpoint\": True, \"n_chunks\": 16, \"train_params\": {\"lr\": 1e-2, \"weight_decay\": 1e-3, \"patience\": 100, \"max_epochs\": 10}}",
-                "surrogate_params={\"model\": \"GCN\", \"n_filters\": [256, 256], \"dropout\": 0.5, \"with_batch_norm\": True, \"train_params\": {\"lr\": 1e-2, \"weight_decay\": 1e-3, \"patience\": 100, \"max_epochs\": 200}}",
-                //"surrogate_params={\"model\": \"GCN\", \"n_filters\": 64, \"dropout\": 0.5, \"with_batch_norm\": False, \"train_params\": {\"lr\": 1e-2, \"weight_decay\": 1e-3, \"patience\": 100, \"max_epochs\": 10}}",
+                //"surrogate_params={\"model\": \"GCN\", \"n_filters\": [256, 256], \"dropout\": 0.5, \"with_batch_norm\": True, \"train_params\": {\"lr\": 1e-2, \"weight_decay\": 1e-3, \"patience\": 100, \"max_epochs\": 200}}",
+                "surrogate_params={\"model\": \"GCN\", \"n_filters\": 64, \"dropout\": 0.5, \"with_batch_norm\": False, \"train_params\": {\"lr\": 1e-2, \"weight_decay\": 1e-3, \"patience\": 100, \"max_epochs\": 10}}",
                 // #################### GANG ####################
                 // "attack=GANG",
                 "epsilons=[0, 0.001, 0.0025]",// If it should be done quickly
@@ -66,13 +66,15 @@
                 // #################### Greey RBCD ####################
                 // "attack=GreedyRBCD",
                 // #################### PRBCD ####################
-                "attack=FGSM",
-                "pert_adj_storage_type=attack",
-                "model_storage_type=pretrained",
+                //"attack=FGSM",
+                //"pert_adj_storage_type=attack",
+                //"model_storage_type=pretrained",
+                "binary_attr=False",
+
                 // "attack_params={\"keep_heuristic\": \"WeightOnly\"}"
                 // "attack_params={\"keep_heuristic\": \"WeightOnly\", \"search_space_size\": 15_000_000, \"do_synchronize\": True}"
                 // #################### DICE ####################
-                // "attack=DICE",
+                "attack=DICE",
             ],
             // "env": {
             //     "CUDA_LAUNCH_BLOCKING": "1"
