@@ -51,16 +51,10 @@ class DICE(object):
         self.add_ratio = add_ratio
 
     #Private Helper Functions
-    def __deletingEdges(self, nonzeros_0, nonzeros_1, delete_budget):
-        
-        adj = self.adj
-        labels = self.labels
+    def __deletingEdges(self, nonzeros_0, nonzeros_1, delete_budget, adj, labels):
+
         pbar = tqdm(total=delete_budget, desc='removing edges...')
 
-        # Potential alternative to checking the degree via the adjacency matrix:
-        # node_degree = self.n * [0]
-        # for nonzero in nonzeros_0:
-        #     node_degree[nonzero] += 1
         to_be_deleted_set = set()
 
         while delete_budget > 0:
@@ -74,16 +68,14 @@ class DICE(object):
                 and edge_index not in to_be_deleted_set
                 and adj[first_node].count_nonzero() > 1
                 and adj[second_node].count_nonzero() > 1
-                # and node_degree[first_node] > 1
-                # and node_degree[second_node] > 1
             ):
                 delete_budget -= 1
                 pbar.update(1)
                 # why do we make a set of nodes to be deleted instead of instantly deleting?
+                # Because we might add a connection in the same place where
+                # we removed a connection from, that's why we perform attack at the end
                 to_be_deleted_set.add(edge_index)
-                # node_degree[first_node] -= 1
-                # node_degree[second_node] -= 1
-            #print(f'removed symetric edge: {first_node} to {second_node}')
+                #print(f'deleted edge from {first_node} to {second_node}')
         pbar.close()
         return to_be_deleted_set
     
@@ -96,7 +88,8 @@ class DICE(object):
             source = np.random.randint(self.n)
             dest = np.random.randint(self.n)
             source, dest = (source, dest) if source < dest else (dest, source)
-            # We only connect two nodes if they do not have the same classification and they are not already connected aka (adj[source, dest] != 1)
+            # We only connect two nodes if they do not have the same classification and 
+            # they are not already connected aka (adj[source, dest] != 1)
             if (
                 source != dest
                 and labels[source] != labels[dest]
@@ -106,7 +99,7 @@ class DICE(object):
                 add_budget -= 1
                 pbar.update(1)
                 to_be_added_set.add((source, dest))
-            #print(f'added symetric edge: {first_node} to {second_node}')
+            #print(f'added symetric edge: {source} to {dest}')
         pbar.close()
         return to_be_added_set
     
@@ -137,7 +130,6 @@ class DICE(object):
                **kwargs):
 
         np.random.seed(attack_seed)
-
         adj = self.adj
         labels = self.labels
         add_budget = int(n_perturbations * self.add_ratio)
@@ -156,14 +148,13 @@ class DICE(object):
         nonzeros_0, nonzeros_1 = adj.nonzero()
 
         # Prepare edges(connections) to be deleted and others to be added
-        to_be_deleted_set = self.__deletingEdges(nonzeros_0, nonzeros_1, delete_budget)
+        to_be_deleted_set = self.__deletingEdges(nonzeros_0, nonzeros_1, delete_budget, adj, labels)
         to_be_added_set = self.__addingEdges(labels, adj, add_budget)
 
         # Perform the attack and update the self.adj_adversary Matrix
         self.__performAttack(to_be_deleted_set, nonzeros_0, to_be_added_set, adj, has_self_loops)
 
         #The adjusted adjacency matrix(adversary) becomes the adjacency matrix of this class, this is not like the FGSM attack, where the original adjacency matrix is preserved so next attacks
-        #with different budgets will always attack the original!
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
+        #with different budgets will always attack the original!                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
         coo_adj = torch_geometric.utils.to_scipy_sparse_matrix(self.adj_adversary.indices(), num_nodes=self.n)
         self.adj = sp.csr_matrix(coo_adj)
