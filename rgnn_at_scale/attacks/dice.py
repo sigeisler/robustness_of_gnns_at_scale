@@ -52,7 +52,9 @@ class DICE(object):
 
     #Private Helper Functions
     def __deletingEdges(self, nonzeros_0, nonzeros_1, delete_budget):
-
+        
+        adj = self.adj
+        labels = self.labels
         pbar = tqdm(total=delete_budget, desc='removing edges...')
 
         # Potential alternative to checking the degree via the adjacency matrix:
