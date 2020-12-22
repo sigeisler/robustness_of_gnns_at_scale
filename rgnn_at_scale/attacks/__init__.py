@@ -25,9 +25,20 @@ def create_attack(attack: str, **kwargs) -> ATTACK_TYPE:
     Union[FGSM, GANG, GreedyRBCD, PRBCD]
         The created instance
     """
-    if not any([attack == attack_model.__name__ for attack_model in ATTACK_TYPE.__args__]):
+    '''found = False
+    for attack_model in ATTACK_TYPE.__args__ :
+        print(f'This attack is {attack} and the current name is {attack_model.__name__}')
+        if attack.lower() == attack_model.__name__.lower():
+            found = True
+            break
+    if found:
+        return globals()[attack](**kwargs)
+    else:
+        raise ValueError(f'The attack {attack} is not in {ATTACK_TYPE.__args__}')'''
+
+    if not any([attack.lower() == attack_model.__name__.lower() for attack_model in ATTACK_TYPE.__args__]):
         raise ValueError(f'The attack {attack} is not in {ATTACK_TYPE.__args__}')
-    return globals()[attack](**kwargs)
+    return globals()[attack.upper()](**kwargs)
 
 
 __all__ = [FGSM, GANG, GreedyRBCD, PRBCD, create_attack, ATTACK_TYPE, SPARSE_ATTACKS]
