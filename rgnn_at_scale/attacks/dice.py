@@ -21,15 +21,18 @@ class DICE(object):
                  device: Union[str, int, torch.device],
                  add_ratio: float = 0.6,  # ratio of the attack budget that is used for edge addition
                  **kwargs):
+        # n is the number of nodes        
         self.n = adj.size()[0]
         coo_adj = torch_geometric.utils.to_scipy_sparse_matrix(adj.indices(), num_nodes=self.n)
+        #adjacency matrix ix sparce
         self.adj = sp.csr_matrix(coo_adj)
-
+        # why cpu??
         self.labels = labels.cpu()
         self.device = device
-
+        # why always on cpu?
         self.attr_adversary = X.cpu()
         self.adj_adversary = None
+        # add ratio decides how much of the budget goes to adding edges and the rest goes to deleting
         self.add_ratio = add_ratio
 
     def attack(self,
@@ -43,12 +46,15 @@ class DICE(object):
         labels = self.labels
         add_budget = int(n_perturbations * self.add_ratio)
         delete_budget = n_perturbations - add_budget
-
+        # If there are connections on diagonal this means node connected to itself ie: self loop
         has_self_loops = adj.diagonal().sum() > 0
         if has_self_loops:
             adj.setdiag(0)  # set diagonal to 0 so that we cannot remove self loops in the perturbations
             adj.eliminate_zeros()
 
+        #nonzeros_0 = [1, 3, 4, 5, 8]
+        #nonzeros_1 = [2, 8, 5, 7, 2]
+        # This means that connection between 1&2 is non zero, connection between 3&8 is non_zero and so on...
         nonzeros_0, nonzeros_1 = adj.nonzero()
 
         pbar = tqdm(total=delete_budget, desc='removing edges...')
@@ -64,6 +70,7 @@ class DICE(object):
             first_node = nonzeros_0[edge_index]
             second_node = nonzeros_1[edge_index]
             # check if they have the same label and they don't get disconnected from the graph after removal
+            # if adj[node].count_nonzero() == 1 means that this connection is the last connection that this node has with the graph and by its removal this node will be completely disconnected with the graph!
             if(
                 labels[first_node] == labels[second_node]
                 and edge_index not in to_be_deleted_set
@@ -88,6 +95,7 @@ class DICE(object):
             source = np.random.randint(self.n)
             dest = np.random.randint(self.n)
             source, dest = (source, dest) if source < dest else (dest, source)
+            # We only connect two nodes if they do not have the same classification and they are not already connected aka (adj[source, dest] != 1)
             if (
                 source != dest
                 and labels[source] != labels[dest]
@@ -99,6 +107,9 @@ class DICE(object):
                 to_be_added_set.add((source, dest))
             #print(f'added symetric edge: {first_node} to {second_node}')
         pbar.close()
+
+        #Here we ended up with a list for connections to be deleted and connections to be added.
+        #to_be_kept is a boolean array, telling which non_zero connections will remain connected and which will be deleted
 
         to_be_deleted = torch.tensor(list(to_be_deleted_set))
         to_be_kept = torch.ones(nonzeros_0.shape[0], dtype=bool)
@@ -117,5 +128,8 @@ class DICE(object):
             edge_indices, edge_attributes, (self.n, self.n)
         ).to(self.device).coalesce()
 
+        #The adjusted adjacency matrix(adversary) becomes the adjacency matrix of this class, this is not like the FGSM attack, where the original adjacency matrix is preserved so next attacks
+        #with different budgets will always attack the original!
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
         coo_adj = torch_geometric.utils.to_scipy_sparse_matrix(self.adj_adversary.indices(), num_nodes=self.n)
         self.adj = sp.csr_matrix(coo_adj)
