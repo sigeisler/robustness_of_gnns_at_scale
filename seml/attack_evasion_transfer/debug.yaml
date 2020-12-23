@@ -1,0 +1,59 @@
+seml:
+  name: neurips_attack
+  db_collection: neurips_attack
+  executable: experiment_attack_evasion_transfer.py
+  conda_environment: neurips20
+  project_root_dir: ../..
+  output_dir: seml/debug/output
+
+slurm:
+  experiments_per_job: 1
+  sbatch_options:
+    gres: gpu:1       # num GPUs
+    mem: 16G          # memory
+    cpus-per-task: 4  # num cores
+    time: 0-08:00     # max time, D-HH:MM
+
+fixed:
+  epsilons: [0, 0.001, 0.0025]  #[0, 0.1, 0.25] # For faster [0, 0.001, 0.0025] 
+  surrogate_params:
+    n_filters: 64
+    dropout: 0.5
+    train_params:
+      lr: 1e-2
+      weight_decay: 1e-3
+      patience: 100
+      max_epochs: 10 #3000
+  artifact_dir: cache
+  pert_adj_storage_type: attack
+  model_storage_type: pretrained
+  device: "cpu" #0 or "cpu"
+  binary_attr: False
+  dataset: cora_ml
+  seed: 1
+
+EXPAND_CONTRACT:
+  fixed:
+    attack: EXPAND_CONTRACT
+    attack_params:
+      k: 1
+      m: 1
+      step: 1
+      #//alpha: 2.0
+      #//protected: 
+      
+#grid:
+  #dataset:
+    #type: choice
+    #options:
+      #- cora_ml
+
+  #attack:
+    #type: choice
+    #options:
+      #- EXPAND_CONTRACT
+
+  #seed:
+    #type: choice
+    #options:
+      #- 1

@@ -28,7 +28,7 @@ class DICE(object):
 
     """
     def __init__(self,
-                 adj: torch.Tensor,
+                 adj: torch.sparse.FloatTensor,
                  X: torch.Tensor,
                  labels: torch.Tensor,
                  device: Union[str, int, torch.device],
@@ -36,26 +36,31 @@ class DICE(object):
                  **kwargs):
         # n is the number of nodes        
         self.n = adj.size()[0]
-        # We are changing a torch Tensor(Dense I assume) to a scipy sparse Matrix(why not torch sparse??)
+        #* We are changing a sparse torch Tensor to a scipy sparse Matrix(why not torch sparse??)
+        #* We do not continue with Torch sparse because it is missing many functions
+
         coo_adj = torch_geometric.utils.to_scipy_sparse_matrix(adj.indices(), num_nodes=self.n)
-        #adjacency matrix ix compressed sparse row matrix(why not torch sparse?)
+        #*adjacency matrix is compressed sparse row matrix(why not torch sparse?)
         self.adj = sp.csr_matrix(coo_adj)
-        # why cpu?? apparently some operations can not be performed on GPU(what are they and are we using them??)
-        # this is equal to labels.to('cpu') -> Change it to this format to have unity in our code
+
+        # ? why cpu?? apparently some operations can not be performed on GPU(what are they and are we using them??)
+        # ? this is equal to labels.to('cpu') -> Change it to this format to have unity in our code
         self.labels = labels.cpu()
         self.device = device
         # why always on cpu?
         self.attr_adversary = X.cpu()
         self.adj_adversary = None
+        
         # add ratio decides how much of the budget goes to adding edges and the rest goes to deleting
         self.add_ratio = add_ratio
 
-    #Private Helper Functions
+    #!Private Helper Functions
     def __deletingEdges(self, nonzeros_0, nonzeros_1, delete_budget, adj, labels):
 
         pbar = tqdm(total=delete_budget, desc='removing edges...')
 
         to_be_deleted_set = set()
+        node_connections = dict()
 
         while delete_budget > 0:
             edge_index = np.random.randint(nonzeros_0.shape[0])
@@ -66,16 +71,32 @@ class DICE(object):
             if(
                 labels[first_node] == labels[second_node]
                 and edge_index not in to_be_deleted_set
-                and adj[first_node].count_nonzero() > 1
-                and adj[second_node].count_nonzero() > 1
+                #// and adj[first_node].count_nonzero() > 1
+                #// and adj[second_node].count_nonzero() > 1
             ):
-                delete_budget -= 1
-                pbar.update(1)
-                # why do we make a set of nodes to be deleted instead of instantly deleting?
-                # Because we might add a connection in the same place where
-                # we removed a connection from, that's why we perform attack at the end
-                to_be_deleted_set.add(edge_index)
-                #print(f'deleted edge from {first_node} to {second_node}')
+                # This way we do not count the connections for the same node multiple times
+                if first_node not in node_connections:
+                    node_connections[first_node] = adj[first_node].count_nonzero()
+                if second_node not in node_connections:
+                    node_connections[second_node] = adj[second_node].count_nonzero()
+
+                if node_connections.get(first_node, -5) > 1 and node_connections.get(second_node, -5) > 1:
+                    delete_budget -= 1
+                    pbar.update(1)
+
+                    # *why do we make a set of nodes to be deleted instead of instantly deleting?
+                    # * Because we might add a connection in the same place where
+                    # * we removed a connection from, that's why we perform attack at the end
+
+                    # ? However this way, deleted connections do not show effect in the adjacency matrix 
+                    # ? and number of connections.
+                    to_be_deleted_set.add(edge_index)
+                    
+                    # ? To make sure we do not remove too much from one node
+                    # ? node_connections[first_node]-= 1
+                    # ? node_connections[second_node]-= 1
+
+                    #//print(f'deleted edge from {first_node} to {second_node}')
         pbar.close()
         return to_be_deleted_set
     
@@ -99,7 +120,7 @@ class DICE(object):
                 add_budget -= 1
                 pbar.update(1)
                 to_be_added_set.add((source, dest))
-            #print(f'added symetric edge: {source} to {dest}')
+            #//print(f'added symetric edge: {source} to {dest}')
         pbar.close()
         return to_be_added_set
     
@@ -130,8 +151,10 @@ class DICE(object):
                **kwargs):
 
         np.random.seed(attack_seed)
+        #Why-----------------
         adj = self.adj
         labels = self.labels
+        #---------------------
         add_budget = int(n_perturbations * self.add_ratio)
         delete_budget = n_perturbations - add_budget
 
