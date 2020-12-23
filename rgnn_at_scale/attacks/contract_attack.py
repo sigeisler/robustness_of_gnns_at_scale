@@ -17,7 +17,42 @@ class EXPAND_CONTRACT():
         logits = self.model.to(self.device)(self.X, self.adj)
         return -F.cross_entropy(logits[self.idx_attack], self.labels[self.idx_attack])
 
+    def flip_edges(self,adj, row, col, edge):
+        new_edge_value = -adj[ row[edge], col[edge] ] + 1
+        adj[row[edge], col[edge]] = new_edge_value
+        adj[col[edge], row[edge]] = new_edge_value
+        return adj
 
+
+    def contract(self, adj, cohort, row, col, s):
+        # Contract the cohort until we are in budget again
+        bar = tqdm(total=len(cohort) - self.k, leave=False, desc="Contract")
+        while len(cohort) > self.k:
+            #? What does this .new_empty do?? 
+            llhs =  np.empty( len(cohort) ) #//X.new_empty(len(cohort))
+            for i, edge in enumerate(cohort):
+                #* flip the edge in the adjacency matrix, it is a dense matrix!
+                #//flip_edges_(graph.a, row[edge], col[edge])
+                adj = self.flip_edges(adj, row, col, edge)
+                llhs[i] = self.log_likelihood()                
+                #//flip_edges_(graph.a, row[edge], col[edge])
+                adj = self.flip_edges(adj, row, col, edge)
+
+            #? What is the type of llhs? I assume numpy array from the call of np.argpartition
+            #? but from .cpu() it means it was a pyTorch Tensor and then we turn it into numpy. 
+            #? In this sense since we so far do not calculate any gradients we should just make it
+            #? numpy in the first place!
+            #//llhs = llhs.cpu().numpy()
+
+            # Undo the flips that increase the log-likelihood the least when undone
+            n_undo = min(self.step, len(cohort) - self.k)
+            for edge in [cohort[i] for i in np.argpartition(llhs, n_undo)[:n_undo]]:
+                cohort.remove(edge)
+                #//flip_edges_(graph.a, row[edge], col[edge])
+                adj = self.flip_edges(adj, row, col, edge)
+                s[edge] = True
+            bar.update(n_undo)
+        return adj
 
     def __init__(self,   
                  adj: torch.sparse.FloatTensor , 
@@ -75,51 +110,12 @@ class EXPAND_CONTRACT():
         k = self.k
         rng = self.rng
         n = self.n
-        adj = self.adj
-        protected = self.protected
-        X = self.X
         step = self.step
+        protected = self.protected
 
-        def contract():
-            # Contract the cohort until we are in budget again
-            bar = tqdm(total=len(cohort) - k, leave=False, desc="Contract")
-            while len(cohort) > k:
-                #? What does this .new_empty do?? 
-                llhs =  np.empty( len(cohort) ) #//X.new_empty(len(cohort))
-                for i, edge in enumerate(cohort):
-                    #* flip the edge in the adjacency matrix, it is a dense matrix!
-                    #//flip_edges_(graph.a, row[edge], col[edge])
-                    new_edge_value = -adj[ row[edge], col[edge] ] + 1 
-                    adj[row[edge], col[edge]] = new_edge_value
-                    adj[col[edge], row[edge]] = new_edge_value
-
-                    llhs[i] = self.log_likelihood()
-                    #llhs.append(self.log_likelihood())
-                
-
-                    #//flip_edges_(graph.a, row[edge], col[edge])
-                    new_edge_value = -adj[ row[edge], col[edge] ] + 1
-                    adj[row[edge], col[edge]] = new_edge_value
-                    adj[col[edge], row[edge]] = new_edge_value
-                #? What is the type of llhs? I assume numpy array from the call of np.argpartition
-                #? but from .cpu() it means it was a pyTorch Tensor and then we turn it into numpy. 
-                #? In this sense since we so far do not calculate any gradients we should just make it
-                #? numpy in the first place!
-                #//llhs = llhs.cpu().numpy()
-
-                # Undo the flips that increase the log-likelihood the least when undone
-                n_undo = min(step, len(cohort) - k)
-                for edge in [cohort[i] for i in np.argpartition(llhs, n_undo)[:n_undo]]:
-                    cohort.remove(edge)
-                    #//flip_edges_(graph.a, row[edge], col[edge])
-                    new_edge_value = -adj[ row[edge], col[edge] ] + 1
-                    adj[row[edge], col[edge]] = new_edge_value
-                    adj[col[edge], row[edge]] = new_edge_value
-
-                    s[edge] = True
-
-                bar.update(n_undo)
-
+        adj = self.adj
+        X = self.X
+        
 
         #Store for each edge if it is eligible for flipping
         s = np.ones(self.n * (self.n - 1) // 2)
@@ -137,42 +133,34 @@ class EXPAND_CONTRACT():
         assert n_edges >= k
 
         clean_ll = self.log_likelihood()
-        bar = tqdm(total=m, desc="Cycles")
+        bar = tqdm(total=n_perturbations, desc="Cycles") #//total = m
         # Randomly select a cohort of edges to flip
         cohort_size = min(int(self.alpha * self.k), n_edges)
         cohort = list(self.rng.choice(s.size, size=cohort_size, replace=False, p=s / s.sum()))
         #//flip_edges_(graph.a, row[cohort], col[cohort])
-        new_edge_value = -adj[ row[cohort], col[cohort] ] + 1 
-        adj[row[cohort], col[cohort]] = new_edge_value
-        adj[col[cohort], row[cohort]] = new_edge_value
-
+        self.flip_edges(adj, row, col, cohort)
         s[cohort] = False
 
         n_expand = min(round((self.alpha - 1.0) * k), n_edges - k)
         if n_expand > 0:
             for _ in range(n_perturbations - 1): #// in range(m-1)
-                contract()
-
+                self.contract(adj,cohort,row,col,s)
                 ll = self.log_likelihood()
                 bar.set_description(f"Cycles (decr {clean_ll - ll:.5f})")
                 bar.update()
-
                 # Expand the cohort again
                 new_edges = rng.choice(s.size, size=n_expand, replace=False, p=s / s.sum())
-                
                 #//flip_edges_(graph.a, row[new_edges], col[new_edges])
-                new_edge_value = -adj[ row[new_edges], col[new_edges] ] + 1 
-                adj[row[new_edges], col[new_edges]] = new_edge_value
-                adj[col[new_edges], row[new_edges]] = new_edge_value
-
+                self.flip_edges(adj, row, col, new_edges)
                 s[new_edges] = False
                 cohort.extend(list(new_edges))
 
-        contract()
+        self.contract(adj,cohort,row,col, s)
         bar.update()
 
         #//graph.a = orig_a
         #? Does self.adj or just adj makes a difference here?? 
+        #? If self.adj is the same as adj, are we saving the original adj for new attacks or destroying it?
         self.adj_adversary = adj.to_sparse().detach()
         self.attr_adversary = self.X
 
