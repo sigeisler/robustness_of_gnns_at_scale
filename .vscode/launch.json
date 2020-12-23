@@ -79,6 +79,19 @@
             // "env": {
             //     "CUDA_LAUNCH_BLOCKING": "1"
             // }
-        }
+        },
+        
+        {
+            "name": "Python: Empirical Robustness",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--config-files",
+                "seml/attack_evasion_transfer/debug.yaml",
+            ],
+ }
     ]
 }
