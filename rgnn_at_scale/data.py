@@ -596,14 +596,14 @@ def prep_graph(name: str,
     ----------
     name : str
         Name of the data set. One of: `cora_ml`, `citeseer`, `pubmed`
-    device : Union[int, torch.device], by default "datasets"
+    device : Union[int, torch.device]
         `cpu` or GPU id, by default 0
     normalize : bool, optional
         Normalize adjacency matrix with symmetric degree normalization (non-scalable implementation!), by default False
     binary_attr : bool, optional
         If true the attributes are binarized (!=0), by default False
     dataset_root : str, optional
-        Path where to find/store the dataset.
+        Path where to find/store the dataset, by default "datasets"
     return_original_split: bool, optional
         If true (and the split is available for the choice of dataset) additionally the original split is returned.
 

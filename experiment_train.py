@@ -76,6 +76,10 @@ def run(dataset: str, model_params: Dict[str, Any], train_params: Dict[str, Any]
     n_features = attr.shape[1]
     n_classes = int(labels.max() + 1)
 
+    print("Training set size: ", len(idx_train))
+    print("Validation set size: ", len(idx_val))
+    print("Test set size: ", len(idx_test))
+
     # Collect all hyperparameters of model
     hyperparams = dict(model_params)
     hyperparams.update({

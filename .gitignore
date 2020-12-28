@@ -445,8 +445,10 @@ TSWLatexianTemp*
 
 # Local
 cache_debug/*
+cache
 extension/*
 kernels/build
 kernels/dist
 kernels/kernels.egg-info
 seml/*/output 
+datasets/*
