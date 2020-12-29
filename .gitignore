@@ -438,7 +438,7 @@ TSWLatexianTemp*
 */*DS_Store
 
 # VS CODE
-*/.vscode
+.vscode
 
 # Misc
 *.txt

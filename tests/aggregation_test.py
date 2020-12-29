@@ -1,7 +1,8 @@
 import torch
+from torch_sparse import SparseTensor
 
-from rgnn_at_scale.means import (_sparse_top_k, soft_weighted_medoid, soft_weighted_medoid_k_neighborhood,
-                                 weighted_dimwise_median, weighted_medoid, weighted_medoid_k_neighborhood)
+from rgnn_at_scale.aggregation import (_sparse_top_k, soft_weighted_medoid, soft_weighted_medoid_k_neighborhood,
+                                       weighted_dimwise_median, weighted_medoid, weighted_medoid_k_neighborhood)
 
 
 device = 0 if torch.cuda.is_available() else 'cpu'
@@ -11,8 +12,9 @@ temperature = 1e-3
 class TestTopK():
 
     def test_simple_example_cpu(self):
-        A = torch.tensor([[0.5, 0.3, 0, 0.4], [0.3, 0.2, 0, 0], [0, 0, 0.9, 0.3],
-                          [0.4, 0, 0.4, 0.4]], dtype=torch.float32).to_sparse()
+        A = SparseTensor.from_dense(torch.tensor([[0.5, 0.3, 0, 0.4], [0.3, 0.2, 0, 0], [0, 0, 0.9, 0.3],
+                                                  [0.4, 0, 0.4, 0.4]], dtype=torch.float32)).to(device)
+
         topk_values, topk_indices = _sparse_top_k(A, 2, return_sparse=False)
         assert torch.all(topk_values == torch.tensor([[0.5, 0.4], [0.3, 0.2], [0.9, 0.3], [0.4, 0.4]]))
         assert torch.all(topk_indices[:-1] == torch.tensor([[0, 3], [0, 1], [2, 3]]))
@@ -264,6 +266,41 @@ class TestSoftWeightedMedoidKNeighborhood():
 
         layer_idx = 3
         assert torch.all(medoids[layer_idx] == row_sum[layer_idx] * x[2])
+
+    def test_disconnected_node_weighted_k2(self):
+        """
+        There is/was a bug in the soft_weighted_medoid_k_neighborhood method where nodes which have
+        no outgoing edges will either produce NaN embeddings for this node when using the dense
+        cpu implementation or result in a RuntimeError caused by a size missmatch when trying to do 
+        the final matrix multuply when using the sparse implementation
+        """
+        A = torch.tensor([[0.5, 0.3, 0, 0], [0.3, 0.2, 0, 0], [0, 0, 0.9, 0],
+                          [0, 0, 0, 0]], dtype=torch.float32).to(device)
+        x = torch.tensor([[-10, 10, 10], [-1, 1, 1], [0, 0, 0], [10, -10, -10]], dtype=torch.float32).to(device)
+
+        A_sparse_tensor = SparseTensor.from_dense(A).to(device)
+
+        medoids = soft_weighted_medoid_k_neighborhood(A_sparse_tensor,
+                                                      x,
+                                                      k=2,
+                                                      temperature=temperature,
+                                                      # forcing sparse implementation
+                                                      threshold_for_dense_if_cpu=0)
+
+        row_sum = A.sum(-1)
+        layer_idx = 0
+        assert torch.all(medoids[layer_idx] == row_sum[layer_idx] * x[0])
+
+        layer_idx = 1
+        assert torch.all(medoids[layer_idx] == row_sum[layer_idx] * x[0])
+
+        layer_idx = 2
+        assert torch.all(medoids[layer_idx] == row_sum[layer_idx] * x[2])
+
+        layer_idx = 3
+        assert (torch.all(medoids[layer_idx] == row_sum[layer_idx] * (x[0] + x[2]) / 2)
+                or torch.all(medoids[layer_idx] == row_sum[layer_idx] * (x[0] + x[3]) / 2)
+                or torch.all(medoids[layer_idx] == row_sum[layer_idx] * (x[2] + x[3]) / 2))
 
 
 class TestWeightedDimwiseMedian():

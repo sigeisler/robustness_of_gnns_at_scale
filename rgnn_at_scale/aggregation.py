@@ -136,21 +136,25 @@ def _select_k_idx_cpu(row_idx: np.ndarray,
     return new_idx, valiue_idx, unroll_idx
 
 
-def _sparse_top_k(A: torch.sparse.FloatTensor, k: int, return_sparse: bool = True):
-    n = A.shape[0]
+def _sparse_top_k(A: torch_sparse.SparseTensor, k: int, return_sparse: bool = True):
+    n = A.size(0)
 
-    if A.is_cuda:
-        topk_values, topk_idx = custom_cuda_kernels.topk(A._indices(), A._values(), n, k)
+    A_rows, A_cols, A_values = A.coo()
+    A_indices = torch.stack([A_rows, A_cols], dim=0)
+    print("_sparse_top_k")
+    if A.is_cuda():
+        print("is cuda")
+        topk_values, topk_idx = custom_cuda_kernels.topk(A_indices, A_values, n, k)
         if not return_sparse:
             return topk_values, topk_idx.long()
 
         mask = topk_idx != -1
-        row_idx = torch.arange(n, device=A.device).view(-1, 1).expand(n, k)
+        row_idx = torch.arange(n, device=A.device()).view(-1, 1).expand(n, k)
         return torch.sparse.FloatTensor(torch.stack((row_idx[mask], topk_idx[mask].long())), topk_values[mask])
 
     n_edges_per_row = torch_scatter.scatter_sum(
-        torch.ones_like(A._values()),
-        A._indices()[0],
+        torch.ones_like(A_values),
+        A_indices[0],
         dim=0
     )
     k_per_row = torch.clamp(
@@ -159,24 +163,24 @@ def _sparse_top_k(A: torch.sparse.FloatTensor, k: int, return_sparse: bool = Tru
     ).long()
 
     new_idx, value_idx, unroll_idx = _select_k_idx_cpu(
-        A.indices()[0].cpu().numpy(),
-        A.indices()[1].cpu().numpy(),
-        A._values().cpu().numpy(),
+        A_indices[0].cpu().numpy(),
+        A_indices[1].cpu().numpy(),
+        A_values.cpu().numpy(),
         k_per_row.cpu().numpy(),
         n,
         method='top'
     )
 
-    new_idx = torch.from_numpy(np.hstack(new_idx)).to(A.device)
-    value_idx = torch.from_numpy(np.hstack(value_idx)).to(A.device)
+    new_idx = torch.from_numpy(np.hstack(new_idx)).to(A.device())
+    value_idx = torch.from_numpy(np.hstack(value_idx)).to(A.device())
 
     if return_sparse:
-        return torch.sparse.FloatTensor(new_idx, A._values()[value_idx])
+        return torch.sparse.FloatTensor(new_idx, A_values[value_idx])
     else:
         unroll_idx = np.hstack(unroll_idx)
-        values = torch.zeros((n, k), device=A.device)
-        indices = -torch.ones((n, k), device=A.device, dtype=torch.long)
-        values[new_idx[0], unroll_idx] = A._values()[value_idx]
+        values = torch.zeros((n, k), device=A.device())
+        indices = -torch.ones((n, k), device=A.device(), dtype=torch.long)
+        values[new_idx[0], unroll_idx] = A_values[value_idx]
         indices[new_idx[0], unroll_idx] = new_idx[1]
         return values, indices
 
@@ -231,7 +235,7 @@ def partial_distance_matrix(x: torch.Tensor, partial_idx: torch.Tensor) -> torch
 
 
 def soft_weighted_medoid_k_neighborhood(
-    A: torch.sparse.FloatTensor,
+    A: torch_sparse.SparseTensor,
     x: torch.Tensor,
     k: int = 32,
     temperature: float = 1.0,
@@ -246,7 +250,7 @@ def soft_weighted_medoid_k_neighborhood(
 
     Parameters
     ----------
-    A : torch.sparse.FloatTensor
+    A : torch_sparse.SparseTensor
         Sparse [n, n] tensor of the weighted/normalized adjacency matrix.
     x : torch.Tensor
         Dense [n, d] tensor containing the node attributes/embeddings.
@@ -275,6 +279,9 @@ def soft_weighted_medoid_k_neighborhood(
     # Custom CUDA extension / Numba JIT code for the top k values of the sparse adjacency matrix
     top_k_weights, top_k_idx = _sparse_top_k(A, k=k, return_sparse=False)
 
+    print(top_k_idx)
+    print(top_k_idx.shape)
+    print(top_k_idx.max())
     # Partial distance matrix calculation
     distances_top_k = partial_distance_matrix(x, top_k_idx)
 
@@ -283,6 +290,7 @@ def soft_weighted_medoid_k_neighborhood(
     distances_top_k[top_k_idx == -1] = torch.finfo(distances_top_k.dtype).max
     distances_top_k[~torch.isfinite(distances_top_k)] = torch.finfo(distances_top_k.dtype).max
 
+    # TODO: Sometimes the next line results in NaN values for extremly large/small distances
     # Softmax over L1 criterium
     reliable_adj_values = F.softmax(-distances_top_k / temperature, dim=-1)
     del distances_top_k
@@ -293,15 +301,20 @@ def soft_weighted_medoid_k_neighborhood(
         reliable_adj_values = reliable_adj_values / reliable_adj_values.sum(-1).view(-1, 1)
 
     # Map the top k results back to the (sparse) [n,n] matrix
-    top_k_inv_idx_row = torch.arange(n, device=A.device)[:, None].expand(n, k).flatten()
+    top_k_inv_idx_row = torch.arange(n, device=A.device())[:, None].expand(n, k).flatten()
     top_k_inv_idx_column = top_k_idx.flatten()
     top_k_mask = top_k_inv_idx_column != -1
 
+    # TODO: The adjacency matrix A might have disconnected nodes. In that case applying the top_k_mask will
+    # drop the nodes completely from the adj matrix making, changing its shape and therefore result in an
+    # error later on when trying to multiply it with the unchanged attribute matrix x
     reliable_adj_index = torch.stack([top_k_inv_idx_row[top_k_mask], top_k_inv_idx_column[top_k_mask]])
     reliable_adj_values = reliable_adj_values[top_k_mask.view(n, k)]
 
+    A_rows, _, A_values = A.coo()
+
     # Normalization and calculation of new embeddings
-    a_row_sum = torch_scatter.scatter_sum(A._values(), A._indices()[0], dim=-1)
+    a_row_sum = torch_scatter.scatter_sum(A_values, A_rows, dim=-1)
     new_embeddings = a_row_sum.view(-1, 1) * torch_sparse.spmm(reliable_adj_index, reliable_adj_values, n, n, x)
     return new_embeddings
 
@@ -332,7 +345,7 @@ def dense_cpu_soft_weighted_medoid_k_neighborhood(
 
     row_sum = A_dense.sum(-1)[:, None]
 
-    topk_weights = torch.zeros(A.shape, device=A.device)
+    topk_weights = torch.zeros(A_dense.shape, device=A_dense.device)
     topk_weights[torch.arange(n)[:, None].expand(n, k), topk_a_idx] = F.softmax(-distances_k / temperature, dim=-1)
     if with_weight_correction:
         topk_weights[torch.arange(n)[:, None].expand(n, k), topk_a_idx] *= topk_a
