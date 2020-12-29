@@ -8,7 +8,6 @@ from typing import Optional, Union, Tuple
 from tqdm.auto import tqdm
 import numpy as np
 import torch
-from torch import nn
 import torch.nn.functional as F
 import torch_sparse
 
@@ -180,9 +179,9 @@ class GANG():
                         symmetric_edge_index = symmetric_edge_index.to(self.device)
                         symmetric_edge_weight = symmetric_edge_weight.to(self.device)
                     else:
-                        # Currently (1.6.0) PyTorch does not support return arguments of `checkpoint` that do not require
-                        # gradient. For this reason we need to execute the code twice (due to checkpointing in fact
-                        # three times...)
+                        # Currently (1.6.0) PyTorch does not support return arguments of `checkpoint` that do not
+                        # require gradient. For this reason we need to execute the code twice (due to checkpointing in 
+                        # fact three times...)
                         with torch.no_grad():
                             symmetric_edge_index = GANG.fuse_adjacency_matrices(
                                 edge_index, edge_weight, new_edge_idx, new_edge_weight, m=next_node, n=next_node, op='mean'
@@ -201,13 +200,10 @@ class GANG():
                     time_symm.record()
 
                 logits = self.model(data=combined_features, adj=(symmetric_edge_index, symmetric_edge_weight))
-                if self.stop_optimizing_if_label_flipped:
-                    not_yet_flipped_mask = logits[self.idx_attack].argmax(-1) == self.labels_attack
-                    if not_yet_flipped_mask.sum() > 0:
-                        loss = F.cross_entropy(logits[self.idx_attack][not_yet_flipped_mask],
-                                               self.labels_attack[not_yet_flipped_mask])
-                    else:
-                        loss = F.cross_entropy(logits[self.idx_attack], self.labels_attack)
+                not_yet_flipped_mask = logits[self.idx_attack].argmax(-1) == self.labels_attack
+                if self.stop_optimizing_if_label_flipped and not_yet_flipped_mask.sum() > 0:
+                    loss = F.cross_entropy(logits[self.idx_attack][not_yet_flipped_mask],
+                                           self.labels_attack[not_yet_flipped_mask])
                 else:
                     loss = F.cross_entropy(logits[self.idx_attack], self.labels_attack)
 
@@ -346,17 +342,21 @@ class GANG():
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
 
+        self.n = self.n + i + 1
         self.adj_adversary = torch.sparse.FloatTensor(
-            edge_index, edge_weight, (self.n + i + 1, self.n + i + 1)
+            edge_index, edge_weight, (self.n, self.n)
         ).coalesce().detach()
         if not self.feature_greedy_opt:
             self.attr_adversary = torch.cat((features, new_features)).detach()
         else:
             self.attr_adversary = features.detach()
 
-        # self.X = self.attr_adversary
-        # self.edge_index = edge_index
-        # self.edge_weight = edge_weight.detach()
+        self.X = self.attr_adversary.clone()
+        self.edge_index = edge_index.clone()
+        self.edge_weight = edge_weight.clone()
+
+        assert self.n == self.X.shape[0]
+        
 
     @staticmethod
     def fuse_adjacency_matrices(edge_index: torch.Tensor, edge_weight: torch.Tensor,

@@ -1,10 +1,10 @@
 seml:
-  name: neurips_attack
-  db_collection: neurips_attack
-  executable: experiment_attack.py
-  conda_environment: neurips20
+  name: rgnn_at_scale_attack_evasion_transfer
+  db_collection: rgnn_at_scale_attack_evasion_transfer
+  executable: experiment_attack_evasion_transfer.py
+  conda_environment: rgnn_at_scale
   project_root_dir: ../..
-  output_dir: seml/attack/output
+  output_dir: seml/attack_evasion_transfer/output
 
 slurm:
   experiments_per_job: 1
@@ -15,7 +15,7 @@ slurm:
     time: 0-08:00     # max time, D-HH:MM
 
 fixed:
-  epsilons: [0, 0.1, 0.25]
+  epsilons: [0, 0.01, 0.05, 0.1, 0.25]
   surrogate_params:
     n_filters: 64
     dropout: 0.5
@@ -28,7 +28,6 @@ fixed:
   pert_adj_storage_type: attack
   model_storage_type: pretrained
   device: 0
-  binary_attr: False
 
 grid:
   dataset:
@@ -37,15 +36,52 @@ grid:
       - cora_ml
       - citeseer
 
-  attack:
-    type: choice
-    options:
-      - fgsm
-      - pgd
-
   seed:
     type: choice
     options:
       - 0
       - 1
       - 5
+
+pgd:
+  fixed:
+    binary_attr: False
+    attack: PGD
+
+fgsm:
+  fixed:
+    binary_attr: False
+    attack: FGSM
+
+
+greedy_rbcd:
+  fixed:
+    binary_attr: False
+    attack: GreedyRBCD
+
+prbcd:
+  fixed:
+    binary_attr: False
+    attack: PRBCD
+    attack_params:
+      keep_heuristic: WeightOnly
+      search_space_size: 1_000_000
+      do_synchronize: True
+
+gang:
+  fixed:
+    binary_attr: True
+    attack: GANG
+    attack_params:
+      edge_with_random_reverse: False
+      edge_step_size: 5
+      edge_budget: 10
+      feature_dedicated_iterations: 5
+      feature_lr: 5e-1
+      feature_greedy_opt: True
+      eps: 1e-16
+
+dice:
+  fixed:
+    binary_attr: False
+    attack: DICE

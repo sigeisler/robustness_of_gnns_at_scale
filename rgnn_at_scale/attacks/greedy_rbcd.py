@@ -34,6 +34,33 @@ class GreedyRBCD(PRBCD):
 
         self.epochs = epochs
 
+    def _greedy_update(self, step_size: int, edge_index: torch.Tensor,
+                       edge_weight: torch.Tensor, gradient: torch.Tensor):
+        does_original_edge_exist = self.match_search_space_on_edges(edge_index, edge_weight)[0]
+        edge_weight_factor = 2 * (0.5 - does_original_edge_exist.float())
+        gradient *= edge_weight_factor
+
+        # FIXME: Consider only edges that have not been previously modified
+        _, topk_edge_index = torch.topk(gradient, step_size)
+
+        add_edge_index = self.modified_edge_index[:, topk_edge_index]
+        add_edge_weight = edge_weight_factor[topk_edge_index]
+        n_newly_added = int(add_edge_weight.sum().item())
+
+        add_edge_index, add_edge_weight = utils.to_symmetric(add_edge_index, add_edge_weight, self.n)
+        add_edge_index = torch.cat((self.edge_index, add_edge_index), dim=-1)
+        add_edge_weight = torch.cat((self.edge_weight, add_edge_weight))
+        edge_index, edge_weight = torch_sparse.coalesce(
+            add_edge_index, add_edge_weight, m=self.n, n=self.n, op='sum'
+        )
+
+        assert torch.isclose(self.edge_weight.sum() + 2 * n_newly_added, edge_weight.sum())
+        is_one_mask = torch.isclose(edge_weight, torch.tensor(1.))
+        self.edge_index = edge_index[:, is_one_mask]
+        self.edge_weight = edge_weight[is_one_mask]
+        self.edge_weight = torch.ones_like(self.edge_weight)
+        assert self.edge_index.size(1) == self.edge_weight.size(0)
+
     def attack(self, n_perturbations: int):
         step_size = n_perturbations // self.epochs
         if step_size > 0:
@@ -47,34 +74,29 @@ class GreedyRBCD(PRBCD):
             self.sample_search_space(step_size)
             edge_index, edge_weight = self.get_modified_adj()
 
-            logits = F.log_softmax(self.model(data=self.X, adj=(edge_index, edge_weight)), dim=1)
+            if self.do_synchronize:
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+
+            print(f'Cuda after sampling: {torch.cuda.memory_summary()}')
+
+            logits = self.model(data=self.X, adj=(edge_index, edge_weight))
             loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
+
             gradient = utils.grad_with_checkpoint(loss, self.modified_edge_weight_diff)[0]
 
-            does_original_edge_exist = self.match_search_space_on_edges(edge_index, edge_weight)[0]
-            edge_weight_factor = 2 * (0.5 - does_original_edge_exist.float())
-            gradient *= edge_weight_factor
+            if self.do_synchronize:
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
 
-            # FIXME: Consider only edges that have not been previously modified
-            _, topk_edge_index = torch.topk(gradient, step_size)
+            print(f'Cuda after gradient update: {torch.cuda.memory_summary()}')
 
-            add_edge_index = self.modified_edge_index[:, topk_edge_index]
-            add_edge_weight = edge_weight_factor[topk_edge_index]
-            n_newly_added = int(add_edge_weight.sum().item())
+            with torch.no_grad():
+                self._greedy_update(step_size, edge_index, edge_weight, gradient)
 
-            add_edge_index, add_edge_weight = utils.to_symmetric(add_edge_index, add_edge_weight, self.n)
-            add_edge_index = torch.cat((self.edge_index, add_edge_index), dim=-1)
-            add_edge_weight = torch.cat((self.edge_weight, add_edge_weight))
-            edge_index, edge_weight = torch_sparse.coalesce(
-                add_edge_index, add_edge_weight, m=self.n, n=self.n, op='sum'
-            )
-
-            assert torch.isclose(self.edge_weight.sum() + 2 * n_newly_added, edge_weight.sum())
-            is_one_mask = torch.isclose(edge_weight, torch.tensor(1.))
-            self.edge_index = edge_index[:, is_one_mask]
-            self.edge_weight = edge_weight[is_one_mask]
-            self.edge_weight = torch.ones_like(self.edge_weight)
-            assert self.edge_index.size(1) == self.edge_weight.size(0)
+            del logits
+            del loss
+            del gradient
 
         self.adj_adversary = torch.sparse.FloatTensor(
             self.edge_index,

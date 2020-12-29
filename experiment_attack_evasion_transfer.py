@@ -47,7 +47,7 @@ def config():
     }
     binary_attr = False
     seed = 0
-    artifact_dir = 'cache'  # 'cache_debug'
+    artifact_dir = 'cache_debug'
     pert_adj_storage_type = 'evasion_transfer_attack_adj'
     pert_attr_storage_type = 'evasion_transfer_attack_attr'
     model_storage_type = 'pretrained'
@@ -68,8 +68,6 @@ def run(dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequ
         'pert_attr_storage_type': pert_attr_storage_type, 'model_label': model_label,
         'model_storage_type': model_storage_type, 'device': device, 'display_steps': display_steps
     })
-
-    binary_attr = False
 
     assert sorted(epsilons) == epsilons, 'argument `epsilons` must be a sorted list'
     assert len(np.unique(epsilons)) == len(epsilons),\
@@ -128,7 +126,7 @@ def run(dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequ
         logging.info(f'Test accuracy of surrogate: {accuracy(pred_logits_surr, labels.to(device), idx_test)}')
         del pred_logits_surr
 
-        adversary = create_attack(attack, adj=adj, X=attr, labels=labels,
+        adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels,
                                   model=gcn, idx_attack=idx_test, device=device, **attack_params)
 
         tmp_epsilons = list(epsilons)

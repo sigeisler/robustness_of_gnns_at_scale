@@ -548,7 +548,7 @@ class RGCN(r_gcn.RGCN):
                 edge_idx: Optional[torch.Tensor] = None,
                 n: Optional[int] = None,
                 d: Optional[int] = None):
-        x, edge_idx = GCN.parse_forward_input(data, adj, attr_idx, edge_idx, n, d)
+        x, edge_idx, _ = GCN.parse_forward_input(data, adj, attr_idx, edge_idx, n, d)
         self.device = x.device
 
         if adj is None:

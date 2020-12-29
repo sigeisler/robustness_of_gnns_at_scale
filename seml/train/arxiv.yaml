@@ -25,16 +25,16 @@ fixed:
   model_storage_type: pretrained
   device: 0
 
-  dataset: False
-  binary_attr: ogbn-arxiv
+  dataset: ogbn-arxiv
+  binary_attr: False
 
 grid:      
   seed:
     type: choice
     options:
       - 0
-      # - 1
-      # - 5
+      - 1
+      - 5
 
 gcn:
   fixed:
