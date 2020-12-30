@@ -12,13 +12,14 @@ temperature = 1e-3
 class TestTopK():
 
     def test_simple_example_cpu(self):
-        A = SparseTensor.from_dense(torch.tensor([[0.5, 0.3, 0, 0.4], [0.3, 0.2, 0, 0], [0, 0, 0.9, 0.3],
-                                                  [0.4, 0, 0.4, 0.4]], dtype=torch.float32)).to(device)
+        A = torch.tensor([[0.5, 0.3, 0, 0.4], [0.3, 0.2, 0, 0], [0, 0, 0.9, 0.3],
+                          [0.4, 0, 0.4, 0.4]], dtype=torch.float32).to(device).to_sparse()
 
-        topk_values, topk_indices = _sparse_top_k(A, 2, return_sparse=False)
+        topk_values, topk_indices = _sparse_top_k(A._indices(), A._values(), A.shape[0], 2, return_sparse=False)
         assert torch.all(topk_values == torch.tensor([[0.5, 0.4], [0.3, 0.2], [0.9, 0.3], [0.4, 0.4]]))
         assert torch.all(topk_indices[:-1] == torch.tensor([[0, 3], [0, 1], [2, 3]]))
-        topk_values, topk_indices = _sparse_top_k(A, 3, return_sparse=False)
+
+        topk_values, topk_indices = _sparse_top_k(A._indices(), A._values(), A.shape[0], 3, return_sparse=False)
         assert torch.all(
             topk_values == torch.tensor([[0.5, 0.4, 0.3], [0.3, 0.2, 0], [0.9, 0.3, 0], [0.4, 0.4, 0.4]])
         )
@@ -256,7 +257,8 @@ class TestSoftWeightedMedoidKNeighborhood():
                                                       x,
                                                       k=3,
                                                       temperature=temperature,
-                                                      threshold_for_dense_if_cpu=0)
+                                                      # threshold_for_dense_if_cpu=0
+                                                      )
 
         row_sum = A.sum(-1)
         layer_idx = 0

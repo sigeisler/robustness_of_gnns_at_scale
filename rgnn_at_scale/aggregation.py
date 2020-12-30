@@ -136,20 +136,15 @@ def _select_k_idx_cpu(row_idx: np.ndarray,
     return new_idx, valiue_idx, unroll_idx
 
 
-def _sparse_top_k(A: torch_sparse.SparseTensor, k: int, return_sparse: bool = True):
-    n = A.size(0)
+def _sparse_top_k(A_indices: torch.Tensor, A_values: torch.Tensor, n: int, k: int, return_sparse: bool = True):
 
-    A_rows, A_cols, A_values = A.coo()
-    A_indices = torch.stack([A_rows, A_cols], dim=0)
-    print("_sparse_top_k")
-    if A.is_cuda():
-        print("is cuda")
+    if A_indices.is_cuda:
         topk_values, topk_idx = custom_cuda_kernels.topk(A_indices, A_values, n, k)
         if not return_sparse:
             return topk_values, topk_idx.long()
 
         mask = topk_idx != -1
-        row_idx = torch.arange(n, device=A.device()).view(-1, 1).expand(n, k)
+        row_idx = torch.arange(n, device=A_indices.device).view(-1, 1).expand(n, k)
         return torch.sparse.FloatTensor(torch.stack((row_idx[mask], topk_idx[mask].long())), topk_values[mask])
 
     n_edges_per_row = torch_scatter.scatter_sum(
@@ -171,15 +166,15 @@ def _sparse_top_k(A: torch_sparse.SparseTensor, k: int, return_sparse: bool = Tr
         method='top'
     )
 
-    new_idx = torch.from_numpy(np.hstack(new_idx)).to(A.device())
-    value_idx = torch.from_numpy(np.hstack(value_idx)).to(A.device())
+    new_idx = torch.from_numpy(np.hstack(new_idx)).to(A_indices.device)
+    value_idx = torch.from_numpy(np.hstack(value_idx)).to(A_indices.device)
 
     if return_sparse:
         return torch.sparse.FloatTensor(new_idx, A_values[value_idx])
     else:
         unroll_idx = np.hstack(unroll_idx)
-        values = torch.zeros((n, k), device=A.device())
-        indices = -torch.ones((n, k), device=A.device(), dtype=torch.long)
+        values = torch.zeros((n, k), device=A_indices.device)
+        indices = -torch.ones((n, k), device=A_indices.device, dtype=torch.long)
         values[new_idx[0], unroll_idx] = A_values[value_idx]
         indices[new_idx[0], unroll_idx] = new_idx[1]
         return values, indices
@@ -241,6 +236,7 @@ def soft_weighted_medoid_k_neighborhood(
     temperature: float = 1.0,
     with_weight_correction: bool = True,
     threshold_for_dense_if_cpu: int = 5_000,
+    eps: int = 1e-10,
     **kwargs
 ) -> torch.Tensor:
     """Soft Weighted Medoid in the top `k` neighborhood (see Eq. 6 and Eq. 7 in our paper). This function can be used
@@ -276,9 +272,33 @@ def soft_weighted_medoid_k_neighborhood(
     if not x.is_cuda and n < threshold_for_dense_if_cpu:
         return dense_cpu_soft_weighted_medoid_k_neighborhood(A, x, k, temperature, with_weight_correction)
 
-    # Custom CUDA extension / Numba JIT code for the top k values of the sparse adjacency matrix
-    top_k_weights, top_k_idx = _sparse_top_k(A, k=k, return_sparse=False)
+    A_rows, A_cols, A_values = A.coo()
+    if A_rows.unique().shape[0] != n:
+        # This means there are some nodes without any outgoing edges.
 
+        # In the sparse implementation this will lead to an RuntimeError down the line,
+        # because there is not a single reference to these rows in the index.
+        # We adress this here by making sure that every node is referenced to at least once
+        # in the sparse format, even if it doesn't have outgoing edges (row for such a node is all 0)
+        all_row_idx_once = torch.arange(n, device=A.device())
+        missing_rows_mask = ~(all_row_idx_once.unsqueeze(1) == A_rows).any(-1)
+        missing_row_idx = all_row_idx_once[missing_rows_mask]
+
+        # it doesn't matter which one of the columns for this row we choose,
+        # because their value is always 0. So we just choose the first one
+        missing_cols_idx = torch.zeros_like(missing_row_idx)
+        missing_values = torch.zeros_like(missing_row_idx)
+
+        A_rows = torch.cat([A_rows, missing_row_idx])
+        A_cols = torch.cat([A_cols, missing_cols_idx])
+        A_values = torch.cat([A_values, missing_values])
+
+    A_indices = torch.stack([A_rows, A_cols], dim=0)
+
+    # Custom CUDA extension / Numba JIT code for the top k values of the sparse adjacency matrix
+    top_k_weights, top_k_idx = _sparse_top_k(A_indices, A_values, n, k=k, return_sparse=False)
+
+    print(top_k_weights)
     print(top_k_idx)
     print(top_k_idx.shape)
     print(top_k_idx.max())
@@ -287,7 +307,9 @@ def soft_weighted_medoid_k_neighborhood(
 
     # Multiply distances with weights
     distances_top_k = (top_k_weights[:, None, :].expand(n, k, k) * distances_top_k).sum(-1)
-    distances_top_k[top_k_idx == -1] = torch.finfo(distances_top_k.dtype).max
+    # TODO: Figure out why this line is needed
+    # if we keep it, we get NaN results in the embedding for nodes without any outgoing edges
+    #distances_top_k[top_k_idx == -1] = torch.finfo(distances_top_k.dtype).max
     distances_top_k[~torch.isfinite(distances_top_k)] = torch.finfo(distances_top_k.dtype).max
 
     # Softmax over L1 criterium
@@ -297,9 +319,9 @@ def soft_weighted_medoid_k_neighborhood(
     # To have GCN as a special case (see Eq. 6 in our paper)
     if with_weight_correction:
         reliable_adj_values = reliable_adj_values * top_k_weights
-        # Bug: this is where we might introduce nan values if a node has no outgoing edges -> sum = 0
-        # TODO fix this
-        reliable_adj_values = reliable_adj_values / reliable_adj_values.sum(-1).view(-1, 1)
+        # If we have a node without outgoing edges we would divide by 0 here.
+        # That's why we introduced eps to make sure this never happens
+        reliable_adj_values = reliable_adj_values / (reliable_adj_values.sum(-1).view(-1, 1) + eps)
 
     # Map the top k results back to the (sparse) [n,n] matrix
     top_k_inv_idx_row = torch.arange(n, device=A.device())[:, None].expand(n, k).flatten()
@@ -308,14 +330,12 @@ def soft_weighted_medoid_k_neighborhood(
 
     # TODO: The adjacency matrix A might have disconnected nodes. In that case applying the top_k_mask will
     # drop the nodes completely from the adj matrix making, changing its shape and therefore result in an
-    # error later on when trying to multiply it with the unchanged attribute matrix x
+    # error later on when trying to multiply it with the attribute matrix x
     reliable_adj_index = torch.stack([top_k_inv_idx_row[top_k_mask], top_k_inv_idx_column[top_k_mask]])
     reliable_adj_values = reliable_adj_values[top_k_mask.view(n, k)]
 
-    A_rows, _, A_values = A.coo()
-
     # Normalization and calculation of new embeddings
-    a_row_sum = torch_scatter.scatter_sum(A_values, A_rows, dim=-1)
+    a_row_sum = torch_scatter.scatter_sum(A_values, A_indices[0], dim=-1)
     new_embeddings = a_row_sum.view(-1, 1) * torch_sparse.spmm(reliable_adj_index, reliable_adj_values, n, n, x)
     return new_embeddings
 
@@ -326,6 +346,7 @@ def dense_cpu_soft_weighted_medoid_k_neighborhood(
     k: int = 32,
     temperature: float = 1.0,
     with_weight_correction: bool = False,
+    eps: int = 1e-10,
     **kwargs
 ) -> torch.Tensor:
     """Dense cpu implementation (for details see `soft_weighted_medoid_k_neighborhood`).
@@ -341,7 +362,9 @@ def dense_cpu_soft_weighted_medoid_k_neighborhood(
         topk_a[:, None, :].expand(n, k, k)
         * l2[topk_l2_idx, topk_l2_idx.transpose(1, 2)]
     ).sum(-1)
-    distances_k[topk_a == 0] = torch.finfo(distances_k.dtype).max
+    # TODO: Figure out why this line is needed
+    # if we keep it, we get NaN results in the embedding for nodes without any outgoing edges
+    #distances_k[topk_a == 0] = torch.finfo(distances_k.dtype).max
     distances_k[~torch.isfinite(distances_k)] = torch.finfo(distances_k.dtype).max
 
     row_sum = A_dense.sum(-1)[:, None]
@@ -351,7 +374,9 @@ def dense_cpu_soft_weighted_medoid_k_neighborhood(
     topk_weights[torch.arange(n)[:, None].expand(n, k), topk_a_idx] = F.softmax(- distances_k / temperature, dim=-1)
     if with_weight_correction:
         topk_weights[torch.arange(n)[:, None].expand(n, k), topk_a_idx] *= topk_a
-        topk_weights /= topk_weights.sum(-1)[:, None]
+        # If we have a node without outgoing edges we would divide by 0 here.
+        # That's why we introduced eps to make sure this never happens
+        topk_weights /= topk_weights.sum(-1)[:, None] + eps
     return row_sum * (topk_weights @ x)
 
 
