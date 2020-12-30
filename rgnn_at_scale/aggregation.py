@@ -276,10 +276,11 @@ def soft_weighted_medoid_k_neighborhood(
     if A_rows.unique().shape[0] != n:
         # This means there are some nodes without any outgoing edges.
 
-        # In the sparse implementation this will lead to an RuntimeError down the line,
-        # because there is not a single reference to these rows in the index.
+        # In the sparse implementation, not addessing this would lead to a RuntimeError (dimension missmatch)
+        # when calculating the new_embedding.
         # We adress this here by making sure that every node is referenced to at least once
         # in the sparse format, even if it doesn't have outgoing edges (row for such a node is all 0)
+        # and therby ensure that these nodes won't be removed when masking the reliable_adj matrix
         all_row_idx_once = torch.arange(n, device=A.device())
         missing_rows_mask = ~(all_row_idx_once.unsqueeze(1) == A_rows).any(-1)
         missing_row_idx = all_row_idx_once[missing_rows_mask]
@@ -303,9 +304,14 @@ def soft_weighted_medoid_k_neighborhood(
 
     # Multiply distances with weights
     distances_top_k = (top_k_weights[:, None, :].expand(n, k, k) * distances_top_k).sum(-1)
-    # TODO: Figure out why this line is needed
-    # if we keep it, we get NaN results in the embedding for nodes without any outgoing edges
-    #distances_top_k[top_k_idx == -1] = torch.finfo(distances_top_k.dtype).max
+    # TODO: Figure out why the following line is needed
+    # removed this line because the equivalent line in the dense implemention leads to NaN softmax result
+    # note: in this sparse implementation this doesn't happen, because `top_k_idx== -1` is used instead of
+    # `top_k_weights == 0` and by explicitly handling nodes with no outgoing edges above we made sure
+    # that top_k_idx has at least one value that is not -1 for every row. Hence, there is no row in
+    # distances_top_k where all values will be set to float.max. Only when all values of a row are set to
+    # max the softmax will produce a NaN value for this row
+    distances_top_k[top_k_idx == -1] = torch.finfo(distances_top_k.dtype).max
     distances_top_k[~torch.isfinite(distances_top_k)] = torch.finfo(distances_top_k.dtype).max
 
     # Softmax over L1 criterium
@@ -316,7 +322,7 @@ def soft_weighted_medoid_k_neighborhood(
     if with_weight_correction:
         reliable_adj_values = reliable_adj_values * top_k_weights
         # If we have a node without outgoing edges we would divide by 0 here.
-        # That's why we introduced eps to make sure this never happens
+        # Therefore we introduced eps to make sure this never happens
         reliable_adj_values = reliable_adj_values / (reliable_adj_values.sum(-1).view(-1, 1) + eps)
 
     # Map the top k results back to the (sparse) [n,n] matrix
@@ -324,9 +330,9 @@ def soft_weighted_medoid_k_neighborhood(
     top_k_inv_idx_column = top_k_idx.flatten()
     top_k_mask = top_k_inv_idx_column != -1
 
-    # TODO: The adjacency matrix A might have disconnected nodes. In that case applying the top_k_mask will
+    # The adjacency matrix A might have disconnected nodes. In that case applying the top_k_mask will
     # drop the nodes completely from the adj matrix making, changing its shape and therefore result in an
-    # error later on when trying to multiply it with the attribute matrix x
+    # error when trying to multiply it with the attribute matrix x. That's why we adressed the issue above.
     reliable_adj_index = torch.stack([top_k_inv_idx_row[top_k_mask], top_k_inv_idx_column[top_k_mask]])
     reliable_adj_values = reliable_adj_values[top_k_mask.view(n, k)]
 
@@ -359,7 +365,7 @@ def dense_cpu_soft_weighted_medoid_k_neighborhood(
         * l2[topk_l2_idx, topk_l2_idx.transpose(1, 2)]
     ).sum(-1)
     # TODO: Figure out why this line is needed
-    # if we keep it, we get NaN results in the embedding for nodes without any outgoing edges
+    # if we keep it, we get NaN results from the softmax and in the embedding for nodes without any outgoing edges
     #distances_k[topk_a == 0] = torch.finfo(distances_k.dtype).max
     distances_k[~torch.isfinite(distances_k)] = torch.finfo(distances_k.dtype).max
 
@@ -371,7 +377,7 @@ def dense_cpu_soft_weighted_medoid_k_neighborhood(
     if with_weight_correction:
         topk_weights[torch.arange(n)[:, None].expand(n, k), topk_a_idx] *= topk_a
         # If we have a node without outgoing edges we would divide by 0 here.
-        # That's why we introduced eps to make sure this never happens
+        # Therefore we introduced eps to make sure this never happens
         topk_weights /= topk_weights.sum(-1)[:, None] + eps
     return row_sum * (topk_weights @ x)
 
