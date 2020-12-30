@@ -298,10 +298,6 @@ def soft_weighted_medoid_k_neighborhood(
     # Custom CUDA extension / Numba JIT code for the top k values of the sparse adjacency matrix
     top_k_weights, top_k_idx = _sparse_top_k(A_indices, A_values, n, k=k, return_sparse=False)
 
-    print(top_k_weights)
-    print(top_k_idx)
-    print(top_k_idx.shape)
-    print(top_k_idx.max())
     # Partial distance matrix calculation
     distances_top_k = partial_distance_matrix(x, top_k_idx)
 
