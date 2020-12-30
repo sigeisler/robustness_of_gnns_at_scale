@@ -252,7 +252,11 @@ class TestSoftWeightedMedoidKNeighborhood():
     def test_simple_example_unweighted_k3(self):
         A = torch.tensor([[1, 1, 0, 1], [1, 1, 0, 0], [0, 0, 1, 1], [1, 0, 1, 1]], dtype=torch.float32).to(device)
         x = torch.tensor([[-10, 10, 10], [-1, 1, 1], [0, 0, 0], [10, -10, -10]], dtype=torch.float32).to(device)
-        medoids = soft_weighted_medoid_k_neighborhood(A.to_sparse(), x, k=3, temperature=temperature)
+        medoids = soft_weighted_medoid_k_neighborhood(SparseTensor.from_dense(A).to(device),
+                                                      x,
+                                                      k=3,
+                                                      temperature=temperature,
+                                                      threshold_for_dense_if_cpu=0)
 
         row_sum = A.sum(-1)
         layer_idx = 0
@@ -267,11 +271,10 @@ class TestSoftWeightedMedoidKNeighborhood():
         layer_idx = 3
         assert torch.all(medoids[layer_idx] == row_sum[layer_idx] * x[2])
 
-    def test_disconnected_node_weighted_k2(self):
+    def test_disconnected_node_weighted_k2_sparse(self):
         """
         There is/was a bug in the soft_weighted_medoid_k_neighborhood method where nodes which have
-        no outgoing edges will either produce NaN embeddings for this node when using the dense
-        cpu implementation or result in a RuntimeError caused by a size missmatch when trying to do 
+        no outgoing edges will result in a RuntimeError caused by a size missmatch when trying to do 
         the final matrix multuply when using the sparse implementation
         """
         A = torch.tensor([[0.5, 0.3, 0, 0], [0.3, 0.2, 0, 0], [0, 0, 0.9, 0],
@@ -286,6 +289,38 @@ class TestSoftWeightedMedoidKNeighborhood():
                                                       temperature=temperature,
                                                       # forcing sparse implementation
                                                       threshold_for_dense_if_cpu=0)
+
+        row_sum = A.sum(-1)
+        layer_idx = 0
+        assert torch.all(medoids[layer_idx] == row_sum[layer_idx] * x[0])
+
+        layer_idx = 1
+        assert torch.all(medoids[layer_idx] == row_sum[layer_idx] * x[0])
+
+        layer_idx = 2
+        assert torch.all(medoids[layer_idx] == row_sum[layer_idx] * x[2])
+
+        layer_idx = 3
+        assert (torch.all(medoids[layer_idx] == row_sum[layer_idx] * (x[0] + x[2]) / 2)
+                or torch.all(medoids[layer_idx] == row_sum[layer_idx] * (x[0] + x[3]) / 2)
+                or torch.all(medoids[layer_idx] == row_sum[layer_idx] * (x[2] + x[3]) / 2))
+
+    def test_disconnected_node_weighted_k2(self):
+        """
+        There is/was a bug in the soft_weighted_medoid_k_neighborhood method where nodes which have
+        no outgoing edges will produce NaN embeddings for this node when using the dense
+        cpu implementation
+        """
+        A = torch.tensor([[0.5, 0.3, 0, 0], [0.3, 0.2, 0, 0], [0, 0, 0.9, 0],
+                          [0, 0, 0, 0]], dtype=torch.float32).to(device)
+        x = torch.tensor([[-10, 10, 10], [-1, 1, 1], [0, 0, 0], [10, -10, -10]], dtype=torch.float32).to(device)
+
+        A_sparse_tensor = SparseTensor.from_dense(A).to(device)
+
+        medoids = soft_weighted_medoid_k_neighborhood(A_sparse_tensor,
+                                                      x,
+                                                      k=2,
+                                                      temperature=temperature)
 
         row_sum = A.sum(-1)
         layer_idx = 0

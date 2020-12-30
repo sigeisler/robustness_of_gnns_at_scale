@@ -290,7 +290,6 @@ def soft_weighted_medoid_k_neighborhood(
     distances_top_k[top_k_idx == -1] = torch.finfo(distances_top_k.dtype).max
     distances_top_k[~torch.isfinite(distances_top_k)] = torch.finfo(distances_top_k.dtype).max
 
-    # TODO: Sometimes the next line results in NaN values for extremly large/small distances
     # Softmax over L1 criterium
     reliable_adj_values = F.softmax(-distances_top_k / temperature, dim=-1)
     del distances_top_k
@@ -298,6 +297,8 @@ def soft_weighted_medoid_k_neighborhood(
     # To have GCN as a special case (see Eq. 6 in our paper)
     if with_weight_correction:
         reliable_adj_values = reliable_adj_values * top_k_weights
+        # Bug: this is where we might introduce nan values if a node has no outgoing edges -> sum = 0
+        # TODO fix this
         reliable_adj_values = reliable_adj_values / reliable_adj_values.sum(-1).view(-1, 1)
 
     # Map the top k results back to the (sparse) [n,n] matrix
@@ -346,7 +347,8 @@ def dense_cpu_soft_weighted_medoid_k_neighborhood(
     row_sum = A_dense.sum(-1)[:, None]
 
     topk_weights = torch.zeros(A_dense.shape, device=A_dense.device)
-    topk_weights[torch.arange(n)[:, None].expand(n, k), topk_a_idx] = F.softmax(-distances_k / temperature, dim=-1)
+
+    topk_weights[torch.arange(n)[:, None].expand(n, k), topk_a_idx] = F.softmax(- distances_k / temperature, dim=-1)
     if with_weight_correction:
         topk_weights[torch.arange(n)[:, None].expand(n, k), topk_a_idx] *= topk_a
         topk_weights /= topk_weights.sum(-1)[:, None]
