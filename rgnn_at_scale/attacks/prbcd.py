@@ -32,7 +32,7 @@ class PRBCD(object):
                  model: GCN,
                  device: Union[str, int, torch.device],
                  loss_type: str = 'CE',  # 'CW', 'LeakyCW'  # 'CE', 'MCE', 'Margin'
-                 keep_heuristic: str = 'Gradient',  # 'InvWeightGradient' 'Gradient', 'WeightOnly'
+                 keep_heuristic: str = 'WeightOnly',  # 'InvWeightGradient' 'Gradient', 'WeightOnly'
                  keep_weight: float = .1,
                  lr_n_perturbations_factor: float = 0.1,
                  display_step: int = 20,
@@ -89,6 +89,13 @@ class PRBCD(object):
         self.lr_factor *= max(math.log2(self.n_possible_edges / self.search_space_size), 1.)
 
     def attack(self, n_perturbations, **kwargs):
+        """Perform attack (`n_perturbations` is increasing as it was a greedy attack).
+
+        Parameters
+        ----------
+        n_perturbations : int
+            Number of edges to be perturbed (assuming an undirected graph)
+        """
         assert self.search_space_size > n_perturbations, \
             f'The search space size ({self.search_space_size}) must be ' \
             + f'greater than the number of permutations ({n_perturbations})'

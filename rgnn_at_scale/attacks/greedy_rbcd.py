@@ -31,8 +31,9 @@ class GreedyRBCD(PRBCD):
         self.edge_index = self.edge_index.to(self.device)
         self.edge_weight = self.edge_weight.to(self.device)
         self.X = self.X.to(self.device)
-
         self.epochs = epochs
+
+        self.n_perturbations = 0
 
     def _greedy_update(self, step_size: int, edge_index: torch.Tensor,
                        edge_weight: torch.Tensor, gradient: torch.Tensor):
@@ -62,6 +63,20 @@ class GreedyRBCD(PRBCD):
         assert self.edge_index.size(1) == self.edge_weight.size(0)
 
     def attack(self, n_perturbations: int):
+        """Perform attack
+
+        Parameters
+        ----------
+        n_perturbations : int
+            Number of edges to be perturbed (assuming an undirected graph)
+        """
+        assert n_perturbations > self.n_perturbations, (
+            f'Number of perturbations must be bigger as this attack is greedy (current {n_perturbations}, '
+            f'previous {self.n_perturbations})'
+        )
+        n_perturbations -= self.n_perturbations
+        self.n_perturbations += n_perturbations
+
         step_size = n_perturbations // self.epochs
         if step_size > 0:
             steps = self.epochs * [step_size]

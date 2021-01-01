@@ -66,7 +66,6 @@ class PGD(object):
 
         self.n = self.X.shape[0]
         self.device = X.device
-        self.n_perturbations = 0
 
         self.attr_adversary = self.X  # Only the adjacency matrix will be perturbed
         self.adj_adversary = None
@@ -79,8 +78,6 @@ class PGD(object):
         n_perturbations : int
             Number of edges to be perturbed (assuming an undirected graph)
         """
-        self.n_perturbations += n_perturbations
-
         self.complementary = None
         self.adj_changes = torch.zeros(int(self.n * (self.n - 1) / 2), dtype=torch.float, device=self.device)
         self.adj_changes.requires_grad = True
@@ -100,12 +97,12 @@ class PGD(object):
                 lr = 0.1 / np.sqrt(t + 1)
                 self.adj_changes.data.add_(lr * adj_grad)
 
-            self.projection()
+            self.projection(n_perturbations)
 
-        self.random_sample()
+        self.random_sample(n_perturbations)
         self.adj_adversary = self.get_modified_adj().detach().to_sparse()
 
-    def random_sample(self):
+    def random_sample(self, n_perturbations: int):
         K = 20
         best_loss = float('-Inf')
         with torch.no_grad():
@@ -114,7 +111,7 @@ class PGD(object):
                 for i in range(K):
                     sampled = np.random.binomial(1, s)
 
-                    if sampled.sum() > self.n_perturbations:
+                    if sampled.sum() > n_perturbations:
                         continue
                     self.adj_changes.data.copy_(torch.tensor(sampled))
                     modified_adj = self.get_modified_adj()
@@ -138,11 +135,11 @@ class PGD(object):
             loss = -torch.clamp(margin, min=0).mean()
         return loss
 
-    def projection(self):
-        if torch.clamp(self.adj_changes, 0, 1).sum() > self.n_perturbations:
+    def projection(self, n_perturbations: int):
+        if torch.clamp(self.adj_changes, 0, 1).sum() > n_perturbations:
             left = (self.adj_changes - 1).min()
             right = self.adj_changes.max()
-            miu = PGD.bisection(left, right, self.adj_changes, self.n_perturbations, self.epsilon)
+            miu = PGD.bisection(left, right, self.adj_changes, n_perturbations, self.epsilon)
             self.adj_changes.data.copy_(torch.clamp(self.adj_changes.data - miu, min=0, max=1))
         else:
             self.adj_changes.data.copy_(torch.clamp(self.adj_changes.data, min=0, max=1))

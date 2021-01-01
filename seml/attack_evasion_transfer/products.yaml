@@ -27,7 +27,8 @@ fixed:
       patience: 100
       max_epochs: 3000
   artifact_dir: cache
-  pert_adj_storage_type: attack
+  pert_adj_storage_type: evasion_transfer_attack_adj
+  pert_attr_storage_type: evasion_transfer_attack_attr
   model_storage_type: pretrained
   device: 0
   binary_attr: False

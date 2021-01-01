@@ -45,19 +45,26 @@ class FGSM():
         self.labels = labels.to(device)
         self.idx_attack = idx_attack
         self.model = deepcopy(model).to(self.device)
+
         self.attr_adversary = None
         self.adj_adversary = None
+        self.n_perturbations = 0
 
-    def attack(self,
-               n_perturbations: int,
-               **kwargs):
-        """Perform attack (`n_perturbations` is increasing as it was a greedy attack).
+    def attack(self, n_perturbations: int):
+        """Perform attack
 
         Parameters
         ----------
         n_perturbations : int
             Number of edges to be perturbed (assuming an undirected graph)
         """
+        assert n_perturbations > self.n_perturbations, (
+            f'Number of perturbations must be bigger as this attack is greedy (current {n_perturbations}, '
+            f'previous {self.n_perturbations})'
+        )
+        n_perturbations -= self.n_perturbations
+        self.n_perturbations += n_perturbations
+
         for i in range(n_perturbations):
             logits = self.model.to(self.device)(self.X, self.adj)
 

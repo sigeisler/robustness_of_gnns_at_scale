@@ -80,8 +80,23 @@ class GANG():
         self.do_synchronize = do_synchronize
         assert self.edge_budget % self.edge_step_size == 0,\
             f'edge budget ({self.edge_budget}) must be dividable by the step size ({self.edge_step_size})'
+        self.n_perturbations = 0
 
     def attack(self, n_perturbations: Optional[int] = None):
+        """Perform attack
+
+        Parameters
+        ----------
+        n_perturbations : int
+            Number of edges to be perturbed (assuming an undirected graph)
+        """
+        assert n_perturbations > self.n_perturbations, (
+            f'Number of perturbations must be bigger as this attack is greedy (current {n_perturbations}, '
+            f'previous {self.n_perturbations})'
+        )
+        n_perturbations -= self.n_perturbations
+        self.n_perturbations += n_perturbations
+
         if n_perturbations is None:
             node_budget = self.node_budget
             edge_budget = self.edge_budget
@@ -180,7 +195,7 @@ class GANG():
                         symmetric_edge_weight = symmetric_edge_weight.to(self.device)
                     else:
                         # Currently (1.6.0) PyTorch does not support return arguments of `checkpoint` that do not
-                        # require gradient. For this reason we need to execute the code twice (due to checkpointing in 
+                        # require gradient. For this reason we need to execute the code twice (due to checkpointing in
                         # fact three times...)
                         with torch.no_grad():
                             symmetric_edge_index = GANG.fuse_adjacency_matrices(
@@ -356,7 +371,6 @@ class GANG():
         self.edge_weight = edge_weight.clone()
 
         assert self.n == self.X.shape[0]
-        
 
     @staticmethod
     def fuse_adjacency_matrices(edge_index: torch.Tensor, edge_weight: torch.Tensor,
