@@ -275,13 +275,23 @@ class TestSoftWeightedMedoidKNeighborhood():
 
     def test_disconnected_node_weighted_k2_sparse(self):
         """
-        There is/was a bug in the soft_weighted_medoid_k_neighborhood method where nodes which have
+        There was a bug in the soft_weighted_medoid_k_neighborhood method where nodes which have
         no outgoing edges will result in a RuntimeError caused by a size missmatch when trying to do 
         the final matrix multuply when using the sparse implementation
         """
-        A = torch.tensor([[0.5, 0.3, 0, 0], [0.3, 0.2, 0, 0], [0, 0, 0.9, 0],
-                          [0, 0, 0, 0]], dtype=torch.float32).to(device)
-        x = torch.tensor([[-10, 10, 10], [-1, 1, 1], [0, 0, 0], [10, -10, -10]], dtype=torch.float32).to(device)
+
+        A = torch.tensor([[0.5, 0.3, 0, 0],
+                          [0.3, 0.2, 0, 0],
+                          [0, 0, 0.9, 0],
+                          [0, 0, 0, 0]],
+                         requires_grad=True,
+                         dtype=torch.float32).to(device)
+        x = torch.tensor([[-10, 10, 10],
+                          [-1, 1, 1],
+                          [0, 0, 0],
+                          [10, -10, -10]],
+                         requires_grad=True,
+                         dtype=torch.float32).to(device)
 
         A_sparse_tensor = SparseTensor.from_dense(A).to(device)
 
@@ -307,15 +317,30 @@ class TestSoftWeightedMedoidKNeighborhood():
                 or torch.all(medoids[layer_idx] == row_sum[layer_idx] * (x[0] + x[3]) / 2)
                 or torch.all(medoids[layer_idx] == row_sum[layer_idx] * (x[2] + x[3]) / 2))
 
+        # just checking that we *can* compute the gradient,
+        # not whether its actually correct
+        medoids.sum().backward()
+        assert A.grad is not None
+        assert x.grad is not None
+
     def test_disconnected_node_weighted_k2(self):
         """
-        There is/was a bug in the soft_weighted_medoid_k_neighborhood method where nodes which have
+        There was a bug in the soft_weighted_medoid_k_neighborhood method where nodes which have
         no outgoing edges will produce NaN embeddings for this node when using the dense
         cpu implementation
         """
-        A = torch.tensor([[0.5, 0.3, 0, 0], [0.3, 0.2, 0, 0], [0, 0, 0.9, 0],
-                          [0, 0, 0, 0]], dtype=torch.float32).to(device)
-        x = torch.tensor([[-10, 10, 10], [-1, 1, 1], [0, 0, 0], [10, -10, -10]], dtype=torch.float32).to(device)
+        A = torch.tensor([[0.5, 0.3, 0, 0],
+                          [0.3, 0.2, 0, 0],
+                          [0, 0, 0.9, 0],
+                          [0, 0, 0, 0]],
+                         requires_grad=True,
+                         dtype=torch.float32).to(device)
+        x = torch.tensor([[-10, 10, 10],
+                          [-1, 1, 1],
+                          [0, 0, 0],
+                          [10, -10, -10]],
+                         requires_grad=True,
+                         dtype=torch.float32).to(device)
 
         A_sparse_tensor = SparseTensor.from_dense(A).to(device)
 
@@ -338,6 +363,10 @@ class TestSoftWeightedMedoidKNeighborhood():
         assert (torch.all(medoids[layer_idx] == row_sum[layer_idx] * (x[0] + x[2]) / 2)
                 or torch.all(medoids[layer_idx] == row_sum[layer_idx] * (x[0] + x[3]) / 2)
                 or torch.all(medoids[layer_idx] == row_sum[layer_idx] * (x[2] + x[3]) / 2))
+
+        medoids.sum().backward()
+        assert A.grad is not None
+        assert x.grad is not None
 
 
 class TestWeightedDimwiseMedian():
