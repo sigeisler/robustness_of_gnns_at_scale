@@ -211,9 +211,16 @@ class TestWeightedMedoidKNeighborhood():
 class TestSoftWeightedMedoidKNeighborhood():
 
     def test_simple_example_weighted_k2(self):
-        A = torch.tensor([[0.5, 0.3, 0, 0.4], [0.3, 0.2, 0, 0], [0, 0, 0.9, 0.3],
-                          [0.4, 0, 0.4, 0.4]], dtype=torch.float32).to(device)
-        x = torch.tensor([[-10, 10, 10], [-1, 1, 1], [0, 0, 0], [10, -10, -10]], dtype=torch.float32).to(device)
+        A = torch.tensor([[0.5, 0.3, 0, 0.4],
+                          [0.3, 0.2, 0, 0],
+                          [0, 0, 0.9, 0.0],
+                          [0.4, 0, 0.4, 0.4]],
+                         dtype=torch.float32).to(device)
+        x = torch.tensor([[-10, 10, 10],
+                          [-1, 1, 1],
+                          [0, 0, 0],
+                          [10, -10, -10]],
+                         dtype=torch.float32).to(device)
         medoids = soft_weighted_medoid_k_neighborhood(A.to_sparse(), x, k=2, temperature=temperature)
 
         row_sum = A.sum(-1)
@@ -232,9 +239,16 @@ class TestSoftWeightedMedoidKNeighborhood():
                 or torch.all(medoids[layer_idx] == row_sum[layer_idx] * (x[2] + x[3]) / 2))
 
     def test_simple_example_weighted_k3(self):
-        A = torch.tensor([[0.5, 0.3, 0, 0.4], [0.3, 0.2, 0, 0], [0, 0, 0.9, 0.3],
-                          [0.4, 0, 0.4, 0.4]], dtype=torch.float32).to(device)
-        x = torch.tensor([[-10, 10, 10], [-1, 1, 1], [0, 0, 0], [10, -10, -10]], dtype=torch.float32).to(device)
+        A = torch.tensor([[0.5, 0.3, 0, 0.4],
+                          [0.3, 0.2, 0, 0],
+                          [0, 0, 0.9, 0.3],
+                          [0.4, 0, 0.4, 0.4]],
+                         dtype=torch.float32).to(device)
+        x = torch.tensor([[-10, 10, 10],
+                          [-1, 1, 1],
+                          [0, 0, 0],
+                          [10, -10, -10]],
+                         dtype=torch.float32).to(device)
         medoids = soft_weighted_medoid_k_neighborhood(A.to_sparse(), x, k=3, temperature=temperature)
 
         row_sum = A.sum(-1)
@@ -251,8 +265,16 @@ class TestSoftWeightedMedoidKNeighborhood():
         assert torch.all(medoids[layer_idx] == row_sum[layer_idx] * x[2])
 
     def test_simple_example_unweighted_k3(self):
-        A = torch.tensor([[1, 1, 0, 1], [1, 1, 0, 0], [0, 0, 1, 1], [1, 0, 1, 1]], dtype=torch.float32).to(device)
-        x = torch.tensor([[-10, 10, 10], [-1, 1, 1], [0, 0, 0], [10, -10, -10]], dtype=torch.float32).to(device)
+        A = torch.tensor([[1, 1, 0, 1],
+                          [1, 1, 0, 0],
+                          [0, 0, 1, 1],
+                          [1, 0, 1, 1]],
+                         dtype=torch.float32).to(device)
+        x = torch.tensor([[-10, 10, 10],
+                          [-1, 1, 1],
+                          [0, 0, 0],
+                          [10, -10, -10]],
+                         dtype=torch.float32).to(device)
         medoids = soft_weighted_medoid_k_neighborhood(SparseTensor.from_dense(A).to(device),
                                                       x,
                                                       k=3,
@@ -280,7 +302,7 @@ class TestSoftWeightedMedoidKNeighborhood():
         the final matrix multuply when using the sparse implementation
         """
 
-        A = torch.tensor([[0.5, 0.3, 0, 0],
+        A = torch.tensor([[0.5, 0.3, 0, 0.3],
                           [0.3, 0.2, 0, 0],
                           [0, 0, 0.9, 0],
                           [0, 0, 0, 0]],
@@ -329,10 +351,10 @@ class TestSoftWeightedMedoidKNeighborhood():
         no outgoing edges will produce NaN embeddings for this node when using the dense
         cpu implementation
         """
-        A = torch.tensor([[0.5, 0.3, 0, 0],
+        A = torch.tensor([[0.5, 0.3, 0, 0.4],
                           [0.3, 0.2, 0, 0],
-                          [0, 0, 0.9, 0],
-                          [0, 0, 0, 0]],
+                          [0, 0, 0.9, 0.3],
+                          [0.4, 0, 0.4, 0.4]],
                          requires_grad=True,
                          dtype=torch.float32).to(device)
         x = torch.tensor([[-10, 10, 10],
@@ -364,6 +386,86 @@ class TestSoftWeightedMedoidKNeighborhood():
                 or torch.all(medoids[layer_idx] == row_sum[layer_idx] * (x[0] + x[3]) / 2)
                 or torch.all(medoids[layer_idx] == row_sum[layer_idx] * (x[2] + x[3]) / 2))
 
+        medoids.sum().backward()
+        assert A.grad is not None
+        assert x.grad is not None
+
+    def test_batched_node_weighted_k2_sparse(self):
+
+        A = torch.tensor([[0.5, 0.3, 0, 0],
+                          [0.0, 0.0, 0.9, 0],
+                          [0.4, 0, 0.4, 0.4]],
+                         requires_grad=True,
+                         dtype=torch.float32).to(device)
+        x = torch.tensor([[-10, 10, 10],
+                          [-1, 1, 1],
+                          [0, 0, 0],
+                          [10, -10, -10]],
+                         requires_grad=True,
+                         dtype=torch.float32).to(device)
+
+        A_sparse_tensor = SparseTensor.from_dense(A).to(device)
+
+        medoids = soft_weighted_medoid_k_neighborhood(A_sparse_tensor,
+                                                      x,
+                                                      k=2,
+                                                      temperature=temperature,
+                                                      # forcing sparse implementation
+                                                      threshold_for_dense_if_cpu=0)
+
+        row_sum = A.sum(-1)
+        layer_idx = 0
+        assert torch.all(medoids[layer_idx] == row_sum[layer_idx] * x[0])
+
+        layer_idx = 1
+        assert torch.all(medoids[layer_idx] == row_sum[layer_idx] * x[2])
+
+        layer_idx = 2
+        assert (torch.all(medoids[layer_idx] == row_sum[layer_idx] * (x[0] + x[2]) / 2)
+                or torch.all(medoids[layer_idx] == row_sum[layer_idx] * (x[0] + x[3]) / 2)
+                or torch.all(medoids[layer_idx] == row_sum[layer_idx] * (x[2] + x[3]) / 2))
+
+        # just checking that we *can* compute the gradient,
+        # not whether its actually correct
+        medoids.sum().backward()
+        assert A.grad is not None
+        assert x.grad is not None
+
+    def test_batched_node_weighted_k2(self):
+
+        A = torch.tensor([[0.5, 0.3, 0, 0.3],
+                          [0.0, 0.0, 0.9, 0],
+                          [0.4, 0, 0.4, 0.4]],
+                         requires_grad=True,
+                         dtype=torch.float32).to(device)
+        x = torch.tensor([[-10, 10, 10],
+                          [-1, 1, 1],
+                          [0, 0, 0],
+                          [10, -10, -10]],
+                         requires_grad=True,
+                         dtype=torch.float32).to(device)
+
+        A_sparse_tensor = SparseTensor.from_dense(A).to(device)
+
+        medoids = soft_weighted_medoid_k_neighborhood(A_sparse_tensor,
+                                                      x,
+                                                      k=2,
+                                                      temperature=temperature)
+
+        row_sum = A.sum(-1)
+        layer_idx = 0
+        assert torch.all(medoids[layer_idx] == row_sum[layer_idx] * x[0])
+
+        layer_idx = 1
+        assert torch.all(medoids[layer_idx] == row_sum[layer_idx] * x[2])
+
+        layer_idx = 2
+        assert (torch.all(medoids[layer_idx] == row_sum[layer_idx] * (x[0] + x[2]) / 2)
+                or torch.all(medoids[layer_idx] == row_sum[layer_idx] * (x[0] + x[3]) / 2)
+                or torch.all(medoids[layer_idx] == row_sum[layer_idx] * (x[2] + x[3]) / 2))
+
+        # just checking that we *can* compute the gradient,
+        # not whether its actually correct
         medoids.sum().backward()
         assert A.grad is not None
         assert x.grad is not None

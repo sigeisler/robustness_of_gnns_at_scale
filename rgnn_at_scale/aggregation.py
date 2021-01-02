@@ -246,7 +246,7 @@ def soft_weighted_medoid_k_neighborhood(
     Parameters
     ----------
     A : torch_sparse.SparseTensor
-        Sparse [n, n] tensor of the weighted/normalized adjacency matrix.
+        Sparse [batch_size, n] tensor of the weighted/normalized adjacency matrix.
     x : torch.Tensor
         Dense [n, d] tensor containing the node attributes/embeddings.
     k : int, optional
@@ -263,7 +263,11 @@ def soft_weighted_medoid_k_neighborhood(
     torch.Tensor
         The new embeddings [n, d].
     """
+
+    batch_size = A.size(0)
     n, d = x.shape
+    assert n == A.size(1), \
+        "Size missmatch of adjacency matrix (batch_size, n) and attribute/embedding matrix x (n,d)"
     if k > n:
         if with_weight_correction:
             raise NotImplementedError('`k` less than `n` and `with_weight_correction` is not implemented.')
@@ -276,13 +280,13 @@ def soft_weighted_medoid_k_neighborhood(
     del A_rows, A_cols
 
     # Custom CUDA extension / Numba JIT code for the top k values of the sparse adjacency matrix
-    top_k_weights, top_k_idx = _sparse_top_k(A_indices, A_values, n, k=k, return_sparse=False)
+    top_k_weights, top_k_idx = _sparse_top_k(A_indices, A_values, batch_size, k=k, return_sparse=False)
 
     # Partial distance matrix calculation
     distances_top_k = partial_distance_matrix(x, top_k_idx)
 
     # Multiply distances with weights
-    distances_top_k = (top_k_weights[:, None, :].expand(n, k, k) * distances_top_k).sum(-1)
+    distances_top_k = (top_k_weights[:, None, :].expand(batch_size, k, k) * distances_top_k).sum(-1)
     distances_top_k[top_k_idx == -1] = torch.finfo(distances_top_k.dtype).max
     distances_top_k[~torch.isfinite(distances_top_k)] = torch.finfo(distances_top_k.dtype).max
 
@@ -295,19 +299,20 @@ def soft_weighted_medoid_k_neighborhood(
         reliable_adj_values = reliable_adj_values * top_k_weights
         reliable_adj_values = reliable_adj_values / reliable_adj_values.sum(-1).view(-1, 1)
 
-    # Map the top k results back to the (sparse) [n,n] matrix
-    top_k_inv_idx_row = torch.arange(n, device=A.device())[:, None].expand(n, k).flatten()
+    # Map the top k results back to the (sparse) [batch_size,n] matrix
+    top_k_inv_idx_row = torch.arange(batch_size, device=A.device())[:, None].expand(batch_size, k).flatten()
     top_k_inv_idx_column = top_k_idx.flatten()
     top_k_mask = top_k_inv_idx_column != -1
 
     # Note: The adjacency matrix A might have disconnected nodes. In that case applying the top_k_mask will
     # drop the nodes completely from the adj matrix making, changing its shape
     reliable_adj_index = torch.stack([top_k_inv_idx_row[top_k_mask], top_k_inv_idx_column[top_k_mask]])
-    reliable_adj_values = reliable_adj_values[top_k_mask.view(n, k)]
+    reliable_adj_values = reliable_adj_values[top_k_mask.view(batch_size, k)]
 
     # Normalization and calculation of new embeddings
-    a_row_sum = torch_scatter.scatter_sum(A_values, A_indices[0], dim=-1, dim_size=n)
-    new_embeddings = a_row_sum.view(-1, 1) * torch_sparse.spmm(reliable_adj_index, reliable_adj_values, n, n, x)
+    a_row_sum = torch_scatter.scatter_sum(A_values, A_indices[0], dim=-1, dim_size=batch_size)
+    new_embeddings = a_row_sum.view(-1, 1) * torch_sparse.spmm(reliable_adj_index,
+                                                               reliable_adj_values, batch_size, n, x)
     return new_embeddings
 
 
@@ -317,20 +322,21 @@ def dense_cpu_soft_weighted_medoid_k_neighborhood(
     k: int = 32,
     temperature: float = 1.0,
     with_weight_correction: bool = False,
-    eps: int = 1e-10,
     **kwargs
 ) -> torch.Tensor:
     """Dense cpu implementation (for details see `soft_weighted_medoid_k_neighborhood`).
     """
-    n, d = x.size()
     A_dense = A.to_dense()
+
+    n, d = x.size()
+    batch_size = A_dense.size(0)
 
     l2 = _distance_matrix(x)
 
     topk_a, topk_a_idx = torch.topk(A_dense, k=k, dim=1)
-    topk_l2_idx = topk_a_idx[:, None, :].expand(n, k, k)
+    topk_l2_idx = topk_a_idx[:, None, :].expand(batch_size, k, k)
     distances_k = (
-        topk_a[:, None, :].expand(n, k, k)
+        topk_a[:, None, :].expand(batch_size, k, k)
         * l2[topk_l2_idx, topk_l2_idx.transpose(1, 2)]
     ).sum(-1)
 
@@ -342,14 +348,19 @@ def dense_cpu_soft_weighted_medoid_k_neighborhood(
     row_sum = A_dense.sum(-1)[:, None]
     topk_weights = torch.zeros(A_dense.shape, device=A_dense.device)
 
-    topk_weights[torch.arange(n)[:, None].expand(n, k), topk_a_idx] = F.softmax(- distances_k / temperature, dim=-1)
+    topk_weights[torch.arange(batch_size)[:, None].expand(batch_size, k),
+                 topk_a_idx] = F.softmax(- distances_k / temperature, dim=-1)
 
     if with_weight_correction:
-        topk_weights[torch.arange(n)[:, None].expand(n, k), topk_a_idx] *= topk_a
+        topk_weights[torch.arange(batch_size)[:, None].expand(batch_size, k), topk_a_idx] *= topk_a
         # Here we have another chance to introduce more NaNs for nodes without any outgoing edges
         # in these cases we are dividing my zero here
         topk_weights /= topk_weights.sum(-1)[:, None]
 
+    # For nodes with no outgoing edges (sum of this row is zero) we have NaN values in our
+    # topk_weights matrix which we need to correct.
+    # We set this to 0 because multiplying with row_sum in the returm statement should have
+    # resulted in a 0 vector for these nodes' embedding anyways
     zero_embedding_mask = (row_sum == 0).flatten()
     topk_weights[zero_embedding_mask] = 0
 
