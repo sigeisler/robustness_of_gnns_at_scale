@@ -470,6 +470,29 @@ class TestSoftWeightedMedoidKNeighborhood():
         assert A.grad is not None
         assert x.grad is not None
 
+    def test_weighted_k2_out_of_bounds(self):
+        """
+        This particular setting threw an error:
+        IndexError: index 2029 is out of bounds for dimension 0 with size 2027
+        This test is to make sure it's fixed now and should just check that 
+        no error is thrown anymore
+
+        The cause of the error was the partial_distance_matrix function that couldn't 
+        handle some batched adjacency matrices.
+        """
+
+        A = torch.load("tests/data_/adj_bug.tensor").to(device)
+        x = torch.load("tests/data_/x_bug.tensor").to(device)
+
+        A_sparse_tensor = SparseTensor.from_dense(A)
+
+        medoids = soft_weighted_medoid_k_neighborhood(A_sparse_tensor,
+                                                      x,
+                                                      k=32,
+                                                      temperature=temperature,
+                                                      # forcing sparse implementation
+                                                      threshold_for_dense_if_cpu=0)
+
 
 class TestWeightedDimwiseMedian():
 

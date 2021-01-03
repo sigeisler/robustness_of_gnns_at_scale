@@ -1,3 +1,10 @@
 {
-    "python.pythonPath": "/nfs/staff-ssd/geisler/anaconda3/envs/rgnn_at_scale/bin/python"
+    "python.pythonPath": "/nfs/homedirs/schmidtt/miniconda3/bin/python",
+    "python.testing.pytestArgs": [
+        "tests"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.nosetestsEnabled": false,
+    "python.testing.pytestEnabled": true,
+    "python.testing.pytestPath": "/nfs/homedirs/schmidtt/miniconda3/bin/pytest"
 }
