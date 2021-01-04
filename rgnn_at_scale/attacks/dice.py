@@ -27,6 +27,40 @@ class DICE(object):
         ratio of the attack budget that is used to add new edges
 
     """
+    #! New Helper Functions
+    def _to_dict(self, adj: torch.sparse.FloatTensor):
+        ''' Here we get full adjacency matrix not just upper triangle '''
+        myAdj = dict()
+        indices = adj.indices()
+        print(indices.type())
+        for index in range(len(indices[0])):
+            key = indices[0, index].item()
+            if myAdj.get(key) is None:
+                myAdj[key] = []
+            myAdj[key].append(indices[1, index].item())
+        return myAdj
+
+    def _to_dict_symmetric(self, adj: torch.sparse.FloatTensor):
+        '''Here We only need the upper triangle, since adjacency matrix is symmetrical'''
+        myAdj = dict()
+        indices = adj.indices()
+        print(indices.type())
+        for index in range(len(indices[0])):
+            key = indices[0, index].item()
+            if myAdj.get(key) is None:
+                myAdj[key] = []
+            if key < indices[1, index]:
+                myAdj[key].append(indices[1, index].item())
+        # Remove all empty keys
+        # This will happen if a node has all its connections in the lower triangle
+        for key in list(myAdj.keys()):
+            if myAdj.get(key) is not None and not myAdj.get(key):
+                myAdj.pop(key, None)
+        return myAdj
+
+    #!---------------------------------------------------------
+
+
     def __init__(self,
                  adj: torch.sparse.FloatTensor,
                  X: torch.Tensor,
@@ -36,9 +70,12 @@ class DICE(object):
                  **kwargs):
         # n is the number of nodes        
         self.n = adj.size()[0]
+
+        #TODO: Adding dictionary
+        #//self.adj_dict = self._to_dict_symmetric(adj)
+
         #* We are changing a sparse torch Tensor to a scipy sparse Matrix(why not torch sparse??)
         #* We do not continue with Torch sparse because it is missing many functions
-
         coo_adj = torch_geometric.utils.to_scipy_sparse_matrix(adj.indices(), num_nodes=self.n)
         #*adjacency matrix is compressed sparse row matrix(why not torch sparse?)
         self.adj = sp.csr_matrix(coo_adj)
@@ -61,19 +98,22 @@ class DICE(object):
 
         to_be_deleted_set = set()
         node_connections = dict()
+        adj_dict =self.adj_dict
 
         while delete_budget > 0:
             edge_index = np.random.randint(nonzeros_0.shape[0])
             first_node = nonzeros_0[edge_index]
             second_node = nonzeros_1[edge_index]
+
+            #//first_node = random.choice(list(adj_dict.keys()))
+            #//second_node = random.choice(adj_dict[first_node])
+
             # check if both nodes have the same label
             if(
                 labels[first_node] == labels[second_node]
                 and edge_index not in to_be_deleted_set
             ):
 
-
-                if node_connections.get(first_node, -5) > 1 and node_connections.get(second_node, -5) > 1:
                     delete_budget -= 1
                     pbar.update(1)
                     # * why do we make a set of nodes to be deleted instead of instantly deleting?
