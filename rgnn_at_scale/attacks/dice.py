@@ -68,18 +68,14 @@ class DICE(object):
         self.n = adj.size()[0]
         
         #? Transform matrix to symmetrical using utils.to_symmetrical, am I calling the function correctly, does it take the size as self.n??
-        adj_symmetric_index, adj_symmetric_values = utils.to_symmetric(adj.indices(), adj.values(), self.n, self.n)
-        adj_symmetric = torch.sparse.FloatTensor(adj_symmetric_index, adj_symmetric_values, torch.Size([self.n, self.n]))
-        #!
-        self.adj_dict = self._to_dict_symmetric(adj_symmetric)
-        self.is_symmetric = True
-        self.adj = adj_symmetric
+        #adj_symmetric_index, adj_symmetric_values = utils.to_symmetric(adj.indices(), adj.values(), self.n, self.n)
+        #adj_symmetric = torch.sparse.FloatTensor(adj_symmetric_index, adj_symmetric_values, torch.Size([self.n, self.n]))
 
-        # ? why cpu?? apparently some operations can not be performed on GPU(what are they and are we using them??)
-        # ? this is equal to labels.to('cpu') -> Change it to this format to have unity in our code
+        self.adj_dict = self._to_dict_symmetric(adj)
+        self.is_symmetric = True
+        self.adj = adj
         self.labels = labels.cpu()
         self.device = device
-        # why always on cpu?
         self.attr_adversary = X.cpu()
         self.adj_adversary = None
         # add ratio decides how much of the budget goes to adding edges and the rest goes to deleting
