@@ -66,36 +66,20 @@ class DICE(object):
             edge_index = np.random.randint(nonzeros_0.shape[0])
             first_node = nonzeros_0[edge_index]
             second_node = nonzeros_1[edge_index]
-            # check if they have the same label and they don't get disconnected from the graph after removal
-            # if adj[node].count_nonzero() == 1 means that this connection is the last connection that this node has with the graph and by its removal this node will be completely disconnected with the graph!
+            # check if both nodes have the same label
             if(
                 labels[first_node] == labels[second_node]
                 and edge_index not in to_be_deleted_set
-                #// and adj[first_node].count_nonzero() > 1
-                #// and adj[second_node].count_nonzero() > 1
             ):
-                # This way we do not count the connections for the same node multiple times
-                if first_node not in node_connections:
-                    node_connections[first_node] = adj[first_node].count_nonzero()
-                if second_node not in node_connections:
-                    node_connections[second_node] = adj[second_node].count_nonzero()
+
 
                 if node_connections.get(first_node, -5) > 1 and node_connections.get(second_node, -5) > 1:
                     delete_budget -= 1
                     pbar.update(1)
-
-                    # *why do we make a set of nodes to be deleted instead of instantly deleting?
+                    # * why do we make a set of nodes to be deleted instead of instantly deleting?
                     # * Because we might add a connection in the same place where
                     # * we removed a connection from, that's why we perform attack at the end
-
-                    # ? However this way, deleted connections do not show effect in the adjacency matrix 
-                    # ? and number of connections.
                     to_be_deleted_set.add(edge_index)
-                    
-                    # ? To make sure we do not remove too much from one node
-                    # ? node_connections[first_node]-= 1
-                    # ? node_connections[second_node]-= 1
-
                     #//print(f'deleted edge from {first_node} to {second_node}')
         pbar.close()
         return to_be_deleted_set
@@ -151,10 +135,10 @@ class DICE(object):
                **kwargs):
 
         np.random.seed(attack_seed)
-        #Why-----------------
+        #?Why--------------
         adj = self.adj
         labels = self.labels
-        #---------------------
+        #?--------------------
         add_budget = int(n_perturbations * self.add_ratio)
         delete_budget = n_perturbations - add_budget
 
@@ -177,7 +161,6 @@ class DICE(object):
         # Perform the attack and update the self.adj_adversary Matrix
         self.__performAttack(to_be_deleted_set, nonzeros_0, to_be_added_set, adj, has_self_loops)
 
-        #The adjusted adjacency matrix(adversary) becomes the adjacency matrix of this class, this is not like the FGSM attack, where the original adjacency matrix is preserved so next attacks
-        #with different budgets will always attack the original!                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
+        #The adjusted adjacency matrix(adversary) becomes the adjacency matrix of this class                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
         coo_adj = torch_geometric.utils.to_scipy_sparse_matrix(self.adj_adversary.indices(), num_nodes=self.n)
         self.adj = sp.csr_matrix(coo_adj)
