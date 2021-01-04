@@ -1,6 +1,7 @@
 """TODO: Do better than this
 """
 import random
+from rgnn_at_scale import utils
 from typing import Union
 
 import numpy as np
@@ -10,7 +11,7 @@ import torch
 from tqdm import tqdm
 
 from torch_geometric.utils import add_self_loops
-
+from rgnn_at_scale import utils
 
 class DICE(object):
     """DICE Attack
@@ -65,10 +66,15 @@ class DICE(object):
                  **kwargs):
         # n is the number of nodes        
         self.n = adj.size()[0]
-        self.adj = adj
-        #TODO: Transform matrix to symmetrical using utils.to_symmetrical
-        self.adj_dict = self._to_dict_symmetric(adj)
+        
+        #? Transform matrix to symmetrical using utils.to_symmetrical, am I calling the function correctly, does it take the size as self.n??
+        adj_symmetric_index, adj_symmetric_values = utils.to_symmetric(adj.indices(), adj.values(), self.n, self.n)
+        adj_symmetric = torch.sparse.FloatTensor(adj_symmetric_index, adj_symmetric_values, torch.Size([self.n, self.n]))
+        #!
+        self.adj_dict = self._to_dict_symmetric(adj_symmetric)
         self.is_symmetric = True
+        self.adj = adj_symmetric
+
         # ? why cpu?? apparently some operations can not be performed on GPU(what are they and are we using them??)
         # ? this is equal to labels.to('cpu') -> Change it to this format to have unity in our code
         self.labels = labels.cpu()
