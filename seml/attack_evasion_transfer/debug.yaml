@@ -15,7 +15,7 @@ slurm:
     time: 0-08:00     # max time, D-HH:MM
 
 fixed:
-  epsilons: [0, 0.01, 0.025]  #[0, 0.1, 0.25] # For faster [0, 0.001, 0.0025] 
+  epsilons: [0, 0.001, 0.0025]    #Slow [0, 0.1, 0.25] Intermediate [0, 0.01, 0.025] Fast [0, 0.001, 0.0025] 
   surrogate_params:
     n_filters: 64
     dropout: 0.5
