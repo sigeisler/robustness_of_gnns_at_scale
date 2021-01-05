@@ -55,7 +55,7 @@ class DICE(object):
         adj_symmetric_index = adj_symmetric_index[:, mask]
         #* Move tensor to cpu to have faster performance
         adj_symmetric_index = adj_symmetric_index.to("cpu")
-        myAdj = dict()
+        myAdj = {}
         for source, dest in zip(adj_symmetric_index[0], adj_symmetric_index[1]):
             myAdj[(source.item(), dest.item())] = 1 
         return myAdj
@@ -84,7 +84,6 @@ class DICE(object):
             source = np.random.randint(self.n)
             dest = np.random.randint(self.n)
             source, dest = (source, dest) if source < dest else (dest, source)
-            #//connected_nodes = self.adj_dict.get(source, [])
             # We only connect two nodes if they do not have the same classification and are not already connected
             # We do not need to check for (dest, source) since we are working in the upper triangle of matrix
             if (
@@ -92,8 +91,6 @@ class DICE(object):
                 and labels[source] != labels[dest]
                 and not self.adj_dict.get( (source, dest) )
             ):
-                #//connected_nodes.append(dest)
-                #//self.adj_dict[source] = connected_nodes
                 self.adj_dict[(source, dest)] = 1
                 add_budget -= 1
                 pbar.update(1)
@@ -113,8 +110,6 @@ class DICE(object):
             #We make connection both ways, and update the values list that will be used to construct sparse matrix
             indices.append([source, dest])
             indices.append([dest, source])
-            #//values.append(1)
-            #//values.append(1)
 
         values = [1] * len(indices)
         i = torch.LongTensor(indices)
