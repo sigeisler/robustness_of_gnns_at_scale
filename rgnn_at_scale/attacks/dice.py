@@ -15,6 +15,7 @@ from rgnn_at_scale import utils
 
 from itertools import chain
 
+
 class DICE(object):
     """DICE Attack
 
@@ -30,14 +31,15 @@ class DICE(object):
         ratio of the attack budget that is used to add new edges
 
     """
+
     def __init__(self,
                  adj: torch.sparse.FloatTensor,
                  X: torch.Tensor,
                  labels: torch.Tensor,
                  device: Union[str, int, torch.device],
-                 add_ratio: float = 0.6, 
+                 add_ratio: float = 0.6,
                  **kwargs):
-        # n is the number of nodes        
+        # n is the number of nodes
         self.n = adj.size()[0]
         adj_symmetric_index, _ = utils.to_symmetric(adj.indices(), adj.values(), self.n)
         self.adj_dict = self._to_dict_symmetric(adj_symmetric_index)
@@ -48,36 +50,64 @@ class DICE(object):
         self.adj_adversary = None
         # add ratio decides how much of the budget goes to adding edges and the rest goes to deleting
         self.add_ratio = add_ratio
-    
+
     def _to_dict_symmetric(self, adj_symmetric_index):
-        '''Here We only need the upper triangle, since adjacency matrix is symmetrical'''
+        """Converts 2D Tensor of indices of sparse matrix into a dictionary.
+            Function assumes sparse matrix is symmetrical and returns dictionary of elements in the upper triangle
+
+        Args:
+            adj_symmetric_index(torch.LongTensor) : indices of sparse symmetrical matrix
+                                  
+
+        Returns:
+            dict: Adjacency matrix described as dictionar.
+                        keys are tuples (first_node, second_node)
+                        values are 1
+        """
         mask = (adj_symmetric_index[1] > adj_symmetric_index[0])
         adj_symmetric_index = adj_symmetric_index[:, mask]
-        #* Move tensor to cpu to have faster performance
+        # * Move tensor to cpu to have faster performance
         adj_symmetric_index = adj_symmetric_index.to("cpu")
         myAdj = {}
         for source, dest in zip(adj_symmetric_index[0], adj_symmetric_index[1]):
-            myAdj[(source.item(), dest.item())] = 1 
+            myAdj[(source.item(), dest.item())] = 1
         return myAdj
+
     def _prepare_edges_to_delete(self, delete_budget, labels):
+        """Chooses the Nodes to be deleted
+
+        Args:
+            delete_budget (int): number of nodes to be deleted
+            labels ([torch.Tensor]): labels of the nodes
+
+        Returns:
+            set: set of tuples(first_node, second_node) of all nodes to be deleted
+        """
         pbar = tqdm(total=delete_budget, desc='removing edges...')
         to_be_deleted_set = set()
         while delete_budget > 0:
-            first_node, second_node = random.choice( list(self.adj_dict.keys())  )
+            first_node, second_node = random.choice(list(self.adj_dict.keys()))
             # check if both nodes have the same label
             if(
                 labels[first_node] == labels[second_node]
                 and (first_node, second_node) not in to_be_deleted_set
             ):
-                    delete_budget -= 1
-                    pbar.update(1)
-                    # * why do we make a set of nodes to be deleted instead of instantly deleting?
-                    # * Because we might add a connection in the same place where
-                    # * we removed a connection from, that's why we perform attack at the end
-                    to_be_deleted_set.add( (first_node, second_node) )  
+                delete_budget -= 1
+                pbar.update(1)
+                # * why do we make a set of nodes to be deleted instead of instantly deleting?
+                # * Because we might add a connection in the same place where
+                # * we removed a connection from, that's why we perform attack at the end
+                to_be_deleted_set.add((first_node, second_node))
         pbar.close()
         return to_be_deleted_set
+
     def _add_edges(self, labels, add_budget):
+        """Adds new edges
+
+        Args:
+            labels ([torch.Tensor]): labels of nodes
+            add_budget (int): number of nodes to be added
+        """
         # add edges till we fill the budget
         pbar = tqdm(total=add_budget, desc='adding edges...')
         while add_budget > 0:
@@ -89,25 +119,36 @@ class DICE(object):
             if (
                 source != dest
                 and labels[source] != labels[dest]
-                and not self.adj_dict.get( (source, dest) )
+                and not self.adj_dict.get((source, dest))
             ):
                 self.adj_dict[(source, dest)] = 1
                 add_budget -= 1
                 pbar.update(1)
-        pbar.close()    
+        pbar.close()
+
     def _delete_edges(self, to_be_deleted_set):
+        """Performs the deletion of the nodes
+
+        Args:
+            to_be_deleted_set (set): set of Nodes to be deleted in shape of tuples (first_node, second_node)
+        """
         for pair in to_be_deleted_set:
             first_node = pair[0]
             second_node = pair[1]
             self.adj_dict.pop((first_node, second_node), None)
 
     def _from_dict_to_sparse(self):
-        #? How to account for both [source, dest] and [dest, source] using list comprehension?
-        #indices = [ [source, dest], [dest, source] for source, dest in self.adj_dict.keys()  ]
+        """Converts dictionary(of symmetrical adjacency matrix) back to sparse Tensor(pyTorch)
+
+        Returns:
+            [torch.sparse.FloarTensor]: sparse adjacency matrix
+        """
+        # ? How to account for both [source, dest] and [dest, source] using list comprehension?
+        # indices = [ [source, dest], [dest, source] for source, dest in self.adj_dict.keys()  ]
 
         indices = []
         for source, dest in self.adj_dict.keys():
-            #We make connection both ways, and update the values list that will be used to construct sparse matrix
+            # We make connection both ways, and update the values list that will be used to construct sparse matrix
             indices.append([source, dest])
             indices.append([dest, source])
 
@@ -115,7 +156,7 @@ class DICE(object):
         i = torch.LongTensor(indices)
         v = torch.FloatTensor(values)
         return torch.sparse.FloatTensor(i.t(), v, torch.Size([self.n, self.n]))
-    
+
     def attack(self,
                n_perturbations: int,
                attack_seed: int = 0,
@@ -127,10 +168,10 @@ class DICE(object):
         # ? The way this is handled is weird. If there is any self connection, all diagonals get set to zero, then after attack is done, all nodes are set to be having self loops, why?
 
         # Prepare edges(connections) to be deleted
-        to_be_deleted_set = self._prepare_edges_to_delete( delete_budget, labels)
+        to_be_deleted_set = self._prepare_edges_to_delete(delete_budget, labels)
         self._add_edges(labels, add_budget)
         # Perform the delete
         self._delete_edges(to_be_deleted_set)
-        #change dictionary back to sparse matrix
+        # change dictionary back to sparse matrix
         self.adj_adversary = self._from_dict_to_sparse()
         self.adj = self.adj_adversary
