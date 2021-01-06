@@ -3,18 +3,14 @@
 import random
 from rgnn_at_scale import utils
 from typing import Union
-
 import numpy as np
 import scipy.sparse as sp
 import torch_geometric
 import torch
 from tqdm import tqdm
-
 from torch_geometric.utils import add_self_loops
 from rgnn_at_scale import utils
-
 from itertools import chain
-
 
 class DICE(object):
     """DICE Attack
@@ -41,6 +37,7 @@ class DICE(object):
                  **kwargs):
         # n is the number of nodes
         self.n = adj.size()[0]
+        # Ensure adjacency matrix is symmetrical
         adj_symmetric_index, _ = utils.to_symmetric(adj.indices(), adj.values(), self.n)
         self.adj_dict = self._to_dict_symmetric(adj_symmetric_index)
         self.adj = adj
