@@ -140,7 +140,7 @@ class DICE(object):
             second_node = pair[1]
             adj_dict.pop((first_node, second_node), None)
 
-    def _from_dict_to_sparse(self):
+    def _from_dict_to_sparse(self, adj_dict):
         """Converts dictionary(of symmetrical adjacency matrix) back to sparse Tensor(pyTorch)
 
         Returns:
@@ -150,7 +150,7 @@ class DICE(object):
         # indices = [ [source, dest], [dest, source] for source, dest in self.adj_dict.keys()  ]
 
         indices = []
-        for source, dest in self.adj_dict.keys():
+        for source, dest in adj_dict.keys():
             # We make connection both ways, and update the values list that will be used to construct sparse matrix
             indices.append([source, dest])
             indices.append([dest, source])
@@ -175,5 +175,5 @@ class DICE(object):
         # Perform the delete
         self._delete_edges(to_be_deleted_set, adj_dict)
         # change dictionary back to sparse matrix
-        self.adj_adversary = self._from_dict_to_sparse()
+        self.adj_adversary = self._from_dict_to_sparse(adj_dict)
         self.adj = self.adj_adversary
