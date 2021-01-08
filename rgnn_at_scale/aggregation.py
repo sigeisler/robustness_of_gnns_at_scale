@@ -272,7 +272,7 @@ def soft_weighted_medoid_k_neighborhood(
     if k > n:
         if with_weight_correction:
             raise NotImplementedError('`k` less than `n` and `with_weight_correction` is not implemented.')
-        return soft_weighted_medoid(A, x, temperature=temperature)
+        return soft_weighted_medoid(A.to_torch_sparse_coo_tensor(), x, temperature=temperature)
     if not x.is_cuda and n < threshold_for_dense_if_cpu:
         return dense_cpu_soft_weighted_medoid_k_neighborhood(A, x, k, temperature, with_weight_correction)
 
@@ -539,13 +539,14 @@ def soft_weighted_medoid(
     torch.Tensor
         The new embeddings [n, d].
     """
+    batch_size = A.size(0)
     N, D = x.shape
     l2 = _distance_matrix(x)
     A_cpu_dense = A.cpu()
     l2_cpu = l2.cpu()
     if A.is_sparse:
         A_cpu_dense = A_cpu_dense.to_dense()
-    distances = A_cpu_dense[:, None, :].expand(N, N, N) * l2_cpu
+    distances = A_cpu_dense[:, None, :].expand(batch_size, N, N) * l2_cpu
     distances[A_cpu_dense == 0] = torch.finfo(distances.dtype).max
     distances = distances.sum(-1).to(x.device)
     distances[~torch.isfinite(distances)] = torch.finfo(distances.dtype).max
