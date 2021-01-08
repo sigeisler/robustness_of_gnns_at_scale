@@ -43,6 +43,7 @@ pip install ./kernels
 conda install gmpy2 statsmodels
 git submodule update --init --recursive
 pip install ./sparse_smoothing
+pip install ./pprgo_pytorch
 ```
 for setting the project up. Run for the results on empirical robustness (takes about 4 minutes with a GPU):
 ```bash
@@ -98,6 +99,16 @@ git submodule update --init --recursive
 ```
 
 In case the installation of `gmpy` fails please check out their [installation guide](https://gmpy2.readthedocs.io/en/latest/intro.html#installation).
+
+### PPRGo
+
+To be able to use the `PPRGo` or the `RobustPPRGo` model you need to install the respective module:
+```bash
+pip install ./pprgo_pytorch
+```
+
+Make sure to follow the same steps as for the `sparse_smoothing` submodule to clone it recursively.
+
 
 ## Unit Tests
 
