@@ -18,6 +18,7 @@ from rgnn_at_scale.aggregation import ROBUST_MEANS, chunked_message_and_aggregat
 from rgnn_at_scale import r_gcn
 from rgnn_at_scale.utils import (get_approx_topk_ppr_matrix, get_ppr_matrix, get_truncated_svd, get_jaccard,
                                  sparse_tensor_to_tuple, tuple_to_sparse_tensor)
+from pprgo.pprgo import PPRGo, RobustPPRGo
 
 
 class ChainableGCNConv(GCNConv):
@@ -584,6 +585,161 @@ class RGCN(r_gcn.RGCN):
             idx_train=idx_train,
             idx_val=idx_val,
             train_iters=max_epochs)
+
+
+class RobustPPRGoWrapper(RobustPPRGo):
+    def __init__(self,
+                 num_features: int,
+                 num_classes: int,
+                 hidden_size:
+                 int, nlayers: int,
+                 dropout: float,
+                 aggr: str = "sum",
+                 **kwargs):
+        super().__init__(num_features, num_classes, hidden_size, nlayersdropout, aggr, **kwargs)
+        self.num_classes = num_classes
+
+    def forward(self,
+                attr: torch.Tensor,
+                adj: torch_sparse.SparseTensor,
+                ppr_scores: torch_sparse.SparseTensor = None,
+                force_batch_size: int = 1e5):
+    if ppr_scores is not None:
+        return super().forward(attr.to(self.device), ppr_scores.to(self.device))
+    else:
+        # we need to precompute the ppr_score first
+        num_nodes, _ = attr.shape
+        ppr_idx = np.arange(num_nodes)
+        topk_ppr = ppr.topk_ppr_matrix(adj.to_csr(), alpha, eps, ppr_idx, topk,  normalization=ppr_normalization)
+        if num_nodes <= force_batch_size:
+            # TODO select subset of attr according to topk_ppr
+            return super().forward(attr.to(self.device), topk_ppr.to(self.device))
+        else:
+            # there are to many node for a single forward pass, we need to do batched prediction
+            data_set = dataset_class(attr_matrix_all=attr,
+                                     ppr_matrix=topk_ppr,
+                                     indices=ppr_idx,
+                                     allow_cache=False)
+            data_loader = torch.utils.data.DataLoader(
+                dataset=data_set,
+                sampler=torch.utils.data.BatchSampler(
+                    torch.utils.data.SequentialSampler(data_set),
+                    batch_size=self.batch_size, drop_last=False
+                ),
+                batch_size=None,
+                num_workers=0,
+            )
+
+            logits = torch.zeros(num_nodes, self.num_classes)
+
+            for idx, xbs, _ in data_loader:
+                xbs = [xb.to(self.device) for xb in xbs]
+                logits[idx] = super().forward(*xbs)
+
+            return logits
+
+    def fit(self,
+            adj: torch_sparse.SparseTensor,
+            attr: torch_sparse.SparseTensor,
+            labels: torch.Tensor,
+            idx_train: np.ndarray,
+            idx_val: np.ndarray,
+            lr,
+            weight_decay: int,
+            patience: int,
+            max_epochs: int = 200,
+            batch_size=512,
+            batch_mult_val=4,
+            eval_step=1,
+            display_step=50
+            ** kwargs):
+
+        topk_train = ppr.topk_ppr_matrix(adj_matrix, alpha, eps, train_idx, topk,
+                                         normalization=ppr_normalization)
+        train_set = DatasetClass(attr_matrix_all=attr_matrix,
+                                 ppr_matrix=topk_train, indices=train_idx, labels_all=labels)
+        if run_val:
+            topk_val = ppr.topk_ppr_matrix(adj_matrix, alpha, eps, val_idx, topk,
+                                           normalization=ppr_normalization)
+            val_set = DatasetClass(attr_matrix_all=attr_matrix,
+                                   ppr_matrix=topk_val, indices=val_idx, labels_all=labels)
+        else:
+            val_set = None
+
+        train_loader = torch.utils.data.DataLoader(
+            dataset=train_set,
+            sampler=torch.utils.data.BatchSampler(
+                torch.utils.data.SequentialSampler(train_set),
+                batch_size=batch_size, drop_last=False
+            ),
+            batch_size=None,
+            num_workers=0,
+        )
+        trace_train = []
+        trace_val = []
+        optimizer = torch.optim.Adam(self.parameters(), lr=lr, weight_decay=weight_decay)
+        best_loss = np.inf
+
+        for it in tqdm(range(max_epochs), desc='Training...'):
+            for train_idx, xbs, yb in train_loader:
+                xbs, yb = [xb.to(self.device) for xb in xbs], yb.to(self.device)
+
+                loss_train, ncorrect_train = self.__run_batch(xbs, yb, optimizer, train=True)
+
+                train_acc = ncorrect_train / float(yb.shape[0])
+
+                # validation on batch of val_set
+                val_batch_size = batch_mult_val * batch_size
+                rnd_idx = np.random.choice(len(val_set))[
+                    :val_batch_size]
+                xbs, yb = val_set[rnd_idx]
+
+                loss_val, ncorrect_val = self.__run_batch(xbs, yb, None, train=False)
+                val_acc = ncorrect_val / float(yb.shape[0])
+
+                trace_train.append(loss_train.detach().item())
+                trace_val.append(loss_val.detach().item())
+
+                if loss_val < best_loss:
+                    best_loss = loss_val
+                    best_epoch = it
+                    best_state = {key: value.cpu() for key, value in model.state_dict().items()}
+                else:
+                    if it >= best_epoch + patience:
+                        break
+
+            logging.info(
+                f'\nEpoch {it:4}: loss_train: {loss_train.item():.5f}, loss_val: {loss_val.item():.5f}, acc_train: {train_acc:.5f}, acc_val: {val_acc:.5f} ')
+
+            # restore the best validation state
+        self.load_state_dict(best_state)
+        return trace_val, trace_train
+
+    def __run_batch(self, xbs, yb, optimizer, train):
+
+        # Set model to training mode
+        if train:
+            model.train()
+        else:
+            model.eval()
+
+        # zero the parameter gradients
+        if train:
+            optimizer.zero_grad()
+
+        # forward
+        with torch.set_grad_enabled(train):
+            logits = model(*xbs)
+            loss = F.cross_entropy(logits, yb)
+            top1 = torch.argmax(logits, dim=1)
+            ncorrect = torch.sum(top1 == yb)
+
+            # backward + optimize only if in training phase
+            if train:
+                loss.backward()
+                optimizer.step()
+
+        return loss, ncorrect
 
 
 MODEL_TYPE = Union[GCN, RGNN, RGCN]
