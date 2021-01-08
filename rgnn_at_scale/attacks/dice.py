@@ -64,7 +64,7 @@ class DICE(object):
                         keys are tuples (first_node, second_node)
                         values are 1
         """
-        mask = self.extract_upper_triangle_nodes(adj_symmetric_index)
+        mask = self._extract_upper_triangle_nodes(adj_symmetric_index)
         adj_symmetric_index = adj_symmetric_index[:, mask]
         # * Move tensor to cpu to have faster performance
         adj_symmetric_index = adj_symmetric_index.to("cpu")
