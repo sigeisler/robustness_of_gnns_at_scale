@@ -48,6 +48,9 @@ class DICE(object):
         # add ratio decides how much of the budget goes to adding edges and the rest goes to deleting
         self.add_ratio = add_ratio
 
+    def _extract_upper_triangle_nodes(self, adj_symmetric_index):
+        return (adj_symmetric_index[1] > adj_symmetric_index[0])
+
     def _to_dict_symmetric(self, adj_symmetric_index):
         """Converts 2D Tensor of indices of sparse matrix into a dictionary.
             Function assumes sparse matrix is symmetrical and returns dictionary of elements in the upper triangle
@@ -61,16 +64,17 @@ class DICE(object):
                         keys are tuples (first_node, second_node)
                         values are 1
         """
-        mask = (adj_symmetric_index[1] > adj_symmetric_index[0])
+        mask = self.extract_upper_triangle_nodes(adj_symmetric_index)
         adj_symmetric_index = adj_symmetric_index[:, mask]
         # * Move tensor to cpu to have faster performance
         adj_symmetric_index = adj_symmetric_index.to("cpu")
-        myAdj = {}
+        myAdj = { (source.item(), dest.item()) : 1 for (source, dest) in adj_symmetric_index.T }
+        '''
         for source, dest in zip(adj_symmetric_index[0], adj_symmetric_index[1]):
-            myAdj[(source.item(), dest.item())] = 1
+            myAdj[(source.item(), dest.item())] = 1'''
         return myAdj
 
-    def _prepare_edges_to_delete(self, delete_budget, labels):
+    def _collect_edges_to_delete(self, delete_budget, labels, adj_dict):
         """Chooses the Nodes to be deleted
 
         Args:
@@ -82,8 +86,9 @@ class DICE(object):
         """
         pbar = tqdm(total=delete_budget, desc='removing edges...')
         to_be_deleted_set = set()
+        dict_keys_list = list(adj_dict.keys())
         while delete_budget > 0:
-            first_node, second_node = random.choice(list(self.adj_dict.keys()))
+            first_node, second_node = random.choice(dict_keys_list)
             # check if both nodes have the same label
             if(
                 labels[first_node] == labels[second_node]
@@ -98,7 +103,7 @@ class DICE(object):
         pbar.close()
         return to_be_deleted_set
 
-    def _add_edges(self, labels, add_budget):
+    def _add_edges(self, labels, add_budget, adj_dict):
         """Adds new edges
 
         Args:
@@ -116,23 +121,24 @@ class DICE(object):
             if (
                 source != dest
                 and labels[source] != labels[dest]
-                and not self.adj_dict.get((source, dest))
+                and not adj_dict.get((source, dest))
             ):
-                self.adj_dict[(source, dest)] = 1
+                adj_dict[(source, dest)] = 1
                 add_budget -= 1
                 pbar.update(1)
         pbar.close()
 
-    def _delete_edges(self, to_be_deleted_set):
+    def _delete_edges(self, to_be_deleted_set, adj_dict):
         """Performs the deletion of the nodes
 
         Args:
             to_be_deleted_set (set): set of Nodes to be deleted in shape of tuples (first_node, second_node)
+            adj_dict (dictionary) : the dictionary describing the upper triangle nodes of the adjacency matrix
         """
         for pair in to_be_deleted_set:
             first_node = pair[0]
             second_node = pair[1]
-            self.adj_dict.pop((first_node, second_node), None)
+            adj_dict.pop((first_node, second_node), None)
 
     def _from_dict_to_sparse(self):
         """Converts dictionary(of symmetrical adjacency matrix) back to sparse Tensor(pyTorch)
@@ -156,19 +162,18 @@ class DICE(object):
 
     def attack(self,
                n_perturbations: int,
-               attack_seed: int = 0,
                **kwargs):
-        np.random.seed(attack_seed)
         labels = self.labels
         add_budget = int(n_perturbations * self.add_ratio)
         delete_budget = n_perturbations - add_budget
+        adj_dict = self.adj_dict.copy()
         # ? The way this is handled is weird. If there is any self connection, all diagonals get set to zero, then after attack is done, all nodes are set to be having self loops, why?
 
         # Prepare edges(connections) to be deleted
-        to_be_deleted_set = self._prepare_edges_to_delete(delete_budget, labels)
-        self._add_edges(labels, add_budget)
+        to_be_deleted_set = self._collect_edges_to_delete(delete_budget, labels, adj_dict)
+        self._add_edges(labels, add_budget, adj_dict)
         # Perform the delete
-        self._delete_edges(to_be_deleted_set)
+        self._delete_edges(to_be_deleted_set, adj_dict)
         # change dictionary back to sparse matrix
         self.adj_adversary = self._from_dict_to_sparse()
         self.adj = self.adj_adversary
