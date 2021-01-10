@@ -309,7 +309,7 @@ def to_symmetric(edge_index: torch.Tensor, edge_weight: torch.Tensor,
 def sparse_tensor(spmat: sp.spmatrix, grad: bool = False):
     """
 
-    Convert a scipy.sparse matrix to a torch.SparseTensor.
+    Convert a scipy.sparse matrix to a torch_sparse.SparseTensor.
     Parameters
     ----------
     spmat: sp.spmatrix
@@ -318,7 +318,7 @@ def sparse_tensor(spmat: sp.spmatrix, grad: bool = False):
         Whether the resulting tensor should have "requires_grad".
     Returns
     -------
-    sparse_tensor: torch.SparseTensor
+    sparse_tensor: torch_sparse.SparseTensor
         The output sparse tensor.
     """
     if str(spmat.dtype) == "float32":
@@ -333,8 +333,7 @@ def sparse_tensor(spmat: sp.spmatrix, grad: bool = False):
         dtype = torch.uint8
     else:
         dtype = torch.float32
-    return torch.sparse_coo_tensor(spmat.nonzero(), spmat.data, size=spmat.shape,
-                                   dtype=dtype, requires_grad=grad).coalesce()
+    return torch_sparse.SparseTensor.from_scipy(spmat).to(dtype).coalesce()
 
 
 def accuracy(logits: torch.Tensor, labels: torch.Tensor, split_idx: np.ndarray) -> float:

@@ -1,0 +1,50 @@
+seml:
+  name: rgnn_at_scale_train
+  db_collection: rgnn_at_scale_train
+  executable: experiment_train.py
+  #conda_environment: rgnn_at_scale
+  project_root_dir: ../..
+  output_dir: seml/train/output
+
+slurm:
+  experiments_per_job: 1
+  sbatch_options:
+    gres: gpu:1       # num GPUs
+    mem: 16G          # memory
+    cpus-per-task: 4  # num cores
+    time: 0-00:01     # max time, D-HH:MM
+
+
+rpprgo:
+  fixed:
+    model_params:
+      label: Robust PPRGo
+      model: RobustPPRGo
+      ppr_normalization: 'sym' 
+      do_cache_adj_prep: True
+      topk: 32
+      hidden_size: 64
+      nlayers: 4
+      alpha: 0.25
+      eps: 1e-2
+      n_filters: 64
+      dropout: 0.1
+      mean_kwargs: 
+        k: 64
+        temperature: 5.0
+        with_weight_correction: True
+
+    dataset: citeseer
+    binary_attr: True
+    seed: 0
+    train_params:
+      lr: 1e-2
+      weight_decay: 1e-3
+      patience: 300
+      max_epochs: 10
+      batch_size: 65536
+      batch_mult_val: 1
+    artifact_dir: cache
+    model_storage_type: pretrained
+    device: 0
+    data_device: cpu

@@ -14,7 +14,7 @@ from torch_geometric.utils import add_remaining_self_loops, remove_isolated_node
 
 from rgnn_at_scale import utils
 from pprgo.pytorch_utils import matrix_to_torch
-
+import torch_sparse
 
 sparse_graph_properties = [
     'adj_matrix', 'attr_matrix', 'labels', 'node_names', 'attr_names', 'class_names', 'metadata'
@@ -635,13 +635,18 @@ def prep_graph(name: str,
                 test=data.test_mask.nonzero().squeeze()
             )
 
+        # converting to numpy arrays, so we don't have to handle different
+        # array types (tensor/numpy/list) later on.
+        # Also we need numpy arrays because Numba cant determine type of torch.Tensor
+        split = {k: v.numpy() for k, v in split.items()}
+
         edge_index, edge_weight = add_remaining_self_loops(
             data.edge_index.to(device),
             torch.ones(data.edge_index.size(1), device=device).float(),
             num_nodes=num_nodes
         )
         edge_index, edge_weight = utils.normalize_adjacency_matrix(edge_index, edge_weight, num_nodes)
-        adj = torch.sparse.FloatTensor(edge_index, edge_weight, (num_nodes, num_nodes)).coalesce()
+        adj = torch_sparse.SparseTensor.from_edge_index(edge_index, edge_weight, (num_nodes, num_nodes)).coalesce()
         del edge_index
         del edge_weight
         attr = data.x.to(device)
@@ -669,12 +674,12 @@ class RobustPPRDataset(torch.utils.data.Dataset):
             indices: array-like of shape (num_train_nodes)
                 The ids of the training nodes
             labels_all: array-like of shape (num_nodes)
-                The class labels for all nodes in the graph        
+                The class labels for all nodes in the graph
         """
         self.attr_matrix_all = attr_matrix_all
         self.ppr_matrix = ppr_matrix
         self.indices = indices
-        self.labels_all = torch.tensor(labels_all)
+        self.labels_all = torch.tensor(labels_all, dtype=torch.long) if labels_all is not None else None
         self.allow_cache = allow_cache
         self.cached = {}
 
@@ -690,10 +695,10 @@ class RobustPPRDataset(torch.utils.data.Dataset):
             A touple (data, labels), where
                 data: touple of
                     - attr_matrix: torch.SparseTensor of shape (ppr_num_nonzeros, num_features)
-                        The node features of all neighboring nodes of the training nodes in 
+                        The node features of all neighboring nodes of the training nodes in
                         the graph derived from the Personal Page Rank as specified by idx
                     - ppr_matrix: torch.SparseTensor of shape (batch_size, ppr_num_nonzeros)
-                        The page rank scores of all neighboring nodes of the training nodes in 
+                        The page rank scores of all neighboring nodes of the training nodes in
                         the graph derived from the Personal Page Rank as specified by idx
                 label: np.ndarray of shape (batch_size)
                     The labels of the training nodes
@@ -716,7 +721,7 @@ class RobustPPRDataset(torch.utils.data.Dataset):
             else:
                 labels = self.labels_all[self.indices[idx]]
 
-            batch = (self.indices[idx], (attr_matrix, ppr_matrix), labels.to(torch.long))
+            batch = (self.indices[idx], (attr_matrix, ppr_matrix), labels)
 
             if self.allow_cache:
                 self.cached[key] = batch

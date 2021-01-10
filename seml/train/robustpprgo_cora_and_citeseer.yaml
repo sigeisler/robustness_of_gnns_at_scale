@@ -1,0 +1,89 @@
+seml:
+  name: rgnn_at_scale_train
+  db_collection: rgnn_at_scale_train
+  executable: experiment_train.py
+  conda_environment: rgnn_at_scale
+  project_root_dir: ../..
+  output_dir: seml/train/output
+
+slurm:
+  experiments_per_job: 1
+  sbatch_options:
+    gres: gpu:1       # num GPUs
+    mem: 16G          # memory
+    cpus-per-task: 4  # num cores
+    time: 0-01:00     # max time, D-HH:MM
+
+fixed:
+  train_params:
+    lr: 1e-2
+    weight_decay: 1e-3
+    patience: 300
+    max_epochs: 3000
+  artifact_dir: cache
+  model_storage_type: pretrained
+  device: 0
+
+
+grid:
+  dataset:
+    type: choice
+    options:
+      - cora_ml
+      - citeseer
+  binary_attr:
+    type: choice
+    options:
+      - True
+      - False
+  seed:
+    type: choice
+    options:
+      - 0
+      - 1
+      - 5
+  model_params:
+    type: parameter_collection 
+    params:
+      hidden_size:              # Size of the MLP's hidden layer
+        type: choice
+        options: [64, 32]
+      nlayers:                   # Number of MLP layers
+        type: choice
+        options: [2, 3, 4]
+      alpha:                      # PPR teleport probability
+        type: choice
+        options: [0.5, 0.25]
+      mean_kwargs: 
+        type: parameter_collection 
+        params:
+          temperature: 
+            type: choice
+            options: [1.0, 5.0, 20.0]
+      dropout:                      # PPR teleport probability
+        type: choice
+        options: [0.1, 0.25, 0.5]
+
+rpprgo:
+  fixed:
+    model_params:
+      label: Robust PPRGo
+      model: RobustPPRGo
+      ppr_normalization: 'sym' 
+      do_cache_adj_prep: True
+      topk: 64
+      eps: 1e-2
+      mean_kwargs: 
+        k: 32
+        with_weight_correction: True
+    train_params:
+      lr: 1e-2
+      weight_decay: 1e-3
+      patience: 300
+      max_epochs: 300
+      batch_size: 65536
+      batch_mult_val: 1
+    artifact_dir: cache
+    model_storage_type: pretrained
+    device: cpu
+    data_device: cpu

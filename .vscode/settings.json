@@ -6,5 +6,8 @@
     "python.testing.unittestEnabled": false,
     "python.testing.nosetestsEnabled": false,
     "python.testing.pytestEnabled": true,
-    "python.testing.pytestPath": "/nfs/homedirs/schmidtt/miniconda3/bin/pytest"
+    "python.testing.pytestPath": "/nfs/homedirs/schmidtt/miniconda3/bin/pytest",
+    "python.linting.pylintEnabled": false,
+    "python.linting.flake8Enabled": true,
+    "python.linting.enabled": true
 }

@@ -1,7 +1,6 @@
 """The models: GCN, GDC SVG GCN, Jaccard GCN, ...
 """
 
-import logging
 import collections
 from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
 
@@ -594,8 +593,8 @@ class RGCN(r_gcn.RGCN):
 
 class RobustPPRGoWrapper(RobustPPRGo):
     def __init__(self,
-                 num_features: int,
-                 num_classes: int,
+                 n_features: int,
+                 n_classes: int,
                  hidden_size: int,
                  nlayers: int,
                  dropout: float,
@@ -603,20 +602,21 @@ class RobustPPRGoWrapper(RobustPPRGo):
                  eps,
                  topk,
                  ppr_normalization,
-                 aggr: str = "sum",
+                 forward_batch_size=1024,
+                 mean='soft_k_medoid',
                  **kwargs):
-        super().__init__(num_features, num_classes, hidden_size, nlayers, dropout, aggr, **kwargs)
-        self.num_classes = num_classes
+        super().__init__(n_features, n_classes, hidden_size, nlayers, dropout, mean=mean,  **kwargs)
+        self.n_classes = n_classes
         self.alpha = alpha
         self.eps = eps
         self.topk = topk
         self.ppr_normalization = ppr_normalization
+        self.forward_batch_size = forward_batch_size
 
     def forward(self,
                 attr: torch.Tensor,
                 adj: SparseTensor,
-                ppr_scores: SparseTensor = None,
-                force_batch_size: int = 1e5):
+                ppr_scores: SparseTensor = None):
 
         device = next(self.parameters()).device
         if ppr_scores is not None:
@@ -625,36 +625,33 @@ class RobustPPRGoWrapper(RobustPPRGo):
             # we need to precompute the ppr_score first
             num_nodes, _ = attr.shape
             ppr_idx = np.arange(num_nodes)
-            topk_ppr = ppr.topk_ppr_matrix(adj.to_scipy(), self.alpha, self.eps, ppr_idx,
+            # TODO: Calculate topk ppr with pytorch so autograd can backprop through adjacency
+            topk_ppr = ppr.topk_ppr_matrix(adj.to_scipy(layout="csr"), self.alpha, self.eps, ppr_idx,
                                            self.topk,  normalization=self.ppr_normalization)
-            if num_nodes <= force_batch_size:
-                # TODO select subset of attr according to topk_ppr
-                _, neighbor_idx, _ = topk_ppr.coo()
-                return super().forward(attr[neighbor_idx].to(device), topk_ppr.to(device))
-            else:
-                # there are to many node for a single forward pass, we need to do batched prediction
-                data_set = RobustPPRDataset(
-                    attr_matrix_all=attr,
-                    ppr_matrix=topk_ppr,
-                    indices=ppr_idx,
-                    allow_cache=False)
-                data_loader = torch.utils.data.DataLoader(
-                    dataset=data_set,
-                    sampler=torch.utils.data.BatchSampler(
-                        torch.utils.data.SequentialSampler(data_set),
-                        batch_size=self.batch_size, drop_last=False
-                    ),
-                    batch_size=None,
-                    num_workers=0,
-                )
 
-                logits = torch.zeros(num_nodes, self.num_classes)
+            # there are to many node for a single forward pass, we need to do batched prediction
+            data_set = RobustPPRDataset(
+                attr_matrix_all=attr,
+                ppr_matrix=topk_ppr,
+                indices=ppr_idx,
+                allow_cache=False)
+            data_loader = torch.utils.data.DataLoader(
+                dataset=data_set,
+                sampler=torch.utils.data.BatchSampler(
+                    torch.utils.data.SequentialSampler(data_set),
+                    batch_size=self.forward_batch_size, drop_last=False
+                ),
+                batch_size=None,
+                num_workers=0,
+            )
 
-                for idx, xbs, _ in data_loader:
-                    xbs = [xb.to(device) for xb in xbs]
-                    logits[idx] = super().forward(*xbs)
+            logits = torch.zeros(num_nodes, self.n_classes, device=device)
 
-                return logits
+            for idx, xbs, _ in data_loader:
+                xbs = [xb.to(device) for xb in xbs]
+                logits[idx] = super().forward(*xbs)
+
+            return logits
 
     def fit(self,
             adj: SparseTensor,
@@ -671,11 +668,13 @@ class RobustPPRGoWrapper(RobustPPRGo):
             eval_step=1,
             display_step=50,
             **kwargs):
-
         device = next(self.parameters()).device
-        topk_train = ppr.topk_ppr_matrix(adj.to_scipy(), self.alpha, self.eps, idx_train,
+
+        adj_csr = adj.to_scipy(layout="csr")
+
+        topk_train = ppr.topk_ppr_matrix(adj_csr, self.alpha, self.eps, idx_train,
                                          self.topk,  normalization=self.ppr_normalization)
-        topk_val = ppr.topk_ppr_matrix(adj.to_scipy(), self.alpha, self.eps, idx_val,
+        topk_val = ppr.topk_ppr_matrix(adj_csr, self.alpha, self.eps, idx_val,
                                        self.topk,  normalization=self.ppr_normalization)
 
         train_set = RobustPPRDataset(attr_matrix_all=attr,
@@ -697,8 +696,11 @@ class RobustPPRGoWrapper(RobustPPRGo):
         optimizer = torch.optim.Adam(self.parameters(), lr=lr, weight_decay=weight_decay)
         best_loss = np.inf
 
-        for it in tqdm(range(max_epochs), desc='Training Epoch...'):
-            for train_idx, xbs, yb in tqdm(train_loader, desc="Training Batch..."):
+        step = 0
+        epoch_pbar = tqdm(range(max_epochs), desc='Training Epoch...')
+        for it in epoch_pbar:
+            batch_pbar = tqdm(train_loader, desc="Training Batch...")
+            for batch_train_idx, xbs, yb in batch_pbar:
                 xbs, yb = [xb.to(device) for xb in xbs], yb.to(device)
 
                 loss_train, ncorrect_train = self.__run_batch(xbs, yb, optimizer, train=True)
@@ -707,15 +709,15 @@ class RobustPPRGoWrapper(RobustPPRGo):
 
                 # validation on batch of val_set
                 val_batch_size = batch_mult_val * batch_size
-                rnd_idx = np.random.choice(len(val_set))[
-                    :val_batch_size]
-                xbs, yb = val_set[rnd_idx]
+                rnd_idx = np.random.choice(len(val_set), size=len(val_set), replace=False)[:val_batch_size]
+                batch_val_idx, xbs, yb = val_set[rnd_idx]
+                xbs, yb = [xb.to(device) for xb in xbs], yb.to(device)
 
                 loss_val, ncorrect_val = self.__run_batch(xbs, yb, None, train=False)
                 val_acc = ncorrect_val / float(yb.shape[0])
 
-                trace_train.append(loss_train.detach().item())
-                trace_val.append(loss_val.detach().item())
+                trace_train.append(loss_train)
+                trace_val.append(loss_val)
 
                 if loss_val < best_loss:
                     best_loss = loss_val
@@ -725,16 +727,17 @@ class RobustPPRGoWrapper(RobustPPRGo):
                     if it >= best_epoch + patience:
                         break
 
-                logging.info(
-                    f'\nEpoch {it: 4}: loss_train: {loss_train.item(): .5f}, loss_val: {loss_val.item(): .5f}, '
-                    f'acc_train: {train_acc: .5f}, acc_val: {val_acc: .5f} ')
+                batch_pbar.set_description(f"Epoch: {it:}, loss_train: {loss_train: .5f}, loss_val: {loss_val: .5f}")
+
+                step += 1
+
+            epoch_pbar.set_description(f"Training Epoch... acc_train: {train_acc: .4f}, acc_val: {val_acc: .4f}")
 
             # restore the best validation state
         self.load_state_dict(best_state)
         return trace_val, trace_train
 
     def __run_batch(self, xbs, yb, optimizer, train):
-
         # Set model to training mode
         if train:
             self.train()
@@ -747,7 +750,7 @@ class RobustPPRGoWrapper(RobustPPRGo):
 
         # forward
         with torch.set_grad_enabled(train):
-            logits = self(*xbs)
+            logits = super().forward(*xbs)
             loss = F.cross_entropy(logits, yb)
             top1 = torch.argmax(logits, dim=1)
             ncorrect = torch.sum(top1 == yb)
@@ -757,7 +760,7 @@ class RobustPPRGoWrapper(RobustPPRGo):
                 loss.backward()
                 optimizer.step()
 
-        return loss, ncorrect
+        return loss.detach().cpu().item(), ncorrect.detach().cpu().item()
 
 
 MODEL_TYPE = Union[GCN, RGNN, RGCN]
@@ -780,5 +783,7 @@ def create_model(hyperparams: Dict[str, Any]) -> MODEL_TYPE:
         return GCN(**hyperparams)
     if hyperparams['model'] == 'RGCN':
         return RGCN(**hyperparams)
+    elif hyperparams['model'] == "RobustPPRGo":
+        return RobustPPRGoWrapper(**hyperparams)
     else:
         return RGNN(**hyperparams)

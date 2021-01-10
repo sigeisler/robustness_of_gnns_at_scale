@@ -14,6 +14,20 @@
             "args": []
         },
         {
+            "name": "Python: Local Train RobustPPRGo",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/script_train.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--config-files=seml/train/robustpprgo_cora_and_citeseer.yaml"
+            ],
+            "env": {
+                "CUDA_LAUNCH_BLOCKING": "1"
+            }
+        },
+        {
             "name": "Python: Train Experiment",
             "type": "python",
             "request": "launch",

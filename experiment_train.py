@@ -57,7 +57,7 @@ def config():
 
 @ex.automain
 def run(dataset: str, model_params: Dict[str, Any], train_params: Dict[str, Any], binary_attr: bool, seed: int,
-        artifact_dir: str, model_storage_type: str, device: Union[str, int], display_steps: int):
+        artifact_dir: str, model_storage_type: str, device: Union[str, int], data_device: Union[str, int], display_steps: int):
     logging.info({
         'dataset': dataset, 'model_params': model_params, 'train_params': train_params, 'binary_attr': binary_attr,
         'seed': seed, 'artifact_dir': artifact_dir, 'model_storage_type': model_storage_type, 'device': device,
@@ -67,7 +67,7 @@ def run(dataset: str, model_params: Dict[str, Any], train_params: Dict[str, Any]
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    graph = prep_graph(dataset, device, binary_attr=binary_attr, return_original_split=dataset.startswith('ogbn'))
+    graph = prep_graph(dataset, data_device, binary_attr=binary_attr, return_original_split=dataset.startswith('ogbn'))
     attr, adj, labels = graph[:3]
     if len(graph) == 3:
         idx_train, idx_val, idx_test = split(labels.cpu().numpy())
@@ -89,16 +89,20 @@ def run(dataset: str, model_params: Dict[str, Any], train_params: Dict[str, Any]
 
     model = create_model(hyperparams).to(device)
     if hasattr(model, 'fit'):
-        model.fit(adj, attr, labels=labels, idx_train=idx_train,
-                  idx_val=idx_val, display_step=display_steps, **train_params)
-        trace_val, trace_train = None, None
+        trace = model.fit(adj, attr, labels=labels, idx_train=idx_train,
+                          idx_val=idx_val, display_step=display_steps, **train_params)
+        if trace is None:
+            trace_val, trace_train = None, None
+        else:
+            trace_val, trace_train = trace
+
     else:
         trace_val, trace_train = train(model=model, attr=attr, adj=adj, labels=labels, idx_train=idx_train,
                                        idx_val=idx_val, display_step=display_steps, **train_params)
 
     model.eval()
     prediction = model(attr, adj)
-    test_accuracy = accuracy(prediction, labels, idx_test)
+    test_accuracy = accuracy(prediction.cpu(), labels.cpu(), idx_test)
     logging.info(f'Test accuracy is {test_accuracy} with seed {seed}')
 
     storage = Storage(artifact_dir, experiment=ex)
