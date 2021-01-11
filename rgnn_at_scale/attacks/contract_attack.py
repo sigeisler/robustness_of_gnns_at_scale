@@ -5,12 +5,7 @@ from tqdm import tqdm
 from typing import Union
 from rgnn_at_scale.models import DenseGCN
 from copy import deepcopy
-
-#! For beauty of tqdm bar
-import time
-#!---------------
-#//from .utils import flip_edges_
-
+from rgnn_at_scale import utils
 class EXPAND_CONTRACT():
 
     def __init__(self,
@@ -20,7 +15,6 @@ class EXPAND_CONTRACT():
                  idx_attack: np.ndarray,
                  model: DenseGCN,
                  device: Union[str, int, torch.device],
-                 #//graph,
                  k: int = 1, 
                  alpha: float = 2.0, 
                  m: int = 1, 
@@ -28,28 +22,23 @@ class EXPAND_CONTRACT():
                  protected=None,
                  **kwargs
                  ):
-
         assert alpha >= 1.0
         assert m >= 1
         assert adj.device == X.device
         #? if k == 0:
             #?return torch.empty((2, 0), dtype=torch.long, device=graph.a.device())
-
         self.alpha = alpha
-
         #? Is m the n_perturbations??
         self.m = m
-
         self.k = k
-        self.rng = np.random.default_rng()
+        #self.rng = np.random.default_rng()
         self.n = adj.size()[0]
-
-        #? should it the adjacency be dense like their code?
-        self.original_adj = adj.to_dense().to(device)
-        self.adj = self.original_adj.clone()
-
-        self.X = X.to(device)
-
+        self.adj = adj
+        adj_symmetric_index, adj_symmetric_weights = utils.to_symmetric(adj.indices(), adj.values(), self.n)
+        self.adj_dict = self._to_dict_symmetric(adj_symmetric_index, adj_symmetric_weights)
+        #?self.adj_symmetric_index = adj_symmetric_index
+        #?self.adj_symmetric_weights = adj_symmetric_weights
+        self.X = X
         self.protected = protected
         self.step = step
         self.device = device
@@ -58,118 +47,124 @@ class EXPAND_CONTRACT():
         self.labels = labels.to(device)
         self.attr_adversary = None
         self.adj_adversary = None
-    #! Helper functions
-    def __log_likelihood(self):
-        #? graph is the adjacency mattrix and attributes, while graph.y is labels
-        #? model(graph) should produce predictions based on the type of Model GDC, etc...
+        
+    def _from_dict_to_sparse(self, adj_dict):
+        """Converts dictionary(of symmetrical adjacency matrix) back to sparse Tensor(pyTorch)
 
-        logits = self.model.to(self.device)(self.X, self.adj)
+        Returns:
+            [torch.sparse.FloarTensor]: sparse adjacency matrix
+        """
+        indices = []
+        for source, dest in adj_dict.keys():
+            # We make connection both ways, and update the values list that will be used to construct sparse matrix
+            indices.append([source, dest])
+            indices.append([dest, source])
+
+        values = [1] * len(indices)
+        i = torch.LongTensor(indices)
+        v = torch.FloatTensor(values)
+        return torch.sparse.FloatTensor(i.t(), v, torch.Size([self.n, self.n]))
+
+    def _log_likelihood(self, adj_dict):
+        #Todo Extremely Inefficient, how can it be done better?
+        adj = self._from_dict_to_sparse(adj_dict)
+        logits = self.model.to(self.device)(self.X, adj)
         return -F.cross_entropy(logits[self.idx_attack], self.labels[self.idx_attack])
 
-    def _flip_edges(self, adj, row, col, edge):
-        new_edge_value = -self.adj[ row[edge], col[edge] ] + 1
-        self.adj[row[edge], col[edge]] = new_edge_value
-        self.adj[col[edge], row[edge]] = new_edge_value
+    def _flip_edges(self, adj_dict, edges):
+        if type(edges) is not list:
+            edges = [edges]
+        for source, dest in edges:
+            if( not adj_dict.get((source, dest)) ):
+                adj_dict[(source, dest)] = 1
+                #?keep lists updated to make log_likelihood function more computationally efficient??
+                #?self.adj_symmetric_index[0].append(source)
+                #?self.adj_symmetric_index[1].append(dest)
+            else:
+                adj_dict.pop((source, dest), None)
 
-    def _contract(self, adj, cohort, row, col, s):
+    def _contract(self, adj_dict, cohort):
         # Contract the cohort until we are in budget again
         bar = tqdm(total=len(cohort) - self.k, leave=False, desc="Contract")
         while len(cohort) > self.k:
-            #? What does this .new_empty do?? 
-            llhs =  np.empty( len(cohort) ) #//X.new_empty(len(cohort))
+            llhs =  np.empty( len(cohort) )
             for i, edge in enumerate(cohort):
-                #* flip the edge in the adjacency matrix, it is a dense matrix!
-                #//flip_edges_(graph.a, row[edge], col[edge])
-                self._flip_edges(adj, row, col, edge)
-                llhs[i] = self.__log_likelihood()                
-                #//flip_edges_(graph.a, row[edge], col[edge])
-                self._flip_edges(adj, row, col, edge)
-
-            #? What is the type of llhs? I assume numpy array from the call of np.argpartition
-            #? but from .cpu() it means it was a pyTorch Tensor and then we turn it into numpy. 
-            #? In this sense since we so far do not calculate any gradients we should just make it
-            #? numpy in the first place!
-            #//llhs = llhs.cpu().numpy()
-
+                self._flip_edges(adj_dict, edge)
+                llhs[i] = self._log_likelihood(adj_dict)                
+                self._flip_edges(adj_dict, edge)
             # Undo the flips that increase the log-likelihood the least when undone
             n_undo = min(self.step, len(cohort) - self.k)
             for edge in [cohort[i] for i in np.argpartition(llhs, n_undo)[:n_undo]]:
                 cohort.remove(edge)
-                #//flip_edges_(graph.a, row[edge], col[edge])
-                self._flip_edges(adj, row, col, edge)
-                s[edge] = True
+                self._flip_edges(adj_dict, edge)
             bar.update(n_undo)
-            #time.sleep(0.5)
         bar.close()
  
+    def _add_edges_to_list(self, my_list, number_of_nodes_to_add):
+        count = 0
+        while count < number_of_nodes_to_add:
+            source = np.random.randint(self.n)
+            dest = np.random.randint(self.n)
+            source, dest = (source, dest) if source < dest else (dest, source)
+            if(source != dest):
+                my_list.append((source, dest))
+                count+= 1
+
+    def _extract_upper_triangle_nodes(self, adj_symmetric_index):
+        return (adj_symmetric_index[1] > adj_symmetric_index[0])
+    
+    def _to_dict_symmetric(self, adj_symmetric_index, adj_symmetric_weights):
+        """Converts 2D Tensor of indices of sparse matrix into a dictionary.
+            Function assumes sparse matrix is symmetrical and returns dictionary of elements in the upper triangle
+
+        Args:
+            adj_symmetric_index(torch.LongTensor) : indices of sparse symmetrical matrix
+                                  
+
+        Returns:
+            dict: Adjacency matrix described as dictionar.
+                        keys are tuples (first_node, second_node)
+                        values are 1
+        """
+        mask = self._extract_upper_triangle_nodes(adj_symmetric_index)
+        adj_symmetric_index = adj_symmetric_index[:, mask]
+        adj_symmetric_weights = adj_symmetric_weights[mask]
+        # * Move tensors to cpu to have faster performance
+        adj_symmetric_index = adj_symmetric_index.to("cpu")
+        adj_symmetric_weights = adj_symmetric_weights.to("cpu")
+        myAdj = { (source.item(), dest.item()) : weight.item() for (source, dest), weight in zip(adj_symmetric_index.T, adj_symmetric_weights) }
+        return myAdj
+    
     def attack(self, 
                n_perturbations: int, 
                **kwargs):
-
-        #? I think m is just n_perturbations and we do not need it in our code!
-        m = self.m
-
-        alpha = self.alpha
         k = self.k
-        rng = self.rng
-        n = self.n
-        step = self.step
-        protected = self.protected
-        adj = self.adj
+        adj_dict = self.adj_dict.copy()
         X = self.X
-        
-        #Store for each edge if it is eligible for flipping
-        s = np.ones(self.n * (self.n - 1) // 2)
-
-        # Lower-triangular indices for conversion between linear indices and matrix positions
-        row, col = torch.tril_indices(self.n, self.n, offset=-1)
-        row, col = row.numpy(), col.numpy()
-
-        # Exclude any protected edges
-        if self.protected is not None:
-            for p in self.protected.cpu().numpy():
-                s[(row == p) | (col == p)] = False
-        
-        n_edges = np.count_nonzero(s)
+        #How many possible edges in the upper triangular
+        n_edges = (self.n * (self.n - 1)) //2
         assert n_edges >= k
-
-        clean_ll = self.__log_likelihood()
-        bar = tqdm(total=n_perturbations, desc="Cycles") #//total = m
+        clean_ll = self._log_likelihood(adj_dict)
+        bar = tqdm(total=n_perturbations, desc="Cycles") 
         # Randomly select a cohort of edges to flip
+        #? Should not we rather choose the indices from len(row)? why do we even need s and counting n_edges this way -> For self.protected in case there is a protected edge!!
         cohort_size = min(int(self.alpha * self.k), n_edges)
-        cohort = list(self.rng.choice(s.size, size=cohort_size, replace=False, p=s / s.sum()))
-        #//flip_edges_(graph.a, row[cohort], col[cohort])
-        self._flip_edges(adj, row, col, cohort)
-        s[cohort] = False
-
+        cohort = []
+        self._add_edges_to_list(cohort, cohort_size)
+        self._flip_edges(adj_dict, cohort)
         n_expand = min(round((self.alpha - 1.0) * k), n_edges - k)
         if n_expand > 0:
-            for _ in range(n_perturbations - 1): #// in range(m-1)
-                self._contract(adj,cohort,row,col,s)
-
-                ll = self.__log_likelihood()
+            for _ in range(n_perturbations - 1): 
+                self._contract(adj_dict,cohort)
+                ll = self._log_likelihood(adj_dict)
                 bar.set_description(f"Cycles (decr {clean_ll - ll:.5f})")
                 bar.update()
-
-                # Expand the cohort again
-                new_edges = rng.choice(s.size, size=n_expand, replace=False, p=s / s.sum())
-                #//flip_edges_(graph.a, row[new_edges], col[new_edges])
-                self._flip_edges(adj, row, col, new_edges)
-                s[new_edges] = False
+                new_edges = []
+                self._add_edges_to_list(new_edges, n_expand)
+                self._flip_edges(adj_dict, new_edges)
                 cohort.extend(list(new_edges))
 
-        self._contract(adj,cohort,row,col, s)
+        self._contract(adj_dict,cohort)
         bar.update()
-
-        #//graph.a = orig_a
-        #? Does self.adj or just adj makes a difference here?? 
-        #? If self.adj is the same as adj, are we saving the original adj for new attacks or destroying it?
-        self.adj_adversary = self.adj.to_sparse().detach()
+        self.adj_adversary = self._from_dict_to_sparse(adj_dict)
         self.attr_adversary = self.X
-
-        #? What was this line supposed to do?
-        #//return torch.from_numpy(np.vstack([row[cohort], col[cohort]])).to(graph.a.device())
-
-
-
-

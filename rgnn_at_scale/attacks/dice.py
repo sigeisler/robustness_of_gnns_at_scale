@@ -69,10 +69,7 @@ class DICE(object):
         # * Move tensors to cpu to have faster performance
         adj_symmetric_index = adj_symmetric_index.to("cpu")
         adj_symmetric_weights = adj_symmetric_weights.to("cpu")
-        myAdj = { (source.item(), dest.item()) : weight for (source, dest), weight in zip(adj_symmetric_index.T, adj_symmetric_weights) }
-        '''
-        for source, dest in zip(adj_symmetric_index[0], adj_symmetric_index[1]):
-            myAdj[(source.item(), dest.item())] = 1'''
+        myAdj = { (source.item(), dest.item()) : weight.item() for (source, dest), weight in zip(adj_symmetric_index.T, adj_symmetric_weights) }
         return myAdj
 
     def _collect_edges_to_delete(self, delete_budget, labels, adj_dict):
@@ -147,9 +144,6 @@ class DICE(object):
         Returns:
             [torch.sparse.FloarTensor]: sparse adjacency matrix
         """
-        # ? How to account for both [source, dest] and [dest, source] using list comprehension?
-        # indices = [ [source, dest], [dest, source] for source, dest in self.adj_dict.keys()  ]
-
         indices = []
         for source, dest in adj_dict.keys():
             # We make connection both ways, and update the values list that will be used to construct sparse matrix
