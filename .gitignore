@@ -446,7 +446,7 @@ TSWLatexianTemp*
 cache/*
 
 #downloaded ogbn-products file
-datasets/ogbn_products/*
+datasets/*
 
 # Local
 cache_debug/*
