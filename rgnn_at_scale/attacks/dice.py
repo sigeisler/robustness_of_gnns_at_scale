@@ -37,7 +37,6 @@ class DICE(object):
                  **kwargs):
         # n is the number of nodes
         self.n = adj.size()[0]
-        # Ensure adjacency matrix is symmetrical
         adj_symmetric_index, _ = utils.to_symmetric(adj.indices(), adj.values(), self.n)
         self.adj_dict = self._to_dict_symmetric(adj_symmetric_index)
         self.adj = adj

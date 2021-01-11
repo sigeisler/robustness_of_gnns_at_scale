@@ -59,9 +59,6 @@ class FGSM():
             Number of edges to be perturbed (assuming an undirected graph)
         """
         for i in range(n_perturbations):
-            #* Notice that here we are calculating gradients on generic GCN model and not on the 
-            #* "real" models like GDC, since the gradient causing maximum error here is similar to there
-            #* and this makes it easier to test
             logits = self.model.to(self.device)(self.X, self.adj)
 
             loss = F.cross_entropy(logits[self.idx_attack], self.labels[self.idx_attack])

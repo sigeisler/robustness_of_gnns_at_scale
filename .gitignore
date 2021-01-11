@@ -443,7 +443,7 @@ TSWLatexianTemp*
 # Misc
 *.txt
 #debug files
-*.pt
+cache/*
 
 #downloaded ogbn-products file
 datasets/ogbn_products/*
