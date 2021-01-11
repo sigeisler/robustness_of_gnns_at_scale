@@ -37,8 +37,8 @@ class DICE(object):
                  **kwargs):
         # n is the number of nodes
         self.n = adj.size()[0]
-        adj_symmetric_index, _ = utils.to_symmetric(adj.indices(), adj.values(), self.n)
-        self.adj_dict = self._to_dict_symmetric(adj_symmetric_index)
+        adj_symmetric_index, adj_symmetric_weights = utils.to_symmetric(adj.indices(), adj.values(), self.n)
+        self.adj_dict = self._to_dict_symmetric(adj_symmetric_index, adj_symmetric_weights)
         self.adj = adj
         self.labels = labels.cpu()
         self.device = device
@@ -50,7 +50,7 @@ class DICE(object):
     def _extract_upper_triangle_nodes(self, adj_symmetric_index):
         return (adj_symmetric_index[1] > adj_symmetric_index[0])
 
-    def _to_dict_symmetric(self, adj_symmetric_index):
+    def _to_dict_symmetric(self, adj_symmetric_index, adj_symmetric_weights):
         """Converts 2D Tensor of indices of sparse matrix into a dictionary.
             Function assumes sparse matrix is symmetrical and returns dictionary of elements in the upper triangle
 
@@ -65,9 +65,11 @@ class DICE(object):
         """
         mask = self._extract_upper_triangle_nodes(adj_symmetric_index)
         adj_symmetric_index = adj_symmetric_index[:, mask]
-        # * Move tensor to cpu to have faster performance
+        adj_symmetric_weights = adj_symmetric_weights[mask]
+        # * Move tensors to cpu to have faster performance
         adj_symmetric_index = adj_symmetric_index.to("cpu")
-        myAdj = { (source.item(), dest.item()) : 1 for (source, dest) in adj_symmetric_index.T }
+        adj_symmetric_weights = adj_symmetric_weights.to("cpu")
+        myAdj = { (source.item(), dest.item()) : weight for (source, dest), weight in zip(adj_symmetric_index.T, adj_symmetric_weights) }
         '''
         for source, dest in zip(adj_symmetric_index[0], adj_symmetric_index[1]):
             myAdj[(source.item(), dest.item())] = 1'''
@@ -166,13 +168,8 @@ class DICE(object):
         add_budget = int(n_perturbations * self.add_ratio)
         delete_budget = n_perturbations - add_budget
         adj_dict = self.adj_dict.copy()
-        # ? The way this is handled is weird. If there is any self connection, all diagonals get set to zero, then after attack is done, all nodes are set to be having self loops, why?
-
-        # Prepare edges(connections) to be deleted
         to_be_deleted_set = self._collect_edges_to_delete(delete_budget, labels, adj_dict)
         self._add_edges(labels, add_budget, adj_dict)
-        # Perform the delete
         self._delete_edges(to_be_deleted_set, adj_dict)
-        # change dictionary back to sparse matrix
         self.adj_adversary = self._from_dict_to_sparse(adj_dict)
         self.adj = self.adj_adversary
