@@ -85,7 +85,6 @@ class EXPAND_CONTRACT():
                 #?keep lists updated to make log_likelihood function more computationally efficient??
                 adj_symmetric_index = torch.cat((adj_symmetric_index, torch.LongTensor([[source], [dest] ])), 1)
                 adj_symmetric_weights = torch.cat((adj_symmetric_weights, torch.tensor([1])))
-
             else:
                 adj_dict.pop((source, dest), None)
                 adj_symmetric_index, adj_symmetric_weights = self._delete_edge_from_tensor(source, dest, adj_symmetric_index, adj_symmetric_weights)
@@ -174,7 +173,14 @@ class EXPAND_CONTRACT():
                 adj_symmetric_index, adj_symmetric_weights = self._flip_edges(adj_dict, new_edges, adj_symmetric_index, adj_symmetric_weights)
                 cohort.extend(list(new_edges))
 
-        self._contract(adj_dict,cohort, adj_symmetric_index, adj_symmetric_weights)
+        adj_symmetric_index, adj_symmetric_weights = self._contract(adj_dict,cohort, adj_symmetric_index, adj_symmetric_weights)
         bar.update()
-        self.adj_adversary = self._from_dict_to_sparse(adj_dict)
+        #? How about we bypass the from_dict_to_sparse step, and create sparse from our tensors?
+        #self.adj_adversary = self._from_dict_to_sparse(adj_dict)
+        #weights = [1] * len(adj_symmetric_index[0])
+        
+        adj_symmetric_index, adj_symmetric_weights = utils.to_symmetric(adj_symmetric_index, adj_symmetric_weights, self.n)
+
+        self.adj_adversary = torch.sparse.FloatTensor(adj_symmetric_index, adj_symmetric_weights, torch.Size([self.n, self.n]))
+
         self.attr_adversary = self.X
