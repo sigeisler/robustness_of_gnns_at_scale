@@ -165,11 +165,8 @@ class EXPAND_CONTRACT():
         if n_expand > 0:
             for _ in range(n_perturbations - 1): 
                 adj_symmetric_index, adj_symmetric_weights = self._contract(adj_dict,cohort, adj_symmetric_index, adj_symmetric_weights)
-                ll = self._log_likelihood(adj_dict, adj_symmetric_index, adj_symmetric_weights)
-                bar.set_description(f"Cycles (decr {clean_ll - ll:.5f})")
                 bar.update()
-                new_edges = []
-                new_edges = self._add_edges_to_list(new_edges, n_expand)
+                new_edges = self._add_edges_to_list([], n_expand)
                 adj_symmetric_index, adj_symmetric_weights = self._flip_edges(adj_dict, new_edges, adj_symmetric_index, adj_symmetric_weights)
                 cohort.extend(list(new_edges))
 

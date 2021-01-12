@@ -28,7 +28,8 @@ def create_attack(attack: str, **kwargs) -> ATTACK_TYPE:
     if not any([attack.lower() == attack_model.__name__.lower() for attack_model in ATTACK_TYPE.__args__]):
         raise ValueError(f'The attack {attack} is not in {ATTACK_TYPE.__args__}')
     #! This might cause an error for GreedyRBCD, since it is not all capital letters
-    return globals()[attack.upper()](**kwargs)
+    #? attack.upper()
+    return globals()[attack](**kwargs)
 
 
 __all__ = [FGSM, GANG, GreedyRBCD, PRBCD, create_attack, ATTACK_TYPE, SPARSE_ATTACKS]
