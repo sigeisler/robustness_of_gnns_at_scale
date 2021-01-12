@@ -27,7 +27,7 @@ fixed:
   artifact_dir: cache
   pert_adj_storage_type: attack
   model_storage_type: pretrained
-  device: 0 #0 or "cpu"
+  device: 0
   binary_attr: False
 
 grid:

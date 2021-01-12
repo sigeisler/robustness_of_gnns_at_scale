@@ -51,7 +51,7 @@ def config():
     seed = 0
     artifact_dir = 'cache_debug'
     model_storage_type = 'pretrained'
-    device = 0 #cpu
+    device = 0
     display_steps = 10
 
 

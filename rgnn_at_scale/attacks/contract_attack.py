@@ -35,7 +35,7 @@ class EXPAND_CONTRACT():
         self.n = adj.size()[0]
         self.adj = adj
         adj_symmetric_index, adj_symmetric_weights = utils.to_symmetric(adj.indices(), adj.values(), self.n)
-        self.adj_dict, self.adj_symmetric_index, self.adj_symmetric_weights = self._to_dict_symmetric(adj_symmetric_index, adj_symmetric_weights)
+        self.adj_dict, self.adj_symmetric_index, self.adj_symmetric_weights = self._to_dict(adj_symmetric_index, adj_symmetric_weights)
         self.X = X
         self.protected = protected
         self.step = step
@@ -119,10 +119,10 @@ class EXPAND_CONTRACT():
                 count+= 1
         return my_list
 
-    def _extract_upper_triangle_nodes(self, adj_symmetric_index):
+    def _is_in_upper_triangle(self, adj_symmetric_index):
         return (adj_symmetric_index[1] > adj_symmetric_index[0])
     
-    def _to_dict_symmetric(self, adj_symmetric_index, adj_symmetric_weights):
+    def _to_dict(self, adj_symmetric_index, adj_symmetric_weights):
         """Converts 2D Tensor of indices of sparse matrix into a dictionary.
             Function assumes sparse matrix is symmetrical and returns dictionary of elements in the upper triangle
 
@@ -135,7 +135,7 @@ class EXPAND_CONTRACT():
                         keys are tuples (first_node, second_node)
                         values are 1
         """
-        mask = self._extract_upper_triangle_nodes(adj_symmetric_index)
+        mask = self._is_in_upper_triangle(adj_symmetric_index)
         adj_symmetric_index = adj_symmetric_index[:, mask]
         adj_symmetric_weights = adj_symmetric_weights[mask]
         # * Move tensors to cpu to have faster performance
@@ -176,11 +176,10 @@ class EXPAND_CONTRACT():
         adj_symmetric_index, adj_symmetric_weights = self._contract(adj_dict,cohort, adj_symmetric_index, adj_symmetric_weights)
         bar.update()
         #? How about we bypass the from_dict_to_sparse step, and create sparse from our tensors?
+        #? Faster implementation?
         #self.adj_adversary = self._from_dict_to_sparse(adj_dict)
         #weights = [1] * len(adj_symmetric_index[0])
-        
+
         adj_symmetric_index, adj_symmetric_weights = utils.to_symmetric(adj_symmetric_index, adj_symmetric_weights, self.n)
-
         self.adj_adversary = torch.sparse.FloatTensor(adj_symmetric_index, adj_symmetric_weights, torch.Size([self.n, self.n]))
-
         self.attr_adversary = self.X

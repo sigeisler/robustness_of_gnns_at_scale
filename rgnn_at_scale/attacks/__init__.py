@@ -7,7 +7,6 @@ from .pgd import PGD
 from .prbcd import PRBCD
 from .contract_attack import EXPAND_CONTRACT
 ATTACK_TYPE = Union[DICE, FGSM, GANG, GreedyRBCD, PGD, PRBCD, EXPAND_CONTRACT]
-#! Try considering EXPAND_CONTRACT as a sparse attack to test with GCN instead of dense GCN
 SPARSE_ATTACKS = [GANG.__name__, GreedyRBCD.__name__, PRBCD.__name__, DICE.__name__, EXPAND_CONTRACT.__name__]
 
 

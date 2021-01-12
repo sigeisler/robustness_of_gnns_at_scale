@@ -9,8 +9,8 @@ import torch_geometric
 import torch
 from tqdm import tqdm
 from torch_geometric.utils import add_self_loops
-from rgnn_at_scale import utils
 from itertools import chain
+from rgnn_at_scale import utils
 
 class DICE(object):
     """DICE Attack
@@ -38,7 +38,7 @@ class DICE(object):
         # n is the number of nodes
         self.n = adj.size()[0]
         adj_symmetric_index, adj_symmetric_weights = utils.to_symmetric(adj.indices(), adj.values(), self.n)
-        self.adj_dict = self._to_dict_symmetric(adj_symmetric_index, adj_symmetric_weights)
+        self.adj_dict = self._to_dict(adj_symmetric_index, adj_symmetric_weights)
         self.adj = adj
         self.labels = labels.cpu()
         self.device = device
@@ -47,10 +47,10 @@ class DICE(object):
         # add ratio decides how much of the budget goes to adding edges and the rest goes to deleting
         self.add_ratio = add_ratio
 
-    def _extract_upper_triangle_nodes(self, adj_symmetric_index):
+    def _is_in_upper_triangle(self, adj_symmetric_index):
         return (adj_symmetric_index[1] > adj_symmetric_index[0])
 
-    def _to_dict_symmetric(self, adj_symmetric_index, adj_symmetric_weights):
+    def _to_dict(self, adj_symmetric_index, adj_symmetric_weights):
         """Converts 2D Tensor of indices of sparse matrix into a dictionary.
             Function assumes sparse matrix is symmetrical and returns dictionary of elements in the upper triangle
 
@@ -63,7 +63,7 @@ class DICE(object):
                         keys are tuples (first_node, second_node)
                         values are 1
         """
-        mask = self._extract_upper_triangle_nodes(adj_symmetric_index)
+        mask = self._is_in_upper_triangle(adj_symmetric_index)
         adj_symmetric_index = adj_symmetric_index[:, mask]
         adj_symmetric_weights = adj_symmetric_weights[mask]
         # * Move tensors to cpu to have faster performance
@@ -166,4 +166,3 @@ class DICE(object):
         self._add_edges(labels, add_budget, adj_dict)
         self._delete_edges(to_be_deleted_set, adj_dict)
         self.adj_adversary = self._from_dict_to_sparse(adj_dict)
-        self.adj = self.adj_adversary
