@@ -14,6 +14,8 @@ slurm:
     cpus-per-task: 4  # num cores
     time: 0-00:01     # max time, D-HH:MM
 
+fixed:
+  data_dir: /nfs/students/schmidtt/datasets/
 
 rpprgo:
   fixed:
@@ -29,12 +31,13 @@ rpprgo:
       eps: 1e-2
       n_filters: 64
       dropout: 0.1
+      mean: soft_k_medoid
       mean_kwargs: 
         k: 64
         temperature: 5.0
         with_weight_correction: True
 
-    dataset: citeseer
+    dataset: ogbn-papers100M #citeseer
     binary_attr: True
     seed: 0
     train_params:

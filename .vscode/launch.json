@@ -21,7 +21,7 @@
             "console": "integratedTerminal",
             "justMyCode": false,
             "args": [
-                "--config-files=seml/train/robustpprgo_cora_and_citeseer.yaml"
+                "--config-files=seml/train/robustpprgo_local_test.yaml"
             ],
             "env": {
                 "CUDA_LAUNCH_BLOCKING": "1"

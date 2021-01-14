@@ -555,7 +555,7 @@ def soft_weighted_medoid(
 
 
 def soft_median(
-    A: torch.sparse.FloatTensor,
+    A: torch_sparse.SparseTensor, ,
     x: torch.Tensor,
     p=2,
     temperature=1.0,
@@ -567,7 +567,7 @@ def soft_median(
 
     Parameters
     ----------
-    A : torch.sparse.FloatTensor
+    A : torch_sparse.SparseTensor,
         Sparse [n, n] tensor of the weighted/normalized adjacency matrix.
     x : torch.Tensor
         Dense [n, d] tensor containing the node attributes/embeddings.

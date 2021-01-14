@@ -8,9 +8,9 @@ slurm:
   experiments_per_job: 1
   sbatch_options:
     gres: gpu:1       # num GPUs
-    mem: 16G          # memory
-    cpus-per-task: 4  # num cores
-    time: 0-00:05     # max time, D-HH:MM
+    mem: 240G
+    cpus-per-task: 12  # num cores
+    time: 1-00:00     # max time, D-HH:MM
 
 fixed:
   data_dir: /nfs/students/schmidtt/datasets/
@@ -28,22 +28,21 @@ grid:
   dataset:
     type: choice
     options:
-      - cora_ml
-      - citeseer
+      - ogbn-papers100M
   binary_attr:
     type: choice
     options:
       - True
-      - False
+      #- False
   seed:
     type: choice
     options:
       - 0
-      - 1
-      - 5
+      # - 1
+      # - 5
 
 random:
-  samples: 100
+  samples: 30
   model_params:
     type: parameter_collection 
     params:
@@ -52,7 +51,7 @@ random:
         options: [64, 32]
       nlayers:                   # Number of MLP layers
         type: choice
-        options: [2, 3, 4]
+        options: [2, 3]
       alpha:                      # PPR teleport probability
         type: choice
         options: [0.5, 0.25]
@@ -61,10 +60,10 @@ random:
         params:
           temperature: 
             type: choice
-            options: [0.2, 0.5, 1.0, 5.0, 20.0, 50.0]
+            options: [5.0, 20.0, 50.0]
       dropout:                      
         type: choice
-        options: [0.1, 0.25, 0.5]
+        options: [0.1, 0.5]
 
 soft_medoid_pprgo:
   fixed:
@@ -80,6 +79,6 @@ soft_medoid_pprgo:
         k: 64
         with_weight_correction: True
     train_params:
-      batch_size: 65536
-      batch_mult_val: 1
+      batch_size: 2048
+      batch_mult_val: 2
     data_device: cpu

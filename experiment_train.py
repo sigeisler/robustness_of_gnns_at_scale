@@ -12,6 +12,7 @@ from rgnn_at_scale.io import Storage
 from rgnn_at_scale.models import create_model
 from rgnn_at_scale.train import train
 from rgnn_at_scale.utils import accuracy
+import torch.nn.functional as F
 
 ex = Experiment()
 seml.setup_logger(ex)
@@ -56,7 +57,7 @@ def config():
 
 
 @ex.automain
-def run(dataset: str, model_params: Dict[str, Any], train_params: Dict[str, Any], binary_attr: bool, seed: int,
+def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params: Dict[str, Any], binary_attr: bool, seed: int,
         artifact_dir: str, model_storage_type: str, device: Union[str, int], data_device: Union[str, int], display_steps: int):
     logging.info({
         'dataset': dataset, 'model_params': model_params, 'train_params': train_params, 'binary_attr': binary_attr,
@@ -67,7 +68,8 @@ def run(dataset: str, model_params: Dict[str, Any], train_params: Dict[str, Any]
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    graph = prep_graph(dataset, data_device, binary_attr=binary_attr, return_original_split=dataset.startswith('ogbn'))
+    graph = prep_graph(dataset, data_device, dataset_root=data_dir, binary_attr=binary_attr,
+                       return_original_split=dataset.startswith('ogbn'))
     attr, adj, labels = graph[:3]
     if len(graph) == 3:
         idx_train, idx_val, idx_test = split(labels.cpu().numpy())

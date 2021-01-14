@@ -602,7 +602,7 @@ class RobustPPRGoWrapper(RobustPPRGo):
                  eps,
                  topk,
                  ppr_normalization,
-                 forward_batch_size=1024,
+                 forward_batch_size=2048,
                  mean='soft_k_medoid',
                  **kwargs):
         super().__init__(n_features, n_classes, hidden_size, nlayers, dropout, mean=mean,  **kwargs)
