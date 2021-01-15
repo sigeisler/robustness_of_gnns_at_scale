@@ -31,7 +31,6 @@ class GANG():
                  node_budget: int = 500,
                  edge_budget: int = 500,
                  edge_step_size: int = 10,
-                 do_only_connect_test=False,  # TODO: Is not working
                  eps: float = 1e-30,
                  feature_lr: float = 1e-2,
                  feature_init_std: float = 1,
@@ -39,13 +38,11 @@ class GANG():
                  feature_mode: str = 'symmetric_float',  # 'binary', 'sparse_pos'
                  feature_pgd_k: int = 20,
                  feature_greedy_opt: bool = False,
-                 do_monitor_time: bool = False,
-                 feature_do_use_seeds: bool = False,
                  feature_dedicated_iterations: int = 10,
                  stop_optimizing_if_label_flipped: bool = True,
                  edge_with_random_reverse: bool = True,
                  do_synchronize: bool = False,
-                 ** kwargs):
+                 **kwargs):
         super().__init__()
         self.device = device
         self.model = deepcopy(model).to(self.device)
@@ -63,7 +60,6 @@ class GANG():
         self.node_budget = node_budget
         self.edge_budget = edge_budget
         self.edge_step_size = edge_step_size
-        self.do_only_connect_test = do_only_connect_test
         self.eps = eps
         self.feature_lr = feature_lr
         self.feature_init_std = feature_init_std
@@ -72,8 +68,6 @@ class GANG():
         self.feature_mode = feature_mode
         self.feature_pgd_k = feature_pgd_k
         self.feature_greedy_opt = feature_greedy_opt
-        self.do_monitor_time = do_monitor_time
-        self.feature_do_use_seeds = feature_do_use_seeds
         self.feature_dedicated_iterations = feature_dedicated_iterations
         self.stop_optimizing_if_label_flipped = stop_optimizing_if_label_flipped
         self.edge_with_random_reverse = edge_with_random_reverse
@@ -111,33 +105,16 @@ class GANG():
         edge_index = self.edge_index.to(self.device)
         edge_weight = self.edge_weight.to(self.device)
 
-        if self.feature_do_use_seeds:
-            n_classes = max(self.labels_attack) + 1
-            feature_seeds = [
-                features[self.labels_attack[self.labels_attack == c]].mean(0)
-                for c
-                in range(n_classes)
-            ]
-
         n_features_avg = int(math.ceil(self.X.bool().sum(0).float().mean().item()))
 
         new_features = None
         for i in tqdm(range(node_budget), desc='Adding nodes'):
             next_node = self.n + i + 1
-            if self.do_only_connect_test:
-                new_edge_weight = self.eps * torch.ones(len(self.idx_attack)).cuda()
-                new_edge_idx = torch.stack([torch.arange(self.n - len(self.idx_attack), self.n),
-                                            (next_node - 1) * torch.ones(len(self.idx_attack)).long()]).cuda()
-            else:
-                new_edge_weight = self.eps * torch.ones(next_node - 1).cuda()
-                new_edge_idx = torch.stack([torch.arange(next_node - 1),
-                                            (next_node - 1) * torch.ones(next_node - 1).long()]).cuda()
+            new_edge_weight = self.eps * torch.ones(next_node - 1).cuda()
+            new_edge_idx = torch.stack([torch.arange(next_node - 1),
+                                        (next_node - 1) * torch.ones(next_node - 1).long()]).cuda()
 
-            if self.feature_do_use_seeds:
-                seed_id = random.choice(range(n_classes))
-                next_new_features = deepcopy(feature_seeds[seed_id])[None, :]
-            else:
-                next_new_features = self.feature_init_std * torch.randn((1, self.d)).cuda()
+            next_new_features = self.feature_init_std * torch.randn((1, self.d)).cuda()
 
             if new_features is not None:
                 new_features = torch.cat([new_features.detach(), next_new_features])
@@ -165,15 +142,6 @@ class GANG():
                 if self.do_synchronize:
                     torch.cuda.empty_cache()
                     torch.cuda.synchronize()
-
-                if self.do_monitor_time:
-                    time_start = torch.cuda.Event(enable_timing=True)
-                    time_symm = torch.cuda.Event(enable_timing=True)
-                    time_forward = torch.cuda.Event(enable_timing=True)
-                    time_edge_update = torch.cuda.Event(enable_timing=True)
-                    time_feature_update = torch.cuda.Event(enable_timing=True)
-
-                    time_start.record()
 
                 if (
                     not hasattr(self.model, 'do_checkpoint')
@@ -211,9 +179,6 @@ class GANG():
 
                 combined_features = torch.cat((features, new_features))
 
-                if self.do_monitor_time:
-                    time_symm.record()
-
                 logits = self.model(data=combined_features, adj=(symmetric_edge_index, symmetric_edge_weight))
                 not_yet_flipped_mask = logits[self.idx_attack].argmax(-1) == self.labels_attack
                 if self.stop_optimizing_if_label_flipped and not_yet_flipped_mask.sum() > 0:
@@ -221,9 +186,6 @@ class GANG():
                                            self.labels_attack[not_yet_flipped_mask])
                 else:
                     loss = F.cross_entropy(logits[self.idx_attack], self.labels_attack)
-
-                if self.do_monitor_time:
-                    time_forward.record()
 
                 gradient_edge, gradient_feature = utils.grad_with_checkpoint(
                     loss,
@@ -244,23 +206,11 @@ class GANG():
                         new_edge_weight.index_put_((topk_idx,),
                                                    torch.tensor(1, dtype=torch.float, device=topk_idx.device))
 
-                if self.do_monitor_time:
-                    time_edge_update.record()
-
                 if j > 0 and self.feature_dedicated_iterations is None:
                     with torch.no_grad():
                         new_features = new_features + self.feature_lr * gradient_feature
                         new_features = torch.clamp(new_features, -self.feature_max_abs, self.feature_max_abs)
                     new_features.requires_grad = True
-
-                if self.do_monitor_time:
-                    time_feature_update.record()
-                    torch.cuda.synchronize()
-
-                    print(f'Symmetrize took: {time_start.elapsed_time(time_symm)}')
-                    print(f'Forward took: {time_symm.elapsed_time(time_forward)}')
-                    print(f'Edge update took: {time_forward.elapsed_time(time_edge_update)}')
-                    print(f'Feature update took: {time_edge_update.elapsed_time(time_feature_update)}')
 
                 if j % self.display_step == 0:
                     accuracy = (
