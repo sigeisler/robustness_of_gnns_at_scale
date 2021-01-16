@@ -555,7 +555,7 @@ def soft_weighted_medoid(
 
 
 def soft_median(
-    A: torch_sparse.SparseTensor, ,
+    A: torch_sparse.SparseTensor,
     x: torch.Tensor,
     p=2,
     temperature=1.0,
@@ -568,7 +568,7 @@ def soft_median(
     Parameters
     ----------
     A : torch_sparse.SparseTensor,
-        Sparse [n, n] tensor of the weighted/normalized adjacency matrix.
+        Sparse [batch_size, n] tensor of the weighted/normalized adjacency matrix.
     x : torch.Tensor
         Dense [n, d] tensor containing the node attributes/embeddings.
     p : int, optional
@@ -584,12 +584,16 @@ def soft_median(
         The new embeddings [n, d].
     """
     n, d = x.size()
-    edge_index, edge_weights = A._indices(), A._values()
-    row_index, col_index = edge_index
+    batch_size = A.size(0)
+
+    row_index, col_index, edge_weights = A.coo()
+    edge_index = torch.stack([row_index, col_index], dim=0)
+
     weight_sums = torch_scatter.scatter_add(edge_weights, row_index)
 
     with torch.no_grad():
-        median_idx = custom_cuda_kernels.dimmedian_idx(x, torch.sparse.FloatTensor(edge_index, edge_weights, (n, n)))
+        median_idx = custom_cuda_kernels.dimmedian_idx(
+            x, torch.sparse.FloatTensor(edge_index, edge_weights, (batch_size, n)))
         median_col_idx = torch.arange(d, device=x.device).view(1, -1).expand(n, d)
     x_median = x[median_idx, median_col_idx]
 
@@ -600,7 +604,7 @@ def soft_median(
     row_sum_weighted_values = torch_scatter.scatter_add(weighted_values, row_index)
     final_adj_weights = weighted_values / row_sum_weighted_values[row_index] * weight_sums[row_index]
 
-    new_embeddings = torch_sparse.spmm(edge_index, final_adj_weights, n, n, x)
+    new_embeddings = torch_sparse.spmm(edge_index, final_adj_weights, batch_size, n, x)
 
     return new_embeddings
 

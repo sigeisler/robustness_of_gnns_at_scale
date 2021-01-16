@@ -1,5 +1,6 @@
 """Utils to retrieve/split/... the data.
 """
+import logging
 
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Union, Tuple
@@ -14,6 +15,7 @@ from torch_geometric.utils import add_remaining_self_loops, remove_isolated_node
 
 from rgnn_at_scale import utils
 from pprgo.pytorch_utils import matrix_to_torch
+from pprgo import utils as ppr_utils
 import torch_sparse
 
 sparse_graph_properties = [
@@ -617,9 +619,17 @@ def prep_graph(name: str,
     if name in ['cora_ml', 'citeseer', 'pubmed']:
         attr, adj, labels = prep_cora_citeseer_pubmed(name, dataset_root, device, normalize)
     elif name.startswith('ogbn'):
+        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+
         pyg_dataset = PygNodePropPredDataset(root=dataset_root, name=name)
 
+        logging.info("Loaded PygNodePropPredDataset into memory.")
+        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+
         data = pyg_dataset[0]
+
+        logging.info("Loaded PygNodePropPredDataset into memory.")
+        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
         if hasattr(data, '__num_nodes__'):
             num_nodes = data.__num_nodes__
@@ -640,25 +650,52 @@ def prep_graph(name: str,
         # Also we need numpy arrays because Numba cant determine type of torch.Tensor
         split = {k: v.numpy() for k, v in split.items()}
 
+        logging.info("Dataset split loaded.")
+        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+
         edge_index, edge_weight = add_remaining_self_loops(
             data.edge_index.to(device),
             torch.ones(data.edge_index.size(1), device=device).float(),
             num_nodes=num_nodes
         )
-        edge_index, edge_weight = utils.normalize_adjacency_matrix(edge_index, edge_weight, num_nodes)
+        logging.info("Added self loops")
+        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+
+        #edge_index, edge_weight = utils.to_symmetric(edge_index, edge_weight, num_nodes)
+
+        logging.info("Symmetric adjacency")
+        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+
         adj = torch_sparse.SparseTensor.from_edge_index(edge_index, edge_weight, (num_nodes, num_nodes)).coalesce()
+
+        logging.info("Created sparse tensor")
+        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+
         del edge_index
         del edge_weight
+
+        logging.info("Deleted edge_index")
+        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+
         attr = data.x.to(device)
+        logging.info("Load attributes")
+        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
         labels = data.y.squeeze().to(device)
+        logging.info("Load labels")
+        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
     if binary_attr:
         attr[attr != 0] = 1
+
+    logging.info("binary_attr")
+    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
     if return_original_split and split is not None:
         return attr, adj, labels, split
 
     remove_isolated_nodes
+    logging.info("remove_isolated_nodes")
+    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
     return attr, adj, labels
 

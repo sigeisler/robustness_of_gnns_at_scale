@@ -2,7 +2,8 @@ import torch
 from torch_sparse import SparseTensor
 
 from rgnn_at_scale.aggregation import (_sparse_top_k, soft_weighted_medoid, soft_weighted_medoid_k_neighborhood,
-                                       weighted_dimwise_median, weighted_medoid, weighted_medoid_k_neighborhood)
+                                       weighted_dimwise_median, weighted_medoid, weighted_medoid_k_neighborhood,
+                                       soft_median)
 
 
 device = 0 if torch.cuda.is_available() else 'cpu'
@@ -519,6 +520,69 @@ class TestWeightedDimwiseMedian():
         A = torch.tensor([[1, 1, 0, 1], [1, 1, 0, 0], [0, 0, 1, 1], [0, 1, 1, 1]], dtype=torch.float32).to(device)
         x = torch.tensor([[-10, 10, 10], [-1, 1, 0], [0, 0, 1], [10, -10, -10]], dtype=torch.float32).to(device)
         median = weighted_dimwise_median(A.to_sparse(), x)
+
+        row_sum = A.sum(-1)
+        layer_idx = 0
+        assert torch.all(median[layer_idx] == row_sum[layer_idx] * x[1])
+
+        layer_idx = 1
+        assert torch.all(
+            (median[layer_idx] == row_sum[layer_idx] * x[0])
+            | (median[layer_idx] == row_sum[layer_idx] * x[1])
+        )
+
+        layer_idx = 2
+        assert torch.all(
+            (median[layer_idx] == row_sum[layer_idx] * x[2])
+            | (median[layer_idx] == row_sum[layer_idx] * x[3])
+        )
+
+        layer_idx = 3
+        assert median[layer_idx][0] == row_sum[layer_idx] * x[2][0]
+        assert median[layer_idx][1] == row_sum[layer_idx] * x[2][1]
+        assert median[layer_idx][2] == row_sum[layer_idx] * x[1][2]
+
+
+class TestSoftMedian():
+
+    def test_simple_example_weighted(self):
+        A = torch.tensor([[0.5, 0.3, 0, 0.4],
+                          [0.3, 0.2, 0, 0],
+                          [0, 0, 0.9, 0.3],
+                          [0.4, 0, 0.4, 0.4]], dtype=torch.float32).to(device)
+        x = torch.tensor([[-10, 10, 10],
+                          [-1, 1, 1],
+                          [0, 0, 0],
+                          [10, -10, -10]], dtype=torch.float32).to(device)
+
+        A_sparse_tensor = SparseTensor.from_dense(A)
+        median = soft_median(A_sparse_tensor, x)
+
+        row_sum = A.sum(-1)
+        layer_idx = 0
+        assert torch.all(median[layer_idx] == row_sum[layer_idx] * x[1])
+
+        layer_idx = 1
+        assert torch.all(median[layer_idx] == row_sum[layer_idx] * x[0])
+
+        layer_idx = 2
+        assert torch.all(median[layer_idx] == row_sum[layer_idx] * x[2])
+
+        layer_idx = 3
+        assert torch.all(median[layer_idx] == row_sum[layer_idx] * x[2])
+
+    def test_simple_example_unweighted(self):
+        A = torch.tensor([[1, 1, 0, 1],
+                          [1, 1, 0, 0],
+                          [0, 0, 1, 1],
+                          [0, 1, 1, 1]], dtype=torch.float32).to(device)
+        x = torch.tensor([[-10, 10, 10],
+                          [-1, 1, 0],
+                          [0, 0, 1],
+                          [10, -10, -10]], dtype=torch.float32).to(device)
+
+        A_sparse_tensor = SparseTensor.from_dense(A)
+        median = soft_median(A_sparse_tensor, x, temperature=0.1)
 
         row_sum = A.sum(-1)
         layer_idx = 0

@@ -13,6 +13,7 @@ from rgnn_at_scale.models import create_model
 from rgnn_at_scale.train import train
 from rgnn_at_scale.utils import accuracy
 import torch.nn.functional as F
+from pprgo import utils as ppr_utils
 
 ex = Experiment()
 seml.setup_logger(ex)
@@ -70,13 +71,21 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
 
     graph = prep_graph(dataset, data_device, dataset_root=data_dir, binary_attr=binary_attr,
                        return_original_split=dataset.startswith('ogbn'))
+
+    logging.info("prep_graph")
+    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+
     attr, adj, labels = graph[:3]
     if len(graph) == 3:
         idx_train, idx_val, idx_test = split(labels.cpu().numpy())
     else:
         idx_train, idx_val, idx_test = graph[3]['train'], graph[3]['valid'], graph[3]['test']
+
+    logging.info("idx_train")
+    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+
     n_features = attr.shape[1]
-    n_classes = int(labels.max() + 1)
+    n_classes = int(labels[~labels.isnan()].max() + 1)
 
     print("Training set size: ", len(idx_train))
     print("Validation set size: ", len(idx_val))
@@ -90,6 +99,10 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
     })
 
     model = create_model(hyperparams).to(device)
+
+    logging.info("model")
+    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+
     if hasattr(model, 'fit'):
         trace = model.fit(adj, attr, labels=labels, idx_train=idx_train,
                           idx_val=idx_val, display_step=display_steps, **train_params)

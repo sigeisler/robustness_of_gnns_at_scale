@@ -31,14 +31,14 @@ rpprgo:
       eps: 1e-2
       n_filters: 64
       dropout: 0.1
-      mean: soft_k_medoid
+      mean: soft_median
       mean_kwargs: 
         k: 64
         temperature: 5.0
         with_weight_correction: True
 
-    dataset: ogbn-papers100M #citeseer
-    binary_attr: True
+    dataset: ogbn-papers100M #citeseer ogbn-arxiv
+    binary_attr: False
     seed: 0
     train_params:
       lr: 1e-2

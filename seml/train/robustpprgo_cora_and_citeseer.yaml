@@ -56,12 +56,12 @@ random:
       alpha:                      # PPR teleport probability
         type: choice
         options: [0.5, 0.25]
-      mean_kwargs: 
-        type: parameter_collection 
-        params:
-          temperature: 
-            type: choice
-            options: [0.2, 0.5, 1.0, 5.0, 20.0, 50.0]
+      # mean_kwargs: 
+      #   type: parameter_collection 
+      #   params:
+      #     temperature: 
+      #       type: choice
+      #       options: [0.2, 0.5, 1.0, 5.0, 20.0, 50.0]
       dropout:                      
         type: choice
         options: [0.1, 0.25, 0.5]
@@ -79,6 +79,21 @@ soft_medoid_pprgo:
       mean_kwargs: 
         k: 64
         with_weight_correction: True
+    train_params:
+      batch_size: 65536
+      batch_mult_val: 1
+    data_device: cpu
+
+  soft_medoid_pprgo:
+  fixed:
+    model_params:
+      label: Soft Medoid PPRGo
+      model: RobustPPRGo
+      ppr_normalization: 'sym' 
+      do_cache_adj_prep: True
+      topk: 64
+      eps: 1e-2
+      mean: soft_median
     train_params:
       batch_size: 65536
       batch_mult_val: 1

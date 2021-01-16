@@ -4,6 +4,7 @@
 import collections
 from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
 
+import logging
 import numpy as np
 import torch
 from torch import nn
@@ -23,6 +24,7 @@ from rgnn_at_scale.utils import (get_approx_topk_ppr_matrix, get_ppr_matrix, get
 from rgnn_at_scale.data import RobustPPRDataset
 from pprgo.pprgo import RobustPPRGo
 from pprgo import ppr
+from pprgo import utils as ppr_utils
 
 
 class ChainableGCNConv(GCNConv):
@@ -625,10 +627,15 @@ class RobustPPRGoWrapper(RobustPPRGo):
             # we need to precompute the ppr_score first
             num_nodes, _ = attr.shape
             ppr_idx = np.arange(num_nodes)
+            
+            logging.info("forward inference ")
+            logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
             # TODO: Calculate topk ppr with pytorch so autograd can backprop through adjacency
             topk_ppr = ppr.topk_ppr_matrix(adj.to_scipy(layout="csr"), self.alpha, self.eps, ppr_idx,
                                            self.topk,  normalization=self.ppr_normalization)
-
+            
+            logging.info("forward inference topk_ppr")
+            logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
             # there are to many node for a single forward pass, we need to do batched prediction
             data_set = RobustPPRDataset(
                 attr_matrix_all=attr,
@@ -644,12 +651,20 @@ class RobustPPRGoWrapper(RobustPPRGo):
                 batch_size=None,
                 num_workers=0,
             )
+            
+            logging.info("datasets forward inference")
+            logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
             logits = torch.zeros(num_nodes, self.n_classes, device=device)
+
+            logging.info("logits forward inference")
+            logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
             for idx, xbs, _ in data_loader:
                 xbs = [xb.to(device) for xb in xbs]
                 logits[idx] = super().forward(*xbs)
+                logging.info("logits forward inference loop")
+                logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
             return logits
 
@@ -670,10 +685,20 @@ class RobustPPRGoWrapper(RobustPPRGo):
             **kwargs):
         device = next(self.parameters()).device
 
+        logging.info("fit start")
+        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+
         adj_csr = adj.to_scipy(layout="csr")
+
+        logging.info("adj_csr ")
+        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
         topk_train = ppr.topk_ppr_matrix(adj_csr, self.alpha, self.eps, idx_train,
                                          self.topk,  normalization=self.ppr_normalization)
+
+        logging.info("topk_train ")
+        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+
         topk_val = ppr.topk_ppr_matrix(adj_csr, self.alpha, self.eps, idx_val,
                                        self.topk,  normalization=self.ppr_normalization)
 
@@ -726,6 +751,9 @@ class RobustPPRGoWrapper(RobustPPRGo):
                 else:
                     if it >= best_epoch + patience:
                         break
+
+                logging.info("batch train step {step} ")
+                logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
                 batch_pbar.set_description(f"Epoch: {it:}, loss_train: {loss_train: .5f}, loss_val: {loss_val: .5f}")
 
