@@ -598,25 +598,31 @@ class PPRGoWrapperBase():
     def model_forward(self, *args, **kwargs):
         pass
 
-    def forward(self,
-                attr: torch.Tensor,
-                adj: Union[SparseTensor, sp.csr_matrix],
-                ppr_scores: SparseTensor = None):
+    def forward_wrapper(self,
+                        attr: torch.Tensor,
+                        adj: Union[SparseTensor, sp.csr_matrix],
+                        ppr_scores: SparseTensor = None,
+                        ppr_idx=None):
 
         device = next(self.parameters()).device
         if ppr_scores is not None:
             return self.model_forward(attr.to(device), ppr_scores.to(device))
         else:
             # we need to precompute the ppr_score first
-            num_nodes, _ = adj.shape
-            ppr_idx = np.arange(num_nodes)
 
             logging.info("forward inference ")
             logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
             # TODO: Calculate topk ppr with pytorch so autograd can backprop through adjacency
 
             if isinstance(adj, SparseTensor):
+                num_nodes = adj.size(0)
                 adj = adj.to_scipy(layout="csr")
+            else:
+                # for scipy sparse matrix
+                num_nodes = adj.size
+
+            if ppr_idx is None:
+                ppr_idx = np.arange(num_nodes)
 
             topk_ppr = ppr.topk_ppr_matrix(adj, self.alpha, self.eps, ppr_idx,
                                            self.topk,  normalization=self.ppr_normalization)
@@ -710,8 +716,10 @@ class PPRGoWrapperBase():
             batch_size=None,
             num_workers=0,
         )
-        trace_train = []
-        trace_val = []
+        trace_train_loss = []
+        trace_val_loss = []
+        trace_train_acc = []
+        trace_val_acc = []
         optimizer = torch.optim.Adam(self.parameters(), lr=lr, weight_decay=weight_decay)
         best_loss = np.inf
 
@@ -735,8 +743,10 @@ class PPRGoWrapperBase():
                 loss_val, ncorrect_val = self.__run_batch(xbs, yb, None, train=False)
                 val_acc = ncorrect_val / float(yb.shape[0])
 
-                trace_train.append(loss_train)
-                trace_val.append(loss_val)
+                trace_train_loss.append(loss_train)
+                trace_val_loss.append(loss_val)
+                trace_train_acc.append(loss_train)
+                trace_val_acc.append(loss_val)
 
                 if loss_val < best_loss:
                     best_loss = loss_val
@@ -761,7 +771,7 @@ class PPRGoWrapperBase():
 
             # restore the best validation state
         self.load_state_dict(best_state)
-        return trace_val, trace_train
+        return {"loss": trace_train_loss, "acc": trace_train_acc}, {"loss": trace_val_loss, "acc": trace_val_acc},
 
     def __run_batch(self, xbs, yb, optimizer, train):
         # Set model to training mode
@@ -810,6 +820,9 @@ class PPRGoWrapper(PPRGo, PPRGoWrapperBase):
         self.ppr_normalization = ppr_normalization
         self.forward_batch_size = forward_batch_size
 
+    def forward(self, *args, **kwargs):
+        return self.forward_wrapper(*args, **kwargs)
+
     def model_forward(self,
                       attr: torch.Tensor,
                       ppr_matrix: SparseTensor,
@@ -840,6 +853,9 @@ class RobustPPRGoWrapper(RobustPPRGo, PPRGoWrapperBase):
         self.topk = topk
         self.ppr_normalization = ppr_normalization
         self.forward_batch_size = forward_batch_size
+
+    def forward(self, *args, **kwargs):
+        return self.forward_wrapper(*args, **kwargs)
 
     def model_forward(self, *args, **kwargs):
         return super().forward(*args, **kwargs)

@@ -4,7 +4,7 @@
 #SBATCH -t 1-00:00 # time after which the process will be killed (D-HH:MM)
 #SBATCH -o "/nfs/homedirs/%u/git/robust-gnns-at-scale/seml/train/output/slurm-%j.out"
 #SBATCH --partition=gpu_all
-#SBATCH --mem=256G 
+#SBATCH --mem=320G 
 #SBATCH --cpus-per-task=12
 #SBATCH --qos=studentprio
 

@@ -20,8 +20,8 @@ fixed:
 rpprgo:
   fixed:
     model_params:
-      label: PPRGo
-      model: PPRGo
+      label: Robust PPRGo
+      model: RobustPPRGo
       ppr_normalization: 'sym' 
       do_cache_adj_prep: True
       topk: 64
@@ -30,22 +30,22 @@ rpprgo:
       alpha: 0.25
       eps: 1e-2
       n_filters: 64
-      dropout: 0.5
+      dropout: 0.25
       mean: soft_k_medoid
       mean_kwargs: 
         k: 64
-        temperature: 5.0
+        temperature: 50.0
         with_weight_correction: True
 
-    dataset: citeseer #  ogbn-papers100M #citeseer 
+    dataset: ogbn-papers100M #  ogbn-papers100M #citeseer 
     binary_attr: False
     seed: 0
     train_params:
       lr: 1e-2
       weight_decay: 1e-3
       patience: 300
-      max_epochs: 3000
-      batch_size: 20480
+      max_epochs: 10
+      batch_size: 24576
       batch_mult_val: 1
     artifact_dir: cache
     model_storage_type: pretrained

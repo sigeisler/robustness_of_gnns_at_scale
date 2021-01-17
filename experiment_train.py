@@ -116,9 +116,12 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
                                        idx_val=idx_val, display_step=display_steps, **train_params)
 
     model.eval()
-    prediction = model(attr, adj[idx_test])
-    test_accuracy = (prediction.cpu().argmax(1) == labels.cpu()[split_idx]).float().mean().item()
-    #test_accuracy = accuracy(prediction.cpu(), labels.cpu(), idx_test)
+
+    # For really large graphs we don't want to compute predictions for all nodes, just the test nodes is enough.
+    # But be carefull when calculating the accuracy. The prediction tensor will be of the same size regardless
+    # of passing idx_test. Every node **not** in idx_test will have a zero as prediction
+    prediction = model(attr, adj, ppr_idx=idx_test)
+    test_accuracy = accuracy(prediction.cpu(), labels.cpu(), idx_test)
     logging.info(f'Test accuracy is {test_accuracy} with seed {seed}')
 
     storage = Storage(artifact_dir, experiment=ex)
