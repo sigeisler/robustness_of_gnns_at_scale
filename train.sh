@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH -N 1 # number of nodes
 #SBATCH --gres=gpu:1 # number of GPUs to be allocated
-#SBATCH -t 0-01:00 # time after which the process will be killed (D-HH:MM)
+#SBATCH -t 1-00:00 # time after which the process will be killed (D-HH:MM)
 #SBATCH -o "/nfs/homedirs/%u/git/robust-gnns-at-scale/seml/train/output/slurm-%j.out"
 #SBATCH --partition=gpu_all
-#SBATCH --mem=320G 
+#SBATCH --mem=256G 
 #SBATCH --cpus-per-task=12
-#SBATCH --qos=interactive
+#SBATCH --qos=studentprio
 
 
 cd ${SLURM_SUBMIT_DIR}

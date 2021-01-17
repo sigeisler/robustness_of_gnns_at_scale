@@ -116,8 +116,9 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
                                        idx_val=idx_val, display_step=display_steps, **train_params)
 
     model.eval()
-    prediction = model(attr, adj)
-    test_accuracy = accuracy(prediction.cpu(), labels.cpu(), idx_test)
+    prediction = model(attr, adj[idx_test])
+    test_accuracy = (prediction.cpu().argmax(1) == labels.cpu()[split_idx]).float().mean().item()
+    #test_accuracy = accuracy(prediction.cpu(), labels.cpu(), idx_test)
     logging.info(f'Test accuracy is {test_accuracy} with seed {seed}')
 
     storage = Storage(artifact_dir, experiment=ex)

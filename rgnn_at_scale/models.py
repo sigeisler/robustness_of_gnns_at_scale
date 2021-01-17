@@ -625,15 +625,18 @@ class RobustPPRGoWrapper(RobustPPRGo):
             return super().forward(attr.to(device), ppr_scores.to(device))
         else:
             # we need to precompute the ppr_score first
-            num_nodes, _ = attr.shape
+            num_nodes, _ = adj.shape
             ppr_idx = np.arange(num_nodes)
-            
+
             logging.info("forward inference ")
             logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
             # TODO: Calculate topk ppr with pytorch so autograd can backprop through adjacency
-            topk_ppr = ppr.topk_ppr_matrix(adj.to_scipy(layout="csr"), self.alpha, self.eps, ppr_idx,
+
+            adj_csr = adj
+            #adj_csr = adj.to_scipy(layout="csr")
+            topk_ppr = ppr.topk_ppr_matrix(adj_csr, self.alpha, self.eps, ppr_idx,
                                            self.topk,  normalization=self.ppr_normalization)
-            
+
             logging.info("forward inference topk_ppr")
             logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
             # there are to many node for a single forward pass, we need to do batched prediction
@@ -651,7 +654,7 @@ class RobustPPRGoWrapper(RobustPPRGo):
                 batch_size=None,
                 num_workers=0,
             )
-            
+
             logging.info("datasets forward inference")
             logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
@@ -688,7 +691,8 @@ class RobustPPRGoWrapper(RobustPPRGo):
         logging.info("fit start")
         logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
-        adj_csr = adj.to_scipy(layout="csr")
+        adj_csr = adj
+        #adj_csr = adj.to_scipy(layout="csr")
 
         logging.info("adj_csr ")
         logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
@@ -703,9 +707,15 @@ class RobustPPRGoWrapper(RobustPPRGo):
                                        self.topk,  normalization=self.ppr_normalization)
 
         train_set = RobustPPRDataset(attr_matrix_all=attr,
-                                     ppr_matrix=topk_train, indices=idx_train, labels_all=labels)
+                                     ppr_matrix=topk_train,
+                                     indices=idx_train,
+                                     labels_all=labels,
+                                     allow_cache=False)
         val_set = RobustPPRDataset(attr_matrix_all=attr,
-                                   ppr_matrix=topk_val, indices=idx_val, labels_all=labels)
+                                   ppr_matrix=topk_val,
+                                   indices=idx_val,
+                                   labels_all=labels,
+                                   allow_cache=False)
 
         train_loader = torch.utils.data.DataLoader(
             dataset=train_set,
@@ -752,14 +762,17 @@ class RobustPPRGoWrapper(RobustPPRGo):
                     if it >= best_epoch + patience:
                         break
 
-                logging.info("batch train step {step} ")
+                logging.info(f"batch train step {step:} ")
                 logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+                logging.info(torch.cuda.max_memory_allocated() / (1024 ** 3))
 
-                batch_pbar.set_description(f"Epoch: {it:}, loss_train: {loss_train: .5f}, loss_val: {loss_val: .5f}")
+                batch_pbar.set_description(f"Epoch: {it:}, loss_train: {loss_train: .5f}, loss_val: {loss_val: .5f}",
+                                           refresh=False)
 
                 step += 1
 
-            epoch_pbar.set_description(f"Training Epoch... acc_train: {train_acc: .4f}, acc_val: {val_acc: .4f}")
+            epoch_pbar.set_description(f"Training Epoch... acc_train: {train_acc: .4f}, acc_val: {val_acc: .4f}",
+                                       refresh=False)
 
             # restore the best validation state
         self.load_state_dict(best_state)
