@@ -15,15 +15,15 @@ slurm:
     time: 0-08:00     # max time, D-HH:MM
 
 fixed:
-  epsilons: [0, 0.001, 0.0025]  #[0, 0.1, 0.25] # For faster [0, 0.001, 0.0025] 
+  epsilons: [0, 0.1, 0.25] 
   surrogate_params:
     n_filters: 64
     dropout: 0.5
     train_params:
       lr: 1e-2
       weight_decay: 1e-3
-      patience: 100
-      max_epochs: 10 #3000
+      patience: 300
+      max_epochs: 3000
   artifact_dir: cache
   pert_adj_storage_type: attack
   model_storage_type: pretrained
