@@ -16,6 +16,7 @@ slurm:
     partition: gpu_large
 
 fixed:
+  data_dir: /nfs/students/schmidtt/datasets/
   train_params:
     lr: 1e-2
     weight_decay: 1e-3
@@ -24,17 +25,18 @@ fixed:
   artifact_dir: cache
   model_storage_type: pretrained
   device: 0
+  data_device: 0
 
-  dataset: False
-  binary_attr: ogbn-arxiv
+  dataset: ogbn-arxiv
+  binary_attr: False
 
 grid:      
   seed:
     type: choice
     options:
       - 0
-      # - 1
-      # - 5
+      - 1
+      - 5
 
 gcn:
   fixed:

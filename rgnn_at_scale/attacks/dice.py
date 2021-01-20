@@ -32,12 +32,22 @@ class DICE(object):
         self.adj_adversary = None
         self.add_ratio = add_ratio
 
-    def attack(self,
-               n_perturbations: int,
-               attack_seed: int = 0,
-               **kwargs):
+        self.n_perturbations = 0
 
-        np.random.seed(attack_seed)
+    def attack(self, n_perturbations: int):
+        """Perform attack
+
+        Parameters
+        ----------
+        n_perturbations : int
+            Number of edges to be perturbed (assuming an undirected graph)
+        """
+        assert n_perturbations > self.n_perturbations, (
+            f'Number of perturbations must be bigger as this attack is greedy (current {n_perturbations}, '
+            f'previous {self.n_perturbations})'
+        )
+        n_perturbations -= self.n_perturbations
+        self.n_perturbations += n_perturbations
 
         adj = self.adj
         labels = self.labels

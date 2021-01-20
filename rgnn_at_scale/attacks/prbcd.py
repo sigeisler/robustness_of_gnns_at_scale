@@ -32,7 +32,7 @@ class PRBCD(object):
                  model: GCN,
                  device: Union[str, int, torch.device],
                  loss_type: str = 'CE',  # 'CW', 'LeakyCW'  # 'CE', 'MCE', 'Margin'
-                 keep_heuristic: str = 'Gradient',  # 'InvWeightGradient' 'Gradient', 'WeightOnly'
+                 keep_heuristic: str = 'WeightOnly',  # 'InvWeightGradient' 'Gradient', 'WeightOnly'
                  keep_weight: float = .1,
                  lr_n_perturbations_factor: float = 0.1,
                  display_step: int = 20,
@@ -85,15 +85,22 @@ class PRBCD(object):
         if self.loss_type == 'CW':
             self.lr_factor = .5
         else:
-            self.lr_factor = 200.0
+            self.lr_factor = 10
         self.lr_factor *= max(math.log2(self.n_possible_edges / self.search_space_size), 1.)
 
     def attack(self, n_perturbations, **kwargs):
+        """Perform attack (`n_perturbations` is increasing as it was a greedy attack).
+
+        Parameters
+        ----------
+        n_perturbations : int
+            Number of edges to be perturbed (assuming an undirected graph)
+        """
         assert self.search_space_size > n_perturbations, \
             f'The search space size ({self.search_space_size}) must be ' \
             + f'greater than the number of permutations ({n_perturbations})'
         self.sample_search_space(n_perturbations)
-        best_loss = float('-Inf')
+        best_accuracy = float('Inf')
         best_epoch = float('-Inf')
         self.attack_statistics = defaultdict(list)
 
@@ -108,36 +115,42 @@ class PRBCD(object):
             logits = self.model(data=self.X.to(self.device), adj=(edge_index, edge_weight))
             loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
 
+            # Todo: do better
+            # entropy = torch.distributions.Bernoulli(self.modified_edge_weight_diff).entropy().mean()
+            # loss += 10 * entropy
+
             gradient = utils.grad_with_checkpoint(loss, self.modified_edge_weight_diff)[0]
 
             if self.do_synchronize:
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
 
-            if epoch % self.display_step == 0:
-                accuracy = (
-                    logits.argmax(-1)[self.idx_attack] == self.labels[self.idx_attack]
-                ).float().mean().item()
-                print(f'\nEpoch: {epoch} Loss: {loss.item()} Accuracy: {100 * accuracy:.3f} %\n')
-
-            if self.with_early_stropping and best_loss < loss:
-                best_loss = loss.detach()
-                best_epoch = epoch
-                best_search_space = self.current_search_space.clone().cpu()
-                best_edge_index = self.modified_edge_index.clone().cpu()
-                best_edge_weight_diff = self.modified_edge_weight_diff.detach().clone().cpu()
-
             with torch.no_grad():
                 self.modified_edge_weight_diff.requires_grad = False
                 edge_weight = self.update_edge_weights(n_perturbations, epoch, gradient)[1]
                 self.projection(n_perturbations, edge_index, edge_weight)
+
+                edge_index, edge_weight = self.get_modified_adj()
+                logits = self.model(data=self.X.to(self.device), adj=(edge_index, edge_weight))
+                accuracy = (
+                    logits.argmax(-1)[self.idx_attack] == self.labels[self.idx_attack]
+                ).float().mean().item()
+                if epoch % self.display_step == 0:
+                    print(f'\nEpoch: {epoch} Loss: {loss.item()} Accuracy: {100 * accuracy:.3f} %\n')
+
+                if self.with_early_stropping and best_accuracy > accuracy:
+                    best_accuracy = accuracy
+                    best_epoch = epoch
+                    best_search_space = self.current_search_space.clone().cpu()
+                    best_edge_index = self.modified_edge_index.clone().cpu()
+                    best_edge_weight_diff = self.modified_edge_weight_diff.detach().clone().cpu()
 
                 self._append_attack_statistics(loss.item(), accuracy)
 
                 if epoch < self.epochs - 1:
                     self.resample_search_space(n_perturbations, edge_index, edge_weight, gradient)
                 elif self.with_early_stropping and epoch == self.epochs - 1:
-                    print(f'Loading search space of epoch {best_epoch} (loss={best_loss.item()}) for fine tuning\n')
+                    print(f'Loading search space of epoch {best_epoch} (accuarcy={best_accuracy}) for fine tuning\n')
                     self.current_search_space = best_search_space.to(self.device)
                     self.modified_edge_index = best_edge_index.to(self.device)
                     self.modified_edge_weight_diff = best_edge_weight_diff.to(self.device)
@@ -161,12 +174,12 @@ class PRBCD(object):
         self.attr_adversary = self.X
 
     def sample_edges(self, n_perturbations: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        best_loss = float('-Inf')
+        best_accuracy = float('Inf')
         with torch.no_grad():
             s = self.modified_edge_weight_diff.abs().detach()
             s[s == self.eps] = 0
             s = s.cpu().numpy()
-            while best_loss == float('-Inf'):
+            while best_accuracy == float('Inf'):
                 for i in range(self.K):
                     sampled = np.random.binomial(1, s)
 
@@ -179,10 +192,12 @@ class PRBCD(object):
                         -pos_modified_edge_weight_diff
                     ).float()
                     edge_index, edge_weight = self.get_modified_adj()
-                    output = self.model(data=self.X.to(self.device), adj=(edge_index, edge_weight))
-                    loss = self.calculate_loss(output[self.idx_attack], self.labels[self.idx_attack])
-                    if best_loss < loss:
-                        best_loss = loss
+                    logits = self.model(data=self.X.to(self.device), adj=(edge_index, edge_weight))
+                    accuracy = (
+                        logits.argmax(-1)[self.idx_attack] == self.labels[self.idx_attack]
+                    ).float().mean().item()
+                    if best_accuracy > accuracy:
+                        best_accuracy = accuracy
                         best_s = self.modified_edge_weight_diff.clone().cpu()
             self.modified_edge_weight_diff.data.copy_(best_s.to(self.device))
             edge_index, edge_weight = self.get_modified_adj(is_final=True)
@@ -199,9 +214,35 @@ class PRBCD(object):
                 - logits[np.arange(logits.size(0)), second_best_class]
             )
             loss = -torch.clamp(margin, min=0).mean()
+        elif self.loss_type == 'LCW':
+            sorted = logits.argsort(-1)
+            best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
+            margin = (
+                logits[np.arange(logits.size(0)), labels]
+                - logits[np.arange(logits.size(0)), best_non_target_class]
+            )
+            loss = -F.leaky_relu(margin, negative_slope=0.1).mean()
+        elif self.loss_type == 'tanhCW':
+            sorted = logits.argsort(-1)
+            best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
+            margin = (
+                logits[np.arange(logits.size(0)), labels]
+                - logits[np.arange(logits.size(0)), best_non_target_class]
+            )
+            loss = torch.tanh(-margin).mean()
         elif self.loss_type == 'MCE':
             not_flipped = logits.argmax(-1) == labels
             loss = F.nll_loss(logits[not_flipped], labels[not_flipped])
+        elif self.loss_type == 'WCE':
+            not_flipped = logits.argmax(-1) == labels
+            weighting_not_flipped = not_flipped.sum().item() / not_flipped.shape[0]
+            weighting_flipped = (not_flipped.shape[0] - not_flipped.sum().item()) / not_flipped.shape[0]
+            loss_not_flipped = F.nll_loss(logits[not_flipped], labels[not_flipped])
+            loss_flipped = F.nll_loss(logits[~not_flipped], labels[~not_flipped])
+            loss = (
+                weighting_not_flipped * loss_not_flipped
+                + 0.25 * weighting_flipped * loss_flipped
+            )
         # TODO: Is it worth trying? CW should be quite similar
         # elif self.loss_type == 'Margin':
         #    loss = F.multi_margin_loss(torch.exp(logits), labels)

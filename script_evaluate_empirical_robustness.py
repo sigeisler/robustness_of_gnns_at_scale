@@ -17,7 +17,8 @@ parser = argparse.ArgumentParser(
     description='Attack the pretrained models.',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter
 )
-parser.add_argument('--config-files', nargs='+', type=str, default=[os.path.join('seml', 'attack', 'attack.yaml')],
+parser.add_argument('--config-files', nargs='+', type=str,
+                    default=[os.path.join('seml', 'attack_evasion_transfer', 'cora_and_citeseer.yaml')],
                     help='Config YAML files. The script deduplicates the configs, but does not check them.')
 parser.add_argument('--kwargs', type=json.loads, default='{}', help='Will overwrite the loaded config')
 
@@ -48,7 +49,7 @@ def print_results(df_result: pd.DataFrame, decimals=3):
 
 
 def main(args: argparse.Namespace):
-    configs, run = build_configs_and_run(args.config_files, 'experiment_attack.py', args.kwargs)
+    configs, run = build_configs_and_run(args.config_files, 'experiment_attack_evasion_transfer.py', args.kwargs)
 
     results = []
     for config in configs:

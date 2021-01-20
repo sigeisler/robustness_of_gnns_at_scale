@@ -10,17 +10,16 @@ slurm:
   experiments_per_job: 1
   sbatch_options:
     gres: gpu:1       # num GPUs
-    mem: 32G          # memory
+    mem: 16G          # memory
     cpus-per-task: 4  # num cores
-    time: 2-00:00     # max time, D-HH:MM
+    time: 0-08:00     # max time, D-HH:MM
     partition: gpu_large
 
 fixed:
+  epsilons: [0, 0.01, 0.05, 0.1, 0.25]
   surrogate_params:
     n_filters: 64
     dropout: 0.5
-    do_checkpoint: True
-    n_chunks: 64
     train_params:
       lr: 1e-2
       weight_decay: 1e-3
@@ -33,23 +32,18 @@ fixed:
   device: 0
   binary_attr: False
 
-  dataset: ogbn-products
-
 grid:
+  dataset:
+    type: choice
+    options:
+      - ogbn-arxiv
+
   seed:
     type: choice
     options:
       - 0
       - 1
       - 5
-
-  epsilons: 
-    type: choice
-    options:
-    - [0, 0.01]
-    - [0, 0.05]
-    - [0, 0.1]
-    - [0, 0.25]
 
 greedy_rbcd:
   fixed:
@@ -69,7 +63,7 @@ prbcd:
     attack: PRBCD
     attack_params:
       keep_heuristic: WeightOnly
-      search_space_size: 20_000_000
+      search_space_size: 5_000_000
       do_synchronize: True
   grid: 
     attack_params:
@@ -86,8 +80,9 @@ gang:
     attack: GANG
     attack_params:
       edge_with_random_reverse: False
-      edge_step_size: 50_000
-      edge_budget: 50_000
+      edge_step_size: 100
+      edge_budget: 1000
+      feature_dedicated_iterations: 5
       do_synchronize: True
       eps: 1e-16
 

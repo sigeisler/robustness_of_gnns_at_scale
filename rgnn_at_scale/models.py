@@ -67,15 +67,15 @@ class ChainableGCNConv(GCNConv):
             x, edge_index, edge_weight = arguments
         else:
             raise NotImplementedError("This method is just implemented for two or three arguments")
-        embedding = super(ChainableGCNConv, self).forward(x, edge_index, edge_weight=edge_weight)
+        embedding = super().forward(x, edge_index, edge_weight=edge_weight)
         if int(torch_geometric.__version__.split('.')[1]) < 6:
-            embedding = super(ChainableGCNConv, self).update(embedding)
+            embedding = super().update(embedding)
         return embedding
 
     # TODO: Add docstring
     def message_and_aggregate(self, adj_t: Union[torch.Tensor, SparseTensor], x: torch.Tensor) -> torch.Tensor:
         if not self.do_chunk or not isinstance(adj_t, SparseTensor):
-            return super(ChainableGCNConv, self).message_and_aggregate(adj_t, x)
+            return super().message_and_aggregate(adj_t, x)
         else:
             return chunked_message_and_aggregate(adj_t, x, n_chunks=self.n_chunks)
 
@@ -421,8 +421,8 @@ class RGNN(GCN):
         super().__init__(**kwargs)
 
     def _build_conv_layer(self, in_channels: int, out_channels: int):
-        return RGNNConv(mean=self._mean, mean_kwargs=self._mean_kwargs,
-                        in_channels=in_channels, out_channels=out_channels)
+        return RGNNConv(mean=self._mean, mean_kwargs=self._mean_kwargs, in_channels=in_channels,
+                        out_channels=out_channels, do_chunk=self.do_checkpoint, n_chunks=self.n_chunks)
 
 
 class DenseGraphConvolution(nn.Module):
