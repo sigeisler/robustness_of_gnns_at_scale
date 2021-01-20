@@ -372,11 +372,11 @@ class RGNNConv(ChainableGCNConv):
         x = kwargs['x']
         if not isinstance(edge_index, SparseTensor):
             edge_weights = kwargs['norm'] if 'norm' in kwargs else kwargs['edge_weight']
-            A = torch.sparse.FloatTensor(edge_index, edge_weights).coalesce()
+            A = SparseTensor.from_edge_index(edge_index, edge_attr=edge_weights).coalesce()
             return self._mean(A, x, **self._mean_kwargs)
 
         def aggregate(edge_index: SparseTensor, x: torch.Tensor):
-            return self._mean(edge_index.to_torch_sparse_coo_tensor(), x, **self._mean_kwargs)
+            return self._mean(edge_index, x, **self._mean_kwargs)
         if self.do_chunk:
             return chunked_message_and_aggregate(edge_index, x, n_chunks=self.n_chunks, aggregation_function=aggregate)
         else:

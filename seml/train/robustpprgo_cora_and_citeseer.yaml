@@ -18,7 +18,7 @@ fixed:
     lr: 1e-2
     weight_decay: 1e-3
     patience: 300
-    max_epochs: 100
+    max_epochs: 200
   artifact_dir: cache
   model_storage_type: pretrained
   device: 0
