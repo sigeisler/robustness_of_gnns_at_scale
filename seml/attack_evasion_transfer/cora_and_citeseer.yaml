@@ -1,6 +1,6 @@
 seml:
   name: rgnn_at_scale_attack_evasion_transfer
-  db_collection: rgnn_at_scale_attack_evasion_transfer
+  db_collection: kdd21_rgnn_at_scale_attack_evasion_transfer
   executable: experiment_attack_evasion_transfer.py
   conda_environment: rgnn_at_scale
   project_root_dir: ../..
@@ -48,17 +48,43 @@ pgd:
   fixed:
     binary_attr: False
     attack: PGD
+  grid: 
+    attack_params:
+      type: parameter_collection
+      params:
+        loss_type: 
+          type: choice
+          options:
+            - CE
+            - tanhCW
 
 fgsm:
   fixed:
     binary_attr: False
     attack: FGSM
-
+  grid: 
+    attack_params:
+      type: parameter_collection
+      params:
+        stop_optimizing_if_label_flipped: 
+          type: choice
+          options:
+            - True
+            - False
 
 greedy_rbcd:
   fixed:
     binary_attr: False
     attack: GreedyRBCD
+  grid: 
+    attack_params:
+      type: parameter_collection
+      params:
+        loss_type: 
+          type: choice
+          options:
+            - CE
+            - MCE
 
 prbcd:
   fixed:
@@ -68,6 +94,15 @@ prbcd:
       keep_heuristic: WeightOnly
       search_space_size: 1_000_000
       do_synchronize: True
+  grid: 
+    attack_params:
+      type: parameter_collection
+      params:
+        loss_type: 
+          type: choice
+          options:
+            - CE
+            - tanhCW
 
 gang:
   fixed:

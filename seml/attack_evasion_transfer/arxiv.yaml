@@ -1,6 +1,6 @@
 seml:
   name: rgnn_at_scale_attack_evasion_transfer
-  db_collection: rgnn_at_scale_attack_evasion_transfer
+  db_collection: kdd21_rgnn_at_scale_attack_evasion_transfer
   executable: experiment_attack_evasion_transfer.py
   conda_environment: rgnn_at_scale
   project_root_dir: ../..
@@ -48,6 +48,15 @@ grid:
 greedy_rbcd:
   fixed:
     attack: GreedyRBCD
+  grid: 
+    attack_params:
+      type: parameter_collection
+      params:
+        loss_type: 
+          type: choice
+          options:
+            - CE
+            - MCE
 
 prbcd:
   fixed:
@@ -56,6 +65,15 @@ prbcd:
       keep_heuristic: WeightOnly
       search_space_size: 5_000_000
       do_synchronize: True
+  grid: 
+    attack_params:
+      type: parameter_collection
+      params:
+        loss_type: 
+          type: choice
+          options:
+            - CE
+            - tanhCW
 
 gang:
   fixed:

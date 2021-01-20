@@ -89,7 +89,7 @@ class PGD(object):
             loss = self._loss(output)
             adj_grad = torch.autograd.grad(loss, self.adj_changes)[0]
 
-            if self.loss_type == 'CE':
+            if self.loss_type == 'CE' or self.loss_type == 'tanhCW':
                 lr = 200 / np.sqrt(t + 1)
                 self.adj_changes.data.add_(lr * adj_grad)
 
@@ -127,12 +127,20 @@ class PGD(object):
         labels = self.labels[self.idx_attack]
         if self.loss_type == "CE":
             loss = F.nll_loss(output, labels)
-        if self.loss_type == "CW":
+        elif self.loss_type == "CW":
             eye = torch.eye(labels.max() + 1, device=self.device)
             onehot = eye[labels]
             best_second_class = (output - 1000 * onehot).argmax(1)
             margin = output[np.arange(len(output)), labels] - output[np.arange(len(output)), best_second_class]
             loss = -torch.clamp(margin, min=0).mean()
+        elif self.loss_type == 'tanhCW':
+            sorted = output.argsort(-1)
+            best_non_target_class = sorted[sorted != labels[:, None]].reshape(output.size(0), -1)[:, -1]
+            margin = (
+                output[np.arange(output.size(0)), labels]
+                - output[np.arange(output.size(0)), best_non_target_class]
+            )
+            loss = torch.tanh(-margin).mean()
         return loss
 
     def projection(self, n_perturbations: int):

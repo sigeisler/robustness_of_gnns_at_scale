@@ -73,9 +73,10 @@ def chunked_message_and_aggregate(
         def aggregation_function(adj: torch_sparse.SparseTensor, x: torch.Tensor) -> torch.Tensor:
             return torch_sparse.matmul(adj, x, reduce='sum')
 
+        if not adj_t.coo()[-1].requires_grad:
+            return aggregation_function(adj_t, x)
+
     n, _ = x.size()
-    if not adj_t.coo()[-1].requires_grad:
-        return aggregation_function(adj_t, x)
 
     edge_weight, *rest = sparse_tensor_to_tuple(adj_t)
 
@@ -531,7 +532,6 @@ def soft_median(
     p=2,
     temperature=1.0,
     eps=1e-12,
-    do_synchronize: bool = False,
     **kwargs
 ) -> torch.Tensor:
     """Soft Weighted Median.

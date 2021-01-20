@@ -1,6 +1,6 @@
 seml:
   name: rgnn_at_scale_attack_evasion_transfer_gang_degree
-  db_collection: rgnn_at_scale_attack_evasion_transfer_gang_degree
+  db_collection: kdd21_rgnn_at_scale_attack_evasion_transfer_gang_degree
   executable: experiment_attack_evasion_transfer.py
   conda_environment: rgnn_at_scale
   project_root_dir: ../..

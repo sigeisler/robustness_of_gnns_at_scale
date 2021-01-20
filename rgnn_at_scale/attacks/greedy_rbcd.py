@@ -93,7 +93,7 @@ class GreedyRBCD(PRBCD):
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
 
-            print(f'Cuda after sampling: {torch.cuda.memory_summary()}')
+            # print(f'Cuda after sampling: {torch.cuda.memory_summary()}')
 
             logits = self.model(data=self.X, adj=(edge_index, edge_weight))
             loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
@@ -104,7 +104,7 @@ class GreedyRBCD(PRBCD):
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
 
-            print(f'Cuda after gradient update: {torch.cuda.memory_summary()}')
+            # print(f'Cuda after gradient update: {torch.cuda.memory_summary()}')
 
             with torch.no_grad():
                 self._greedy_update(step_size, edge_index, edge_weight, gradient)
