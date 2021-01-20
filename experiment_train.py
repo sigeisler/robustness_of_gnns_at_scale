@@ -50,6 +50,9 @@ def config():
         'max_epochs': 3000
     }
     binary_attr = False
+    normalize = False
+    make_undirected = True
+    make_unweighted = True
     seed = 0
     artifact_dir = 'cache_debug'
     model_storage_type = 'pretrained'
@@ -58,10 +61,12 @@ def config():
 
 
 @ex.automain
-def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params: Dict[str, Any], binary_attr: bool, seed: int,
-        artifact_dir: str, model_storage_type: str, device: Union[str, int], data_device: Union[str, int], display_steps: int):
+def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params: Dict[str, Any], binary_attr: bool,
+        normalize: bool, make_undirected: bool, make_unweighted: bool, seed: int, artifact_dir: str,
+        model_storage_type: str, device: Union[str, int], data_device: Union[str, int], display_steps: int):
     logging.info({
         'dataset': dataset, 'model_params': model_params, 'train_params': train_params, 'binary_attr': binary_attr,
+        'normalize': normalize, 'make_undirected': make_undirected, 'make_unweighted': make_unweighted,
         'seed': seed, 'artifact_dir': artifact_dir, 'model_storage_type': model_storage_type, 'device': device,
         'display_steps': display_steps
     })
@@ -69,7 +74,11 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    graph = prep_graph(dataset, data_device, dataset_root=data_dir, binary_attr=binary_attr,
+    graph = prep_graph(dataset, data_device, dataset_root=data_dir,
+                       normalize=normalize,
+                       make_undirected=make_undirected,
+                       make_unweighted=make_unweighted,
+                       binary_attr=binary_attr,
                        return_original_split=dataset.startswith('ogbn'))
 
     logging.info("prep_graph")

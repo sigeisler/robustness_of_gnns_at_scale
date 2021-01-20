@@ -542,7 +542,9 @@ def split(labels, n_per_class=20, seed=None):
 def prep_cora_citeseer_pubmed(name: str,
                               dataset_root: str,
                               device: Union[int, torch.device] = 0,
-                              normalize: bool = False) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+                              normalize: bool = False,
+                              make_undirected: bool = True,
+                              make_unweighted: bool = True) -> Tuple[torch.Tensor, torch_sparse.SparseTensor, torch.Tensor]:
     """Prepares and normalizes the desired dataset
 
     Parameters
@@ -562,8 +564,8 @@ def prep_cora_citeseer_pubmed(name: str,
         dense attribute tensor, sparse adjacency matrix (normalized) and labels tensor
     """
     graph = load_dataset(name, dataset_root).standardize(
-        make_unweighted=True,
-        make_undirected=True,
+        make_unweighted=make_unweighted,
+        make_undirected=make_undirected,
         no_self_loops=True,
         select_lcc=True
     )
@@ -590,6 +592,8 @@ def prep_cora_citeseer_pubmed(name: str,
 def prep_graph(name: str,
                device: Union[int, torch.device] = 0,
                normalize: bool = False,
+               make_undirected: bool = True,
+               make_unweighted: bool = True,
                binary_attr: bool = False,
                dataset_root: str = 'datasets',
                return_original_split: bool = False) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -617,7 +621,12 @@ def prep_graph(name: str,
     """
     split = None
     if name in ['cora_ml', 'citeseer', 'pubmed']:
-        attr, adj, labels = prep_cora_citeseer_pubmed(name, dataset_root, device, normalize)
+        attr, adj, labels = prep_cora_citeseer_pubmed(name,
+                                                      dataset_root,
+                                                      device,
+                                                      normalize,
+                                                      make_undirected,
+                                                      make_unweighted)
     elif name.startswith('ogbn'):
         logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
@@ -661,15 +670,28 @@ def prep_graph(name: str,
         logging.info("Added self loops")
         logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
-        if normalize:
+        if make_undirected:
             edge_index, edge_weight = utils.to_symmetric(edge_index, edge_weight, num_nodes)
 
-            logging.info("Symmetric adjacency")
+            logging.info("make_undirected adjacency")
             logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
-        adj = torch_sparse.SparseTensor.from_edge_index(edge_index, edge_weight, (num_nodes, num_nodes)).coalesce()
-        # adj = sp.csr_matrix(sp.coo_matrix((edge_weight, edge_index),
-        #                                   (num_nodes, num_nodes)))
+        if make_unweighted:
+            edge_weight = torch.ones_like(edge_weight)
+
+            logging.info("make_unweighted adjacency")
+            logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+
+        adj = sp.csr_matrix(sp.coo_matrix((edge_weight, edge_index),
+                                          (num_nodes, num_nodes)))
+
+        if normalize:
+            adj = utils.calc_A_hat(adj)
+
+            logging.info("normalized adjacency")
+            logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+
+        adj = torch_sparse.SparseTensor.from_scipy(adj).coalesce()
 
         logging.info("Created sparse tensor")
         logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
@@ -683,15 +705,18 @@ def prep_graph(name: str,
         attr = data.x.to(device)
         logging.info("Load attributes")
         logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+
         labels = data.y.squeeze().to(device)
         logging.info("Load labels")
         logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
     if binary_attr:
+        # NOTE: do not use this for really large datasets.
+        # The mask is a **dense** matrix of the same size as the attribute matrix
         attr[attr != 0] = 1
 
-    logging.info("binary_attr")
-    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+        logging.info("binary_attr")
+        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
     if return_original_split and split is not None:
         return attr, adj, labels, split

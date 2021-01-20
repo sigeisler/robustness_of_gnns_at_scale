@@ -36,7 +36,7 @@ rpprgo:
         temperature: 50.0
         with_weight_correction: True
 
-    dataset: ogbn-papers100M #  ogbn-papers100M #citeseer 
+    dataset: ogbn-arxiv #  ogbn-papers100M #citeseer 
     binary_attr: False
     seed: 0
     train_params:
