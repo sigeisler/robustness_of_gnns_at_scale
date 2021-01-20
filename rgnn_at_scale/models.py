@@ -768,8 +768,8 @@ class PPRGoWrapperBase():
 
                 trace_train_loss.append(loss_train)
                 trace_val_loss.append(loss_val)
-                trace_train_acc.append(loss_train)
-                trace_val_acc.append(loss_val)
+                trace_train_acc.append(train_acc)
+                trace_val_acc.append(val_acc)
 
                 if loss_val < best_loss:
                     best_loss = loss_val
