@@ -196,7 +196,8 @@ class GCN(nn.Module):
 
     @ staticmethod
     def parse_forward_input(data: Optional[Union[Data, torch.Tensor]] = None,
-                            adj: Optional[Union[torch.sparse.FloatTensor, Tuple[torch.Tensor, torch.Tensor]]] = None,
+                            adj: Optional[Union[SparseTensor, torch.sparse.FloatTensor,
+                                                Tuple[torch.Tensor, torch.Tensor]]] = None,
                             attr_idx: Optional[torch.Tensor] = None,
                             edge_idx: Optional[torch.Tensor] = None,
                             edge_weight: Optional[torch.Tensor] = None,
@@ -215,6 +216,10 @@ class GCN(nn.Module):
         elif isinstance(adj, tuple):
             # Necessary since `torch.sparse.FloatTensor` eliminates the gradient...
             x, edge_idx, edge_weight = data, adj[0], adj[1]
+        elif isinstance(adj, SparseTensor):
+            x = data
+            edge_idx_rows, edge_idx_cols, edge_weight = adj.coo()
+            edge_idx = torch.stack([edge_idx_rows, edge_idx_cols], dim=0)
         else:
             x, edge_idx, edge_weight = data, adj._indices(), adj._values()
         return x, edge_idx, edge_weight
@@ -556,7 +561,7 @@ class RGCN(r_gcn.RGCN):
                 edge_idx: Optional[torch.Tensor] = None,
                 n: Optional[int] = None,
                 d: Optional[int] = None):
-        x, edge_idx = GCN.parse_forward_input(data, adj, attr_idx, edge_idx, n, d)
+        x, edge_idx, _ = GCN.parse_forward_input(data, adj, attr_idx, edge_idx, n, d)
         self.device = x.device
 
         if adj is None:
@@ -575,7 +580,7 @@ class RGCN(r_gcn.RGCN):
         return super()._forward()
 
     def fit(self,
-            adj: torch.sparse.FloatTensor,
+            adj: Union[SparseTensor, torch.sparse.FloatTensor],
             attr: torch.Tensor,
             labels: torch.Tensor,
             idx_train: np.ndarray,
@@ -583,7 +588,10 @@ class RGCN(r_gcn.RGCN):
             max_epochs: int = 200,
             **kwargs):
 
-        self.device = adj.device
+        if isinstance(adj, SparseTensor):
+            self.device = adj.device()
+        else:  # torch.sparse.FloatTensor
+            self.device = adj.device
 
         super().fit(
             features=attr,

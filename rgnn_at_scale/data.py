@@ -661,14 +661,15 @@ def prep_graph(name: str,
         logging.info("Added self loops")
         logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
-        #edge_index, edge_weight = utils.to_symmetric(edge_index, edge_weight, num_nodes)
+        if normalize:
+            edge_index, edge_weight = utils.to_symmetric(edge_index, edge_weight, num_nodes)
 
-        logging.info("Symmetric adjacency")
-        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+            logging.info("Symmetric adjacency")
+            logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
-        #adj = torch_sparse.SparseTensor.from_edge_index(edge_index, edge_weight, (num_nodes, num_nodes)).coalesce()
-        adj = sp.csr_matrix(sp.coo_matrix((edge_weight, edge_index),
-                                          (num_nodes, num_nodes)))
+        adj = torch_sparse.SparseTensor.from_edge_index(edge_index, edge_weight, (num_nodes, num_nodes)).coalesce()
+        # adj = sp.csr_matrix(sp.coo_matrix((edge_weight, edge_index),
+        #                                   (num_nodes, num_nodes)))
 
         logging.info("Created sparse tensor")
         logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))

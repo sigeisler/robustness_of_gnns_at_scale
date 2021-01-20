@@ -15,34 +15,36 @@ slurm:
     time: 0-01:00     # max time, D-HH:MM
 
 fixed:
+  data_dir: /nfs/students/schmidtt/datasets/
   train_params:
     lr: 1e-2
     weight_decay: 1e-3
     patience: 300
-    max_epochs: 3000
+    max_epochs: 1
   artifact_dir: cache
   model_storage_type: pretrained
-  device: 0
+  device: cpu
+  data_device: cpu
 
 grid:
   dataset:
     type: choice
     options:
       - cora_ml
-      - citeseer
+      #- citeseer
 
   binary_attr:
     type: choice
     options:
       - True
-      - False
+      #- False
 
   seed:
     type: choice
     options:
       - 0
-      - 1
-      - 5
+      #- 1
+      #- 5
 
 gcn:
   fixed:
