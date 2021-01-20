@@ -1,8 +1,8 @@
 seml:
   name: rgnn_at_scale_train
-  db_collection: rgnn_at_scale_train
+  #db_collection: rgnn_at_scale_train
   executable: experiment_train.py
-  conda_environment: rgnn_at_scale
+  #conda_environment: rgnn_at_scale
   project_root_dir: ../..
   output_dir: seml/train/output
 
@@ -32,15 +32,16 @@ grid:
     options:
       - cora_ml
       - citeseer
-
   binary_attr:
     type: choice
     options:
       - True
       - False
-
-  
-
+  normalize:
+    type: choice
+    options:
+      - True
+      - False
   seed:
     type: choice
     options:

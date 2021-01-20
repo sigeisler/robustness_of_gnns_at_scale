@@ -18,7 +18,7 @@ fixed:
     lr: 1e-2
     weight_decay: 1e-3
     patience: 300
-    max_epochs: 3000
+    max_epochs: 100
   artifact_dir: cache
   model_storage_type: pretrained
   device: 0
@@ -33,7 +33,7 @@ grid:
   binary_attr:
     type: choice
     options:
-      - True
+      #- True
       - False
   seed:
     type: choice
@@ -49,13 +49,13 @@ random:
     params:
       hidden_size:              # Size of the MLP's hidden layer
         type: choice
-        options: [64, 32]
+        options: [160, 128, 64, 32]
       nlayers:                   # Number of MLP layers
         type: choice
-        options: [2, 3, 4]
+        options: [2]
       alpha:                      # PPR teleport probability
         type: choice
-        options: [0.5, 0.25]
+        options: [0.25, 0.1]
       # mean_kwargs: 
       #   type: parameter_collection 
       #   params:
@@ -72,7 +72,7 @@ pprgo:
     model_params:
       label: Vanilla PPRGo
       model: PPRGo
-      ppr_normalization: 'sym' 
+      ppr_normalization: 'row' 
       do_cache_adj_prep: True
       topk: 64
       eps: 1e-2

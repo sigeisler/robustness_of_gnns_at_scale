@@ -18,10 +18,13 @@ fixed:
     lr: 1e-2
     weight_decay: 1e-3
     patience: 300
-    max_epochs: 3000
+    max_epochs: 100
   artifact_dir: cache
   model_storage_type: pretrained
   device: 0
+  make_unweighted: True
+  make_undirected: True
+  normalize: False
 
 
 grid:
@@ -33,7 +36,7 @@ grid:
   binary_attr:
     type: choice
     options:
-      - True
+      #- True
       - False
   seed:
     type: choice
@@ -49,29 +52,31 @@ random:
     params:
       hidden_size:              # Size of the MLP's hidden layer
         type: choice
-        options: [64, 32]
+        options: [160, 128, 64, 32]
       nlayers:                   # Number of MLP layers
         type: choice
-        options: [2, 3, 4]
+        options: [2]
       alpha:                      # PPR teleport probability
         type: choice
-        options: [0.5, 0.25]
-      # mean_kwargs: 
-      #   type: parameter_collection 
-      #   params:
-      #     temperature: 
-      #       type: choice
-      #       options: [0.2, 0.5, 1.0, 5.0, 20.0, 50.0]
+        options: [0.25, 0.1]
+      mean_kwargs: 
+        type: parameter_collection 
+        params:
+          temperature: 
+            type: choice
+            options: [0.2, 0.5, 1.0, 5.0]
       dropout:                      
         type: choice
         options: [0.1, 0.25, 0.5]
+        
+
 
 soft_medoid_pprgo:
   fixed:
     model_params:
       label: Soft Medoid PPRGo
       model: RobustPPRGo
-      ppr_normalization: 'sym' 
+      ppr_normalization: 'row' 
       do_cache_adj_prep: True
       topk: 64
       eps: 1e-2
@@ -91,14 +96,11 @@ soft_median_pprgo:
     model_params:
       label: Soft Median PPRGo
       model: RobustPPRGo
-      ppr_normalization: 'sym' 
+      ppr_normalization: 'row' 
       do_cache_adj_prep: True
       topk: 64
       eps: 1e-2
       mean: soft_median
-      mean_kwargs: 
-        k: 64
-        with_weight_correction: True
     train_params:
       batch_size: 65536
       batch_mult_val: 1

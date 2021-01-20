@@ -18,7 +18,7 @@ fixed:
     lr: 1e-2
     weight_decay: 1e-3
     patience: 300
-    max_epochs: 200
+    max_epochs: 30
   artifact_dir: cache
   model_storage_type: pretrained
   device: 0
@@ -63,18 +63,21 @@ grid:
         options: [0.1, 0.5]
 
 
-soft_medoid_pprgo:
+soft_median_pprgo:
   fixed:
     model_params:
-      label: Soft Medoid PPRGo
+      label: Soft Median PPRGo
       model: RobustPPRGo
-      ppr_normalization: 'sym' 
+      ppr_normalization: 'row' 
       do_cache_adj_prep: True
       topk: 64
       eps: 1e-2
       mean: soft_median
     train_params:
-      batch_size: 10240
+      batch_size: 16384 # 16G
       batch_mult_val: 1
       forward_batch_size: 128
     data_device: cpu
+    make_unweighted: True
+    make_undirected: False
+    normalize: False
