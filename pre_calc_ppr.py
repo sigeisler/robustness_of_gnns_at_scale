@@ -30,7 +30,7 @@ from rgnn_at_scale.local import setup_logging
 setup_logging()
 
 logging.info("start")
-dataset = "ogbn-arxiv"  # "ogbn-papers100M"
+dataset = "ogbn-papers100M"  # "ogbn-arxiv"
 device = "cpu"
 dataset_root = "/nfs/students/schmidtt/datasets/"
 binary_attr = False
@@ -105,6 +105,11 @@ idx_train, idx_val, idx_test = split['train'], split['valid'], split['test']
 num_nodes, _ = attr.shape
 logging.info("Load ppr_idx")
 logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+
+# adj = torch.sparse.FloatTensor(edge_index, edge_weight, (num_nodes, num_nodes)).coalesce()
+
+# logging.info("Load adj FloatTensor")
+# logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
 adj_sp = sp.csr_matrix(sp.coo_matrix((edge_weight, edge_index),
                                      (num_nodes, num_nodes)))

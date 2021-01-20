@@ -66,42 +66,17 @@ random:
         type: choice
         options: [0.1, 0.25, 0.5]
 
-soft_medoid_pprgo:
+
+pprgo:
   fixed:
     model_params:
-      label: Soft Medoid PPRGo
-      model: RobustPPRGo
+      label: Vanilla PPRGo
+      model: PPRGo
       ppr_normalization: 'sym' 
       do_cache_adj_prep: True
       topk: 64
       eps: 1e-2
-      mean: soft_k_medoid
-      mean_kwargs: 
-        k: 64
-        with_weight_correction: True
     train_params:
       batch_size: 65536
       batch_mult_val: 1
     data_device: cpu
-
-
-
-soft_median_pprgo:
-  fixed:
-    model_params:
-      label: Soft Median PPRGo
-      model: RobustPPRGo
-      ppr_normalization: 'sym' 
-      do_cache_adj_prep: True
-      topk: 64
-      eps: 1e-2
-      mean: soft_median
-      mean_kwargs: 
-        k: 64
-        with_weight_correction: True
-    train_params:
-      batch_size: 65536
-      batch_mult_val: 1
-    data_device: cpu
-
-

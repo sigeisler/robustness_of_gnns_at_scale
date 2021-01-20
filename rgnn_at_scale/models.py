@@ -648,14 +648,29 @@ class PPRGoWrapperBase():
             logging.info("datasets forward inference")
             logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
-            logits = torch.zeros(num_nodes, self.n_classes, device=device)
+            num_classes = self.n_classes
+            num_predictions = topk_ppr.shape[0]
+            logging.info(f"Allocating tensor for {num_predictions} nodes and {num_classes} classes")
+            logits = torch.zeros(num_predictions, self.n_classes, device="cpu", dtype=torch.float32)
 
             logging.info("logits forward inference")
             logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
-
-            for idx, xbs, _ in data_loader:
+            num_batches = len(data_loader)
+            for batch_id, (idx, xbs, _) in enumerate(data_loader):
+                logging.info(f"inference batch {batch_id}/{num_batches}")
+                if device.type == "cuda":
+                    logging.info(torch.cuda.max_memory_allocated() / (1024 ** 3))
                 xbs = [xb.to(device) for xb in xbs]
-                logits[idx] = self.model_forward(*xbs)
+                if device.type == "cuda":
+                    logging.info(torch.cuda.max_memory_allocated() / (1024 ** 3))
+                start = batch_id * self.forward_batch_size
+                end = start + xbs[1].size(0)  # batch_id * batch_size
+                logits[start:end] = self.model_forward(*xbs).cpu()
+                if device.type == "cuda":
+                    logging.info(torch.cuda.max_memory_allocated() / (1024 ** 3))
+
+                if device.type == "cuda":
+                    logging.info(torch.cuda.max_memory_allocated() / (1024 ** 3))
                 logging.info("logits forward inference loop")
                 logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
@@ -810,7 +825,7 @@ class PPRGoWrapper(PPRGo, PPRGoWrapperBase):
                  eps,
                  topk,
                  ppr_normalization,
-                 forward_batch_size=2048,
+                 forward_batch_size=256,
                  **kwargs):
         super().__init__(n_features, n_classes, hidden_size, nlayers, dropout, **kwargs)
         self.n_classes = n_classes
@@ -843,7 +858,7 @@ class RobustPPRGoWrapper(RobustPPRGo, PPRGoWrapperBase):
                  eps,
                  topk,
                  ppr_normalization,
-                 forward_batch_size=2048,
+                 forward_batch_size=256,
                  mean='soft_k_medoid',
                  **kwargs):
         super().__init__(n_features, n_classes, hidden_size, nlayers, dropout, mean=mean,  **kwargs)
@@ -861,7 +876,7 @@ class RobustPPRGoWrapper(RobustPPRGo, PPRGoWrapperBase):
         return super().forward(*args, **kwargs)
 
 
-MODEL_TYPE = Union[GCN, RGNN, RGCN]
+MODEL_TYPE = Union[GCN, RGNN, RGCN, RobustPPRGoWrapper, PPRGoWrapper]
 
 
 def create_model(hyperparams: Dict[str, Any]) -> MODEL_TYPE:

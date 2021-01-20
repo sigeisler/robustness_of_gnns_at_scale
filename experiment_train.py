@@ -9,7 +9,7 @@ import torch
 
 from rgnn_at_scale.data import prep_graph, split
 from rgnn_at_scale.io import Storage
-from rgnn_at_scale.models import create_model
+from rgnn_at_scale.models import create_model, PPRGoWrapperBase
 from rgnn_at_scale.train import train
 from rgnn_at_scale.utils import accuracy
 import torch.nn.functional as F
@@ -118,10 +118,13 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
     model.eval()
 
     # For really large graphs we don't want to compute predictions for all nodes, just the test nodes is enough.
-    # But be carefull when calculating the accuracy. The prediction tensor will be of the same size regardless
-    # of passing idx_test. Every node **not** in idx_test will have a zero as prediction
-    prediction = model(attr, adj, ppr_idx=idx_test)
-    test_accuracy = accuracy(prediction.cpu(), labels.cpu(), idx_test)
+    if isinstance(model, PPRGoWrapperBase):
+        prediction = model(attr, adj, ppr_idx=idx_test)
+        test_accuracy = (prediction.cpu().argmax(1) == labels.cpu()[idx_test]).float().mean().item()
+    else:
+        prediction = model(attr, adj)
+        test_accuracy = accuracy(prediction.cpu(), labels.cpu(), idx_test)
+
     logging.info(f'Test accuracy is {test_accuracy} with seed {seed}')
 
     storage = Storage(artifact_dir, experiment=ex)

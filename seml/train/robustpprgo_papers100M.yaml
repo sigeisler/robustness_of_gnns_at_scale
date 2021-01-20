@@ -1,5 +1,5 @@
 seml:
-  name: rgnn_at_scale_train
+  name: rgnn_papers100M_train
   executable: experiment_train.py
   project_root_dir: ../..
   output_dir: seml/train/output
@@ -8,9 +8,9 @@ slurm:
   experiments_per_job: 1
   sbatch_options:
     gres: gpu:1       # num GPUs
-    mem: 240G
+    mem: 200G
     cpus-per-task: 12  # num cores
-    time: 1-00:00     # max time, D-HH:MM
+    time: 1-12:00     # max time, D-HH:MM
 
 fixed:
   data_dir: /nfs/students/schmidtt/datasets/
@@ -18,7 +18,7 @@ fixed:
     lr: 1e-2
     weight_decay: 1e-3
     patience: 300
-    max_epochs: 3000
+    max_epochs: 200
   artifact_dir: cache
   model_storage_type: pretrained
   device: 0
@@ -32,38 +32,36 @@ grid:
   binary_attr:
     type: choice
     options:
-      - True
-      #- False
+      #- True
+      - False
   seed:
     type: choice
     options:
       - 0
       # - 1
       # - 5
-
-random:
-  samples: 30
   model_params:
     type: parameter_collection 
     params:
       hidden_size:              # Size of the MLP's hidden layer
         type: choice
-        options: [64, 32]
+        options: [64, 128]
       nlayers:                   # Number of MLP layers
         type: choice
         options: [2, 3]
       alpha:                      # PPR teleport probability
         type: choice
-        options: [0.5, 0.25]
+        options: [0.5]
       mean_kwargs: 
         type: parameter_collection 
         params:
           temperature: 
             type: choice
-            options: [5.0, 20.0, 50.0]
+            options: [5.0, 50.0]
       dropout:                      
         type: choice
         options: [0.1, 0.5]
+
 
 soft_medoid_pprgo:
   fixed:
@@ -74,11 +72,9 @@ soft_medoid_pprgo:
       do_cache_adj_prep: True
       topk: 64
       eps: 1e-2
-      mean: soft_k_medoid
-      mean_kwargs: 
-        k: 64
-        with_weight_correction: True
+      mean: soft_median
     train_params:
-      batch_size: 2048
-      batch_mult_val: 2
+      batch_size: 10240
+      batch_mult_val: 1
+      forward_batch_size: 128
     data_device: cpu

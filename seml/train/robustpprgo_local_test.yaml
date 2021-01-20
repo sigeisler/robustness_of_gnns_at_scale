@@ -22,14 +22,13 @@ rpprgo:
     model_params:
       label: Robust PPRGo
       model: RobustPPRGo
-      ppr_normalization: 'sym' 
+      ppr_normalization: 'row' 
       do_cache_adj_prep: True
       topk: 64
-      hidden_size: 64
+      hidden_size: 128
       nlayers: 2
-      alpha: 0.25
+      alpha: 0.5
       eps: 1e-2
-      n_filters: 64
       dropout: 0.25
       mean: soft_k_medoid
       mean_kwargs: 
@@ -44,8 +43,9 @@ rpprgo:
       lr: 1e-2
       weight_decay: 1e-3
       patience: 300
-      max_epochs: 10
-      batch_size: 24576
+      max_epochs: 200
+      batch_size: 10240
+      forward_batch_size: 128
       batch_mult_val: 1
     artifact_dir: cache
     model_storage_type: pretrained

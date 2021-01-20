@@ -45,6 +45,28 @@ def tuple_to_sparse_tensor(edge_weight: torch.Tensor, row: torch.Tensor, rowptr:
     return sparse_tensor
 
 
+def calc_A_hat(adj_matrix: sp.spmatrix) -> sp.spmatrix:
+    """
+    From https://github.com/klicperajo/ppnp
+    """
+    nnodes = adj_matrix.shape[0]
+    A = adj_matrix + sp.eye(nnodes)
+    D_vec = np.sum(A, axis=1).A1
+    D_vec_invsqrt_corr = 1 / np.sqrt(D_vec)
+    D_invsqrt_corr = sp.diags(D_vec_invsqrt_corr)
+    return D_invsqrt_corr @ A @ D_invsqrt_corr
+
+
+def calc_ppr_exact(adj_matrix: sp.spmatrix, alpha: float) -> np.ndarray:
+    """
+    From https://github.com/klicperajo/ppnp
+    """
+    nnodes = adj_matrix.shape[0]
+    M = calc_A_hat(adj_matrix)
+    A_inner = sp.eye(nnodes) - (1 - alpha) * M
+    return alpha * np.linalg.inv(A_inner.toarray())
+
+
 def get_ppr_matrix(adjacency_matrix: torch.Tensor,
                    alpha: float = 0.15,
                    k: int = 32,
