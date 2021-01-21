@@ -81,17 +81,11 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
                        binary_attr=binary_attr,
                        return_original_split=dataset.startswith('ogbn'))
 
-    logging.info("prep_graph")
-    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
-
     attr, adj, labels = graph[:3]
     if len(graph) == 3:
         idx_train, idx_val, idx_test = split(labels.cpu().numpy())
     else:
         idx_train, idx_val, idx_test = graph[3]['train'], graph[3]['valid'], graph[3]['test']
-
-    logging.info("idx_train")
-    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
     n_features = attr.shape[1]
     n_classes = int(labels[~labels.isnan()].max() + 1)

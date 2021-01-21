@@ -618,8 +618,6 @@ class PPRGoWrapperBase():
         else:
             # we need to precompute the ppr_score first
 
-            logging.info("forward inference ")
-            logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
             # TODO: Calculate topk ppr with pytorch so autograd can backprop through adjacency
 
             if isinstance(adj, SparseTensor):
@@ -635,8 +633,6 @@ class PPRGoWrapperBase():
             topk_ppr = ppr.topk_ppr_matrix(adj, self.alpha, self.eps, ppr_idx,
                                            self.topk,  normalization=self.ppr_normalization)
 
-            logging.info("forward inference topk_ppr")
-            logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
             # there are to many node for a single forward pass, we need to do batched prediction
             data_set = RobustPPRDataset(
                 attr_matrix_all=attr,
@@ -652,35 +648,18 @@ class PPRGoWrapperBase():
                 batch_size=None,
                 num_workers=0,
             )
-
-            logging.info("datasets forward inference")
-            logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
-
             num_classes = self.n_classes
             num_predictions = topk_ppr.shape[0]
-            logging.info(f"Allocating tensor for {num_predictions} nodes and {num_classes} classes")
+
             logits = torch.zeros(num_predictions, self.n_classes, device="cpu", dtype=torch.float32)
 
-            logging.info("logits forward inference")
-            logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
             num_batches = len(data_loader)
             for batch_id, (idx, xbs, _) in enumerate(data_loader):
                 logging.info(f"inference batch {batch_id}/{num_batches}")
-                if device.type == "cuda":
-                    logging.info(torch.cuda.max_memory_allocated() / (1024 ** 3))
                 xbs = [xb.to(device) for xb in xbs]
-                if device.type == "cuda":
-                    logging.info(torch.cuda.max_memory_allocated() / (1024 ** 3))
                 start = batch_id * self.forward_batch_size
                 end = start + xbs[1].size(0)  # batch_id * batch_size
                 logits[start:end] = self.model_forward(*xbs).cpu()
-                if device.type == "cuda":
-                    logging.info(torch.cuda.max_memory_allocated() / (1024 ** 3))
-
-                if device.type == "cuda":
-                    logging.info(torch.cuda.max_memory_allocated() / (1024 ** 3))
-                logging.info("logits forward inference loop")
-                logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
             return logits
 
@@ -707,14 +686,8 @@ class PPRGoWrapperBase():
         if isinstance(adj, SparseTensor):
             adj = adj.to_scipy(layout="csr")
 
-        logging.info("adj_csr ")
-        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
-
         topk_train = ppr.topk_ppr_matrix(adj, self.alpha, self.eps, idx_train,
                                          self.topk,  normalization=self.ppr_normalization)
-
-        logging.info("topk_train ")
-        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
         topk_val = ppr.topk_ppr_matrix(adj, self.alpha, self.eps, idx_val,
                                        self.topk,  normalization=self.ppr_normalization)
@@ -778,11 +751,6 @@ class PPRGoWrapperBase():
                 else:
                     if it >= best_epoch + patience:
                         break
-
-                logging.info(f"batch train step {step:} ")
-                logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
-                if device.type == "cuda":
-                    logging.info(torch.cuda.max_memory_allocated() / (1024 ** 3))
 
                 batch_pbar.set_description(f"Epoch: {it:}, loss_train: {loss_train: .5f}, loss_val: {loss_val: .5f}",
                                            refresh=False)

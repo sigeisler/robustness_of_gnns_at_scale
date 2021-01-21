@@ -632,13 +632,7 @@ def prep_graph(name: str,
 
         pyg_dataset = PygNodePropPredDataset(root=dataset_root, name=name)
 
-        logging.info("Loaded PygNodePropPredDataset into memory.")
-        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
-
         data = pyg_dataset[0]
-
-        logging.info("Loaded PygNodePropPredDataset into memory.")
-        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
         if hasattr(data, '__num_nodes__'):
             num_nodes = data.__num_nodes__
@@ -659,28 +653,17 @@ def prep_graph(name: str,
         # Also we need numpy arrays because Numba cant determine type of torch.Tensor
         split = {k: v.numpy() for k, v in split.items()}
 
-        logging.info("Dataset split loaded.")
-        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
-
         edge_index, edge_weight = add_remaining_self_loops(
             data.edge_index.to(device),
             torch.ones(data.edge_index.size(1), device=device).float(),
             num_nodes=num_nodes
         )
-        logging.info("Added self loops")
-        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
         if make_undirected:
             edge_index, edge_weight = utils.to_symmetric(edge_index, edge_weight, num_nodes)
 
-            logging.info("make_undirected adjacency")
-            logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
-
         if make_unweighted:
             edge_weight = torch.ones_like(edge_weight)
-
-            logging.info("make_unweighted adjacency")
-            logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
         adj = sp.csr_matrix(sp.coo_matrix((edge_weight, edge_index),
                                           (num_nodes, num_nodes)))
@@ -688,42 +671,24 @@ def prep_graph(name: str,
         if normalize:
             adj = utils.calc_A_hat(adj)
 
-            logging.info("normalized adjacency")
-            logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
-
         adj = torch_sparse.SparseTensor.from_scipy(adj).coalesce()
-
-        logging.info("Created sparse tensor")
-        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
         del edge_index
         del edge_weight
 
-        logging.info("Deleted edge_index")
-        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
-
         attr = data.x.to(device)
-        logging.info("Load attributes")
-        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
         labels = data.y.squeeze().to(device)
-        logging.info("Load labels")
-        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
     if binary_attr:
         # NOTE: do not use this for really large datasets.
         # The mask is a **dense** matrix of the same size as the attribute matrix
         attr[attr != 0] = 1
 
-        logging.info("binary_attr")
-        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
-
     if return_original_split and split is not None:
         return attr, adj, labels, split
 
     remove_isolated_nodes
-    logging.info("remove_isolated_nodes")
-    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
     return attr, adj, labels
 
