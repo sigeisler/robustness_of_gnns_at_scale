@@ -12,7 +12,7 @@ slurm:
     gres: gpu:1       # num GPUs
     mem: 16G          # memory
     cpus-per-task: 4  # num cores
-    time: 0-01:00     # max time, D-HH:MM
+    time: 0-00:10     # max time, D-HH:MM
 
 fixed:
   data_dir: /nfs/students/schmidtt/datasets/
@@ -22,9 +22,11 @@ fixed:
     patience: 200
     max_epochs: 300
   artifact_dir: cache
-  model_storage_type: pretrained
+  model_storage_type: attack_pretrained
   device: 0
   data_device: 0
+  make_unweighted: True
+  make_undirected: True
 
 grid:
   dataset:
@@ -35,12 +37,10 @@ grid:
   binary_attr:
     type: choice
     options:
-      - True
       - False
   normalize:
     type: choice
     options:
-      - True
       - False
   seed:
     type: choice
@@ -50,6 +50,83 @@ grid:
       - 5
       - 42
       - 100
+
+soft_medoid_rpprgo_t1_0:
+  fixed:
+    data_device: cpu
+    model_params:
+      label: Soft Medoid RPPRGo (T=1.0)
+      model: RobustPPRGo
+      ppr_normalization: 'row' 
+      do_cache_adj_prep: True
+      topk: 64
+      hidden_size: 64
+      nlayers: 2
+      alpha: 0.1
+      eps: 1e-2
+      dropout: 0.1
+      mean: soft_k_medoid
+      mean_kwargs: 
+        k: 64
+        temperature: 1.0
+        with_weight_correction: True
+
+soft_medoid_rpprgo_t0_5:
+  fixed:
+    data_device: cpu
+    model_params:
+      label: Soft Medoid RPPRGo (T=0.5)
+      model: RobustPPRGo
+      ppr_normalization: 'row' 
+      do_cache_adj_prep: True
+      topk: 64
+      hidden_size: 64
+      nlayers: 2
+      alpha: 0.1
+      eps: 1e-2
+      dropout: 0.1
+      mean: soft_k_medoid
+      mean_kwargs: 
+        k: 64
+        temperature: 0.5
+        with_weight_correction: True
+
+
+soft_medoid_rpprgo_t0_2:
+  fixed:
+    data_device: cpu
+    model_params:
+      label: Soft Medoid RPPRGo (T=0.2)
+      model: RobustPPRGo
+      ppr_normalization: 'row' 
+      do_cache_adj_prep: True
+      topk: 64
+      hidden_size: 64
+      nlayers: 2
+      alpha: 0.1
+      eps: 1e-2
+      dropout: 0.1
+      mean: soft_k_medoid
+      mean_kwargs: 
+        k: 64
+        temperature: 0.2
+        with_weight_correction: True
+    
+pprgo:
+  fixed:
+    data_device: cpu
+    model_params:
+      label: Vanilla PPRGo
+      model: PPRGo
+      ppr_normalization: 'row' 
+      do_cache_adj_prep: True
+      topk: 64
+      hidden_size: 64
+      nlayers: 2
+      alpha: 0.1
+      eps: 1e-2
+      dropout: 0.1
+
 
 soft_medoid_gdc_t0_2:
   fixed:

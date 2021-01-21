@@ -14,6 +14,20 @@
             "args": []
         },
         {
+            "name": "Python: Local Attack RobustPPRGo",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/script_evaluate_empirical_robustness.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--config-files=seml/attack_evasion_transfer/cora_and_citeseer.yaml"
+            ],
+            "env": {
+                "CUDA_LAUNCH_BLOCKING": "1"
+            }
+        },
+        {
             "name": "Python: Local Train RobustPPRGo",
             "type": "python",
             "request": "launch",

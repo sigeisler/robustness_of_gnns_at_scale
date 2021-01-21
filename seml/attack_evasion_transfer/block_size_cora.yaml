@@ -17,7 +17,7 @@ slurm:
 
 fixed:
   epsilons: [0, 0.05, 0.1, 0.25]
-
+  
   surrogate_params:
     n_filters: 64
     dropout: 0.5
@@ -30,7 +30,7 @@ fixed:
   pert_adj_storage_type: evasion_transfer_attack_adj
   pert_attr_storage_type: evasion_transfer_attack_attr
   model_storage_type: pretrained
-  device: 0
+  device: cpu
   binary_attr: False
 
 grid:

@@ -8,7 +8,7 @@ from torch.nn import functional as F
 import numpy as np
 import torch
 import torch_sparse
-
+from torch_sparse import SparseTensor
 from rgnn_at_scale import utils
 from rgnn_at_scale.models import GCN
 
@@ -25,7 +25,7 @@ class PRBCD(object):
     """
 
     def __init__(self,
-                 adj: torch.sparse.FloatTensor,
+                 adj: SparseTensor,
                  X: torch.Tensor,
                  labels: torch.Tensor,
                  idx_attack: np.ndarray,
@@ -53,9 +53,11 @@ class PRBCD(object):
         self.model.eval()
         for p in self.model.parameters():
             p.requires_grad = False
-        self.edge_index = adj.indices().cpu()
-        self.edge_weight = adj.values().cpu()
-        self.n = adj.shape[0]
+
+        edge_index_rows, edge_index_cols, edge_weight = adj.coo()
+        self.edge_index = torch.stack([edge_index_rows, edge_index_cols], dim=0).cpu()
+        self.edge_weight = edge_weight.cpu()
+        self.n = adj.size(0)
         self.n_possible_edges = self.n * (self.n - 1) // 2
         self.d = X.shape[1]
         self.labels = labels.to(self.device)
@@ -166,7 +168,7 @@ class PRBCD(object):
 
         edge_index = self.sample_edges(n_perturbations)[0]
 
-        self.adj_adversary = torch.sparse.FloatTensor(
+        self.adj_adversary = SparseTensor.from_edge_index(
             edge_index,
             torch.ones_like(edge_index[0], dtype=torch.float32),
             (self.n, self.n)

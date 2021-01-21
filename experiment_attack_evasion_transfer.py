@@ -54,13 +54,16 @@ def config():
     device = 0
     display_steps = 10
     model_label = None
+    normalize = False
+    make_undirected = True
+    make_unweighted = True
 
 
 @ex.automain
-def run(dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequence[float], binary_attr: bool,
-        surrogate_params: Dict[str, Any], seed: int, artifact_dir: str, pert_adj_storage_type: str,
-        pert_attr_storage_type: str, model_storage_type: str, device: Union[str, int], display_steps: int,
-        model_label: str):
+def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequence[float], binary_attr: bool,
+        normalize: bool, make_undirected: bool, make_unweighted: bool, surrogate_params: Dict[str, Any],
+        seed: int, artifact_dir: str, pert_adj_storage_type: str, pert_attr_storage_type: str, model_label: str,
+        model_storage_type: str, device: Union[str, int], data_device: Union[str, int], display_steps: int):
     logging.info({
         'dataset': dataset, 'attack': attack, 'attack_params': attack_params, 'epsilons': epsilons,
         'binary_attr': binary_attr, 'surrogate_params': surrogate_params, 'seed': seed,
@@ -76,8 +79,12 @@ def run(dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequ
     assert 'train_params' in surrogate_params, '`surrogate` must contain the field `train_params`'
 
     results = []
-
-    graph = prep_graph(dataset, device, binary_attr=binary_attr, return_original_split=dataset.startswith('ogbn'))
+    graph = prep_graph(dataset, data_device, dataset_root=data_dir,
+                       normalize=normalize,
+                       make_undirected=make_undirected,
+                       make_unweighted=make_unweighted,
+                       binary_attr=binary_attr,
+                       return_original_split=dataset.startswith('ogbn'))
     attr, adj, labels = graph[:3]
     if len(graph) == 3:
         idx_train, idx_val, idx_test = split(labels.cpu().numpy())
@@ -86,8 +93,16 @@ def run(dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequ
     n_features = attr.shape[1]
     n_classes = int(labels.max() + 1)
 
-    params = dict(dataset=dataset, binary_attr=binary_attr, seed=seed, attack=attack,
-                  surrogate_params=surrogate_params, attack_params=attack_params)
+    params = dict(dataset=dataset,
+                  binary_attr=binary_attr,
+                  normalize=normalize,
+                  make_undirected=make_undirected,
+                  make_unweighted=make_unweighted,
+                  seed=seed,
+                  attack=attack,
+                  surrogate_params=surrogate_params,
+                  attack_params=attack_params)
+
     storage = Storage(artifact_dir, experiment=ex)
 
     adj_per_eps = []
@@ -133,7 +148,7 @@ def run(dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequ
         if tmp_epsilons[0] != 0:
             tmp_epsilons.insert(0, 0)
 
-        m = adj._nnz() / 2
+        m = adj.nnz() / 2
         for epsilon in tmp_epsilons[1:]:
             logging.info(f'Attack via {attack} with budget {epsilon}')
 
@@ -153,7 +168,13 @@ def run(dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequ
         adj_per_eps.insert(0, adj.to('cpu'))
         attr_per_eps.insert(0, attr.to('cpu'))
 
-    model_params = dict(dataset=dataset, binary_attr=binary_attr, seed=seed)
+    model_params = dict(dataset=dataset,
+                        binary_attr=binary_attr,
+                        # normalize=normalize,
+                        # make_undirected=make_undirected,
+                        # make_unweighted=make_unweighted,
+                        seed=seed)
+
     if model_label is not None and model_label:
         model_params['label'] = model_label
     models_and_hyperparams = storage.find_models(model_storage_type, model_params)
@@ -169,7 +190,7 @@ def run(dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequ
                 np.random.seed(seed)
 
                 pred_logits_target = model(attr_perturbed.to(device), adj_perturbed.to(device))
-                acc_test_target = accuracy(pred_logits_target, labels.to(device), idx_test)
+                acc_test_target = accuracy(pred_logits_target.cpu(), labels.cpu(), idx_test)
                 results.append({
                     'label': hyperparams['label'],
                     'epsilon': eps,

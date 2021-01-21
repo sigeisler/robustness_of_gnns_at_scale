@@ -1,8 +1,8 @@
 seml:
   name: rgnn_at_scale_attack_evasion_transfer
-  db_collection: kdd21_rgnn_at_scale_attack_evasion_transfer
+  #db_collection: kdd21_rgnn_at_scale_attack_evasion_transfer
   executable: experiment_attack_evasion_transfer.py
-  conda_environment: rgnn_at_scale
+  #conda_environment: rgnn_at_scale
   project_root_dir: ../..
   output_dir: seml/attack_evasion_transfer/output
 
@@ -15,6 +15,7 @@ slurm:
     time: 0-08:00     # max time, D-HH:MM
 
 fixed:
+  data_dir: /nfs/students/schmidtt/datasets/
   epsilons: [0, 0.01, 0.05, 0.1, 0.25]
   surrogate_params:
     n_filters: 64
@@ -22,13 +23,16 @@ fixed:
     train_params:
       lr: 1e-2
       weight_decay: 1e-3
-      patience: 100
-      max_epochs: 3000
+      patience: 200
+      max_epochs: 300
   artifact_dir: cache
   pert_adj_storage_type: evasion_transfer_attack_adj
   pert_attr_storage_type: evasion_transfer_attack_attr
-  model_storage_type: pretrained
+  model_storage_type: attack_pretrained
   device: 0
+  data_device: 0
+  make_unweighted: True
+  make_undirected: True
 
 grid:
   dataset:
@@ -36,61 +40,30 @@ grid:
     options:
       - cora_ml
       - citeseer
-
+  binary_attr:
+    type: choice
+    options:
+      - False
+  normalize:
+    type: choice
+    options:
+      - False
   seed:
     type: choice
     options:
       - 0
       - 1
       - 5
-
-pgd:
-  fixed:
-    binary_attr: False
-    attack: PGD
-  grid: 
-    attack_params:
-      type: parameter_collection
-      params:
-        loss_type: 
-          type: choice
-          options:
-            - CE
-            - tanhCW
-
-fgsm:
-  fixed:
-    binary_attr: False
-    attack: FGSM
-  grid: 
-    attack_params:
-      type: parameter_collection
-      params:
-        stop_optimizing_if_label_flipped: 
-          type: choice
-          options:
-            - True
-            - False
-
-greedy_rbcd:
-  fixed:
-    binary_attr: False
-    attack: GreedyRBCD
-  grid: 
-    attack_params:
-      type: parameter_collection
-      params:
-        loss_type: 
-          type: choice
-          options:
-            - CE
-            - MCE
+      - 42
+      - 100
 
 prbcd:
   fixed:
     binary_attr: False
     attack: PRBCD
     attack_params:
+      epochs: 400
+      fine_tune_epochs: 100
       keep_heuristic: WeightOnly
       search_space_size: 1_000_000
       do_synchronize: True
@@ -104,20 +77,63 @@ prbcd:
             - CE
             - tanhCW
 
-gang:
-  fixed:
-    binary_attr: True
-    attack: GANG
-    attack_params:
-      edge_with_random_reverse: False
-      edge_step_size: 5
-      edge_budget: 10
-      feature_dedicated_iterations: 5
-      feature_lr: 5e-1
-      feature_greedy_opt: True
-      eps: 1e-16
+# pgd:
+#   fixed:
+#     binary_attr: False
+#     attack: PGD
+#   grid: 
+#     attack_params:
+#       type: parameter_collection
+#       params:
+#         loss_type: 
+#           type: choice
+#           options:
+#             - CE
+#             - tanhCW
 
-dice:
-  fixed:
-    binary_attr: False
-    attack: DICE
+# fgsm:
+#   fixed:
+#     binary_attr: False
+#     attack: FGSM
+#   grid: 
+#     attack_params:
+#       type: parameter_collection
+#       params:
+#         stop_optimizing_if_label_flipped: 
+#           type: choice
+#           options:
+#             - True
+#             - False
+
+# greedy_rbcd:
+#   fixed:
+#     binary_attr: False
+#     attack: GreedyRBCD
+#   grid: 
+#     attack_params:
+#       type: parameter_collection
+#       params:
+#         loss_type: 
+#           type: choice
+#           options:
+#             - CE
+#             - MCE
+
+
+# gang:
+#   fixed:
+#     binary_attr: True
+#     attack: GANG
+#     attack_params:
+#       edge_with_random_reverse: False
+#       edge_step_size: 5
+#       edge_budget: 10
+#       feature_dedicated_iterations: 5
+#       feature_lr: 5e-1
+#       feature_greedy_opt: True
+#       eps: 1e-16
+
+# dice:
+#   fixed:
+#     binary_attr: False
+#     attack: DICE

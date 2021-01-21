@@ -49,5 +49,8 @@ rpprgo:
       batch_mult_val: 1
     artifact_dir: cache
     model_storage_type: pretrained
-    device: 0
+    device: cpu
     data_device: cpu
+    make_unweighted: True
+    make_undirected: False
+    normalize: False
