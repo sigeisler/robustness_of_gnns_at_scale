@@ -17,7 +17,7 @@ class EXPAND_CONTRACT():
                  device: Union[str, int, torch.device],
                  k: int = 1, 
                  alpha: float = 2.0, 
-                 m: int = 1, 
+                 m: int = 10, 
                  step: int = 1, 
                  protected=None,
                  **kwargs
@@ -25,13 +25,10 @@ class EXPAND_CONTRACT():
         assert alpha >= 1.0
         assert m >= 1
         assert adj.device == X.device
-        #? if k == 0:
-            #?return torch.empty((2, 0), dtype=torch.long, device=graph.a.device())
         self.alpha = alpha
-        #? Is m the n_perturbations??
+        #* m is the number of times we filter our selected nodes
         self.m = m
         self.k = k
-        #self.rng = np.random.default_rng()
         self.n = adj.size()[0]
         self.adj = adj
         adj_symmetric_index, adj_symmetric_weights = utils.to_symmetric(adj.indices(), adj.values(), self.n)
@@ -65,8 +62,17 @@ class EXPAND_CONTRACT():
 
     def _log_likelihood(self, adj_dict, adj_symmetric_index, adj_symmetric_weights):
         #adj = self._from_dict_to_sparse(adj_dict)
+        #? Would it speed up the calculation of self.X and the two tensors get moved to GPU, so model calculation become faster??
+        adj_symmetric_index = adj_symmetric_index.to(self.device)
+        adj_symmetric_weights = adj_symmetric_weights.to(self.device)
+
         adj = torch.sparse.FloatTensor(adj_symmetric_index, adj_symmetric_weights, torch.Size([self.n, self.n]))
         logits = self.model.to(self.device)(self.X, adj)
+
+        #? And then back to CPU??
+        adj_symmetric_index = adj_symmetric_index.to("cpu")
+        adj_symmetric_weights = adj_symmetric_weights.to("cpu")
+
         return -F.cross_entropy(logits[self.idx_attack], self.labels[self.idx_attack])
 
     def _delete_edge_from_tensor(self, source, dest, adj_symmetric_index, adj_symmetric_weights):
@@ -90,22 +96,29 @@ class EXPAND_CONTRACT():
                 adj_symmetric_index, adj_symmetric_weights = self._delete_edge_from_tensor(source, dest, adj_symmetric_index, adj_symmetric_weights)
         return adj_symmetric_index, adj_symmetric_weights
 
-    def _contract(self, adj_dict, cohort, adj_symmetric_index, adj_symmetric_weights):
+    def _contract(self, adj_dict, cohort, adj_symmetric_index, adj_symmetric_weights, n_perturbations):
         # Contract the cohort until we are in budget again
-        bar = tqdm(total=len(cohort) - self.k, leave=False, desc="Contract")
-        while len(cohort) > self.k:
+        bar = tqdm(total=len(cohort) - n_perturbations, leave=False, desc="Contract")
+        
+        # we retain n_perturbation nodes
+        while len(cohort) > n_perturbations: #//self.k:
             llhs =  np.empty( len(cohort) )
+            bar2 = tqdm(total=len(cohort), leave=False, desc="Flipping Edges")
             for i, edge in enumerate(cohort):
                 adj_symmetric_index, adj_symmetric_weights = self._flip_edges(adj_dict, edge, adj_symmetric_index, adj_symmetric_weights)
                 llhs[i] = self._log_likelihood(adj_dict, adj_symmetric_index, adj_symmetric_weights)                
                 adj_symmetric_index, adj_symmetric_weights = self._flip_edges(adj_dict, edge, adj_symmetric_index, adj_symmetric_weights)
+                bar2.update(1)
             # Undo the flips that increase the log-likelihood the least when undone
-            n_undo = min(self.step, len(cohort) - self.k)
+            #//n_undo = min(self.step, len(cohort) - self.k)
+            n_undo = min(self.step, len(cohort) - n_perturbations)
             for edge in [cohort[i] for i in np.argpartition(llhs, n_undo)[:n_undo]]:
                 cohort.remove(edge)
                 adj_symmetric_index, adj_symmetric_weights = self._flip_edges(adj_dict, edge, adj_symmetric_index, adj_symmetric_weights)
             bar.update(n_undo)
+            bar2.close()
         bar.close()
+        
         return adj_symmetric_index, adj_symmetric_weights
  
     def _add_edges_to_list(self, my_list, number_of_nodes_to_add):
@@ -155,28 +168,28 @@ class EXPAND_CONTRACT():
         n_edges = (self.n * (self.n - 1)) //2
         assert n_edges >= k
         clean_ll = self._log_likelihood(adj_dict, adj_symmetric_index, adj_symmetric_weights)
-        bar = tqdm(total=n_perturbations, desc="Cycles") 
+        bar = tqdm(total=self.m, desc="Cycles") 
         # Randomly select a cohort of edges to flip
-        cohort_size = min(int(self.alpha * self.k), n_edges)
+        #* Cohort size changes to be k*n_perturbation, we keep just n_perturbation fi
+        #//cohort_size = min(int(self.alpha * self.k), n_edges)
+        cohort_size = min(int(n_perturbations * self.k), n_edges)
         cohort = []
         cohort = self._add_edges_to_list(cohort, cohort_size)
         adj_symmetric_index, adj_symmetric_weights = self._flip_edges(adj_dict, cohort, adj_symmetric_index, adj_symmetric_weights)
-        n_expand = min(round((self.alpha - 1.0) * k), n_edges - k)
+        #*How many new nodes to add to cohort
+        #//n_expand = min(round((self.alpha - 1.0) * k), n_edges - k)
+        n_expand = min(round((k-1)*n_perturbations), n_edges - k)
         if n_expand > 0:
-            for _ in range(n_perturbations - 1): 
-                adj_symmetric_index, adj_symmetric_weights = self._contract(adj_dict,cohort, adj_symmetric_index, adj_symmetric_weights)
+            #refine the choice of nodes m times
+            for _ in range(self.m - 1): #//range(n_perturbations - 1): 
+                adj_symmetric_index, adj_symmetric_weights = self._contract(adj_dict,cohort, adj_symmetric_index, adj_symmetric_weights, n_perturbations)
                 bar.update()
                 new_edges = self._add_edges_to_list([], n_expand)
                 adj_symmetric_index, adj_symmetric_weights = self._flip_edges(adj_dict, new_edges, adj_symmetric_index, adj_symmetric_weights)
                 cohort.extend(list(new_edges))
 
-        adj_symmetric_index, adj_symmetric_weights = self._contract(adj_dict,cohort, adj_symmetric_index, adj_symmetric_weights)
+        adj_symmetric_index, adj_symmetric_weights = self._contract(adj_dict,cohort, adj_symmetric_index, adj_symmetric_weights, n_perturbations)
         bar.update()
-        #? How about we bypass the from_dict_to_sparse step, and create sparse from our tensors?
-        #? Faster implementation?
-        #self.adj_adversary = self._from_dict_to_sparse(adj_dict)
-        #weights = [1] * len(adj_symmetric_index[0])
-
         adj_symmetric_index, adj_symmetric_weights = utils.to_symmetric(adj_symmetric_index, adj_symmetric_weights, self.n)
         self.adj_adversary = torch.sparse.FloatTensor(adj_symmetric_index, adj_symmetric_weights, torch.Size([self.n, self.n]))
         self.attr_adversary = self.X
