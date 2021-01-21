@@ -4,15 +4,19 @@
 import collections
 from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
 
+import logging
 import numpy as np
+import scipy.sparse as sp
 import torch
 from torch import nn
+import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
 import torch_geometric
 from torch_geometric.nn import GCNConv
 from torch_geometric.data import Data
 from torch_scatter import scatter_add
 from torch_sparse import coalesce, SparseTensor
+from tqdm.auto import tqdm
 
 from rgnn_at_scale.aggregation import ROBUST_MEANS, chunked_message_and_aggregate
 from rgnn_at_scale import r_gcn
@@ -59,15 +63,15 @@ class ChainableGCNConv(GCNConv):
             x, edge_index, edge_weight = arguments
         else:
             raise NotImplementedError("This method is just implemented for two or three arguments")
-        embedding = super().forward(x, edge_index, edge_weight=edge_weight)
+        embedding = super(ChainableGCNConv, self).forward(x, edge_index, edge_weight=edge_weight)
         if int(torch_geometric.__version__.split('.')[1]) < 6:
-            embedding = super().update(embedding)
+            embedding = super(ChainableGCNConv, self).update(embedding)
         return embedding
 
     # TODO: Add docstring
     def message_and_aggregate(self, adj_t: Union[torch.Tensor, SparseTensor], x: torch.Tensor) -> torch.Tensor:
         if not self.do_chunk or not isinstance(adj_t, SparseTensor):
-            return super().message_and_aggregate(adj_t, x)
+            return super(ChainableGCNConv, self).message_and_aggregate(adj_t, x)
         else:
             return chunked_message_and_aggregate(adj_t, x, n_chunks=self.n_chunks)
 
@@ -188,7 +192,8 @@ class GCN(nn.Module):
 
     @ staticmethod
     def parse_forward_input(data: Optional[Union[Data, torch.Tensor]] = None,
-                            adj: Optional[Union[torch.sparse.FloatTensor, Tuple[torch.Tensor, torch.Tensor]]] = None,
+                            adj: Optional[Union[SparseTensor, torch.sparse.FloatTensor,
+                                                Tuple[torch.Tensor, torch.Tensor]]] = None,
                             attr_idx: Optional[torch.Tensor] = None,
                             edge_idx: Optional[torch.Tensor] = None,
                             edge_weight: Optional[torch.Tensor] = None,
@@ -207,6 +212,10 @@ class GCN(nn.Module):
         elif isinstance(adj, tuple):
             # Necessary since `torch.sparse.FloatTensor` eliminates the gradient...
             x, edge_idx, edge_weight = data, adj[0], adj[1]
+        elif isinstance(adj, SparseTensor):
+            x = data
+            edge_idx_rows, edge_idx_cols, edge_weight = adj.coo()
+            edge_idx = torch.stack([edge_idx_rows, edge_idx_cols], dim=0)
         else:
             x, edge_idx, edge_weight = data, adj._indices(), adj._values()
         return x, edge_idx, edge_weight
@@ -408,8 +417,8 @@ class RGNN(GCN):
         super().__init__(**kwargs)
 
     def _build_conv_layer(self, in_channels: int, out_channels: int):
-        return RGNNConv(mean=self._mean, mean_kwargs=self._mean_kwargs, in_channels=in_channels,
-                        out_channels=out_channels, do_chunk=self.do_checkpoint, n_chunks=self.n_chunks)
+        return RGNNConv(mean=self._mean, mean_kwargs=self._mean_kwargs,
+                        in_channels=in_channels, out_channels=out_channels)
 
 
 class DenseGraphConvolution(nn.Module):
@@ -567,7 +576,7 @@ class RGCN(r_gcn.RGCN):
         return super()._forward()
 
     def fit(self,
-            adj: torch.sparse.FloatTensor,
+            adj: Union[SparseTensor, torch.sparse.FloatTensor],
             attr: torch.Tensor,
             labels: torch.Tensor,
             idx_train: np.ndarray,
@@ -575,7 +584,10 @@ class RGCN(r_gcn.RGCN):
             max_epochs: int = 200,
             **kwargs):
 
-        self.device = adj.device
+        if isinstance(adj, SparseTensor):
+            self.device = adj.device()
+        else:  # torch.sparse.FloatTensor
+            self.device = adj.device
 
         super().fit(
             features=attr,
