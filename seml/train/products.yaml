@@ -32,9 +32,9 @@ grid:
   seed:
     type: choice
     options:
-      # - 0
+      - 0
       - 1
-      # - 5
+      - 5
 
 gcn:
   fixed:

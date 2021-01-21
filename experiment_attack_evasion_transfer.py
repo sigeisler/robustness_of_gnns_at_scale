@@ -32,7 +32,7 @@ def config():
 
     # default params
     dataset = 'cora_ml'  # Options are 'cora_ml' and 'citeseer' (or with a big GPU 'pubmed')
-    attack = 'fgsm'  # Options are 'fgsm' and 'pgd'
+    attack = 'FGSM'
     attack_params = {}
     epsilons = [0, 0.1, 0.25]
     surrogate_params = {
@@ -47,7 +47,7 @@ def config():
     }
     binary_attr = False
     seed = 0
-    artifact_dir = 'cache'  # 'cache_debug'
+    artifact_dir = 'cache_debug'
     pert_adj_storage_type = 'evasion_transfer_attack_adj'
     pert_attr_storage_type = 'evasion_transfer_attack_attr'
     model_storage_type = 'pretrained'
@@ -68,8 +68,6 @@ def run(dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequ
         'pert_attr_storage_type': pert_attr_storage_type, 'model_label': model_label,
         'model_storage_type': model_storage_type, 'device': device, 'display_steps': display_steps
     })
-
-    binary_attr = False
 
     assert sorted(epsilons) == epsilons, 'argument `epsilons` must be a sorted list'
     assert len(np.unique(epsilons)) == len(epsilons),\
@@ -128,7 +126,7 @@ def run(dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequ
         logging.info(f'Test accuracy of surrogate: {accuracy(pred_logits_surr, labels.to(device), idx_test)}')
         del pred_logits_surr
 
-        adversary = create_attack(attack, adj=adj, X=attr, labels=labels,
+        adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels,
                                   model=gcn, idx_attack=idx_test, device=device, **attack_params)
 
         tmp_epsilons = list(epsilons)
@@ -136,20 +134,20 @@ def run(dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequ
             tmp_epsilons.insert(0, 0)
 
         m = adj._nnz() / 2
-        for eps1, eps2 in zip(tmp_epsilons[:-1], tmp_epsilons[1:]):
-            logging.info(f'Attack via {attack} with budget {eps2}')
+        for epsilon in tmp_epsilons[1:]:
+            logging.info(f'Attack via {attack} with budget {epsilon}')
 
             # To increase consistency between runs
             torch.manual_seed(seed)
             np.random.seed(seed)
 
-            n_perturbations = int(round(eps2 * m)) - int(round(eps1 * m))
+            n_perturbations = int(round(epsilon * m))
             adversary.attack(n_perturbations)
             adj_per_eps.append(adversary.adj_adversary.cpu())
             attr_per_eps.append(adversary.attr_adversary.cpu())
 
-            storage.save_artifact(pert_adj_storage_type, {**params, **{'epsilon': eps2}}, adj_per_eps[-1])
-            storage.save_artifact(pert_attr_storage_type, {**params, **{'epsilon': eps2}}, attr_per_eps[-1])
+            storage.save_artifact(pert_adj_storage_type, {**params, **{'epsilon': epsilon}}, adj_per_eps[-1])
+            storage.save_artifact(pert_attr_storage_type, {**params, **{'epsilon': epsilon}}, attr_per_eps[-1])
 
     if epsilons[0] == 0:
         adj_per_eps.insert(0, adj.to('cpu'))

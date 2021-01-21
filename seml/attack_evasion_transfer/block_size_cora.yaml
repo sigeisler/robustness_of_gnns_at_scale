@@ -1,0 +1,170 @@
+seml:
+  name: rgnn_at_scale_attack_evasion_transfer_block_size
+  db_collection: kdd21_rgnn_at_scale_attack_evasion_transfer_block_size
+  executable: experiment_attack_evasion_transfer.py
+  conda_environment: rgnn_at_scale
+  project_root_dir: ../..
+  output_dir: seml/attack_evasion_transfer/output
+
+
+slurm:
+  experiments_per_job: 1
+  sbatch_options:
+    gres: gpu:1       # num GPUs
+    mem: 16G          # memory
+    cpus-per-task: 4  # num cores
+    time: 0-04:00     # max time, D-HH:MM
+
+fixed:
+  epsilons: [0, 0.05, 0.1, 0.25]
+
+  surrogate_params:
+    n_filters: 64
+    dropout: 0.5
+    train_params:
+      lr: 1e-2
+      weight_decay: 1e-3
+      patience: 100
+      max_epochs: 3000
+  artifact_dir: cache
+  pert_adj_storage_type: evasion_transfer_attack_adj
+  pert_attr_storage_type: evasion_transfer_attack_attr
+  model_storage_type: pretrained
+  device: 0
+  binary_attr: False
+
+grid:
+  dataset: 
+    type: choice
+    options:
+      - cora_ml
+      # - citeseer
+
+  seed:
+    type: choice
+    options:
+      - 0
+      - 1
+      - 5
+      - 42
+      - 100
+
+fsgm:
+  fixed:
+    attack: FGSM
+  grid: 
+    attack_params:
+      type: parameter_collection
+      params:
+        stop_optimizing_if_label_flipped: 
+          type: choice
+          options:
+            - True
+            - False
+
+pgd:
+  fixed:
+    attack: PGD
+  grid:
+    attack_params: 
+      type: choice
+      options:
+        - epochs: 300
+          loss_type: CE
+        - epochs: 300
+          loss_type: tanhCW
+
+sampled_fsgm:
+  fixed:
+    attack: GreedyRBCD
+  grid:
+   attack_params: 
+      type: choice
+      options:
+        - epochs: 50
+          search_space_size: 2_000
+        - epochs: 50
+          search_space_size: 5_000
+        - epochs: 50
+          search_space_size: 10_000
+        - epochs: 50
+          search_space_size: 100_000
+        - epochs: 50
+          search_space_size: 1_000_000
+        - epochs: 50
+          search_space_size: 2_000
+          loss_type: MCE
+        - epochs: 50
+          search_space_size: 5_000
+          loss_type: MCE
+        - epochs: 50
+          search_space_size: 10_000
+          loss_type: MCE
+        - epochs: 50
+          search_space_size: 100_000
+          loss_type: MCE
+        - epochs: 50
+          search_space_size: 1_000_000
+          loss_type: MCE
+
+sampled_pgd:
+  fixed:
+    attack: PRBCD
+  grid:
+    attack_params: 
+      type: choice
+      options:
+        - epochs: 50
+          keep_heuristic: WeightOnly
+          fine_tune_epochs: 250
+          search_space_size: 2_000
+          loss_type: tanhCW
+        - epochs: 50
+          keep_heuristic: WeightOnly
+          fine_tune_epochs: 250
+          search_space_size: 5_000
+          loss_type: tanhCW
+        - epochs: 50
+          keep_heuristic: WeightOnly
+          fine_tune_epochs: 250
+          search_space_size: 10_000
+          loss_type: tanhCW
+        - epochs: 50
+          keep_heuristic: WeightOnly
+          fine_tune_epochs: 250
+          search_space_size: 100_000
+          loss_type: tanhCW
+        - epochs: 50
+          keep_heuristic: WeightOnly
+          fine_tune_epochs: 250
+          search_space_size: 1_000_000
+          loss_type: tanhCW
+        - epochs: 50
+          keep_heuristic: WeightOnly
+          fine_tune_epochs: 250
+          search_space_size: 10_000_000
+          loss_type: tanhCW
+        - epochs: 50
+          keep_heuristic: WeightOnly
+          fine_tune_epochs: 250
+          search_space_size: 2_000
+        - epochs: 50
+          keep_heuristic: WeightOnly
+          fine_tune_epochs: 250
+          search_space_size: 5_000
+        - epochs: 50
+          keep_heuristic: WeightOnly
+          fine_tune_epochs: 250
+          search_space_size: 10_000
+        - epochs: 50
+          keep_heuristic: WeightOnly
+          fine_tune_epochs: 250
+          search_space_size: 100_000
+        - epochs: 50
+          keep_heuristic: WeightOnly
+          fine_tune_epochs: 250
+          search_space_size: 1_000_000
+        - epochs: 50
+          keep_heuristic: WeightOnly
+          fine_tune_epochs: 250
+          search_space_size: 10_000_000

@@ -11,6 +11,7 @@ extra_compile_args = {
 CC = os.environ.get("CC", None)
 if CC is not None:
     extra_compile_args["nvcc"].append("-ccbin={}".format(CC))
+    extra_compile_args["nvcc"].extend(['-arch=sm_35', '--expt-relaxed-constexpr'])
 
 setup(
     name='kernels',
