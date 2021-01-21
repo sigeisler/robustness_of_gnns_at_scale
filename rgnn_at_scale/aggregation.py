@@ -73,10 +73,9 @@ def chunked_message_and_aggregate(
         def aggregation_function(adj: torch_sparse.SparseTensor, x: torch.Tensor) -> torch.Tensor:
             return torch_sparse.matmul(adj, x, reduce='sum')
 
-        if not adj_t.coo()[-1].requires_grad:
-            return aggregation_function(adj_t, x)
-
     n, _ = x.size()
+    if not adj_t.coo()[-1].requires_grad:
+        return aggregation_function(adj_t, x)
 
     edge_weight, *rest = sparse_tensor_to_tuple(adj_t)
 
@@ -203,8 +202,8 @@ def partial_distance_matrix(x: torch.Tensor, partial_idx: torch.Tensor) -> torch
     # Permute the indices of partial_idx
     idx_row = partial_idx[:, None, :].expand(batch_size, k, k).flatten()
     idx_column = partial_idx[:, None, :].expand(batch_size, k, k).transpose(1, 2).flatten()
-    missing_mask = (idx_row != -1) & (idx_column != -1)
-    idx_row, idx_column = idx_row[missing_mask], idx_column[missing_mask]
+    is_not_missing_mask = (idx_row != -1) & (idx_column != -1)
+    idx_row, idx_column = idx_row[is_not_missing_mask], idx_column[is_not_missing_mask]
 
     # Use symmetry of Euclidean distance to half memory footprint
     symmetry_mask = idx_column < idx_row
@@ -226,7 +225,7 @@ def partial_distance_matrix(x: torch.Tensor, partial_idx: torch.Tensor) -> torch
     out = torch.zeros(batch_size * k * k, dtype=torch.float, device=x.device)
 
     # Map sparse distances to output tensor
-    out[missing_mask] = sparse_distances[unique_reverse_index]
+    out[is_not_missing_mask] = sparse_distances[unique_reverse_index]
 
     return out.view(batch_size, k, k)
 
@@ -561,6 +560,7 @@ def soft_median(
     p=2,
     temperature=1.0,
     eps=1e-12,
+    do_synchronize: bool = False,
     **kwargs
 ) -> torch.Tensor:
     """Soft Weighted Median.
