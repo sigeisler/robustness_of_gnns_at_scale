@@ -35,8 +35,8 @@ class DICE(object):
                  device: Union[str, int, torch.device],
                  add_ratio: float = 0.6,
                  **kwargs):
-        # n is the number of nodes
         self.n = adj.size()[0]
+        # Create Symmetric Adjacency Matrix
         adj_symmetric_index, adj_symmetric_weights = utils.to_symmetric(adj.indices(), adj.values(), self.n)
         self.adj_dict = self._to_dict(adj_symmetric_index, adj_symmetric_weights)
         self.adj = adj
@@ -87,16 +87,14 @@ class DICE(object):
         dict_keys_list = list(adj_dict.keys())
         while delete_budget > 0:
             first_node, second_node = random.choice(dict_keys_list)
-            # check if both nodes have the same label
             if(
                 labels[first_node] == labels[second_node]
                 and (first_node, second_node) not in to_be_deleted_set
             ):
                 delete_budget -= 1
                 pbar.update(1)
-                # * why do we make a set of nodes to be deleted instead of instantly deleting?
-                # * Because we might add a connection in the same place where
-                # * we removed a connection from, that's why we perform attack at the end
+                # * why do we make a set of nodes to be deleted instead of instantly deleting them?
+                # * Because otherwise we might add a connection in the same place where we removed a connection from, that's why we remove the nodes at the end
                 to_be_deleted_set.add((first_node, second_node))
         pbar.close()
         return to_be_deleted_set
