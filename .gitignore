@@ -151,6 +151,10 @@ plots*/
 
 # SEML
 *.out
+seml/train
+seml/smoothing
+seml/attack_evasion_transfer_vs_number_nodes
+seml/attack_evasion_transfer
 
 ##### LATEX #####
 
@@ -452,3 +456,7 @@ kernels/dist
 kernels/kernels.egg-info
 seml/*/output 
 datasets/*
+train.sh
+pre_calc_ppr.py
+ppr_calc.sh
+
