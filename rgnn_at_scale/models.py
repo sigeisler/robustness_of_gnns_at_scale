@@ -648,14 +648,18 @@ class PPRGoWrapperBase():
                 batch_size=None,
                 num_workers=0,
             )
-            num_classes = self.n_classes
             num_predictions = topk_ppr.shape[0]
 
             logits = torch.zeros(num_predictions, self.n_classes, device="cpu", dtype=torch.float32)
 
             num_batches = len(data_loader)
             for batch_id, (idx, xbs, _) in enumerate(data_loader):
+
                 logging.info(f"inference batch {batch_id}/{num_batches}")
+                logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+                if device.type == "cuda":
+                    logging.info(torch.cuda.max_memory_allocated() / (1024 ** 3))
+
                 xbs = [xb.to(device) for xb in xbs]
                 start = batch_id * self.forward_batch_size
                 end = start + xbs[1].size(0)  # batch_id * batch_size
@@ -725,6 +729,11 @@ class PPRGoWrapperBase():
             batch_pbar = tqdm(train_loader, desc="Training Batch...")
             for batch_train_idx, xbs, yb in batch_pbar:
                 xbs, yb = [xb.to(device) for xb in xbs], yb.to(device)
+
+                logging.info("Train batch")
+                logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+                if device.type == "cuda":
+                    logging.info(torch.cuda.max_memory_allocated() / (1024 ** 3))
 
                 loss_train, ncorrect_train = self.__run_batch(xbs, yb, optimizer, train=True)
 
@@ -801,7 +810,7 @@ class PPRGoWrapper(PPRGo, PPRGoWrapperBase):
                  eps,
                  topk,
                  ppr_normalization,
-                 forward_batch_size=256,
+                 forward_batch_size=128,
                  **kwargs):
         super().__init__(n_features, n_classes, hidden_size, nlayers, dropout, **kwargs)
         self.n_classes = n_classes
@@ -834,7 +843,7 @@ class RobustPPRGoWrapper(RobustPPRGo, PPRGoWrapperBase):
                  eps,
                  topk,
                  ppr_normalization,
-                 forward_batch_size=256,
+                 forward_batch_size=128,
                  mean='soft_k_medoid',
                  **kwargs):
         super().__init__(n_features, n_classes, hidden_size, nlayers, dropout, mean=mean,  **kwargs)

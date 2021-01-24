@@ -11,13 +11,12 @@ from ogb.nodeproppred import PygNodePropPredDataset
 import scipy.sparse as sp
 from sklearn.model_selection import train_test_split
 import torch
+import torch_sparse
 from torch_geometric.utils import add_remaining_self_loops, remove_isolated_nodes
 
 from rgnn_at_scale import utils
 from pprgo.pytorch_utils import matrix_to_torch
 from pprgo import utils as ppr_utils
-import torch_sparse
-
 sparse_graph_properties = [
     'adj_matrix', 'attr_matrix', 'labels', 'node_names', 'attr_names', 'class_names', 'metadata'
 ]
