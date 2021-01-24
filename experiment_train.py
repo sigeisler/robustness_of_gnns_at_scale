@@ -50,7 +50,6 @@ def config():
         'max_epochs': 3000
     }
     binary_attr = False
-    normalize = False
     make_undirected = True
     make_unweighted = True
     seed = 0
@@ -62,11 +61,11 @@ def config():
 
 @ex.automain
 def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params: Dict[str, Any], binary_attr: bool,
-        normalize: bool, make_undirected: bool, make_unweighted: bool, seed: int, artifact_dir: str,
+        make_undirected: bool, make_unweighted: bool, seed: int, artifact_dir: str,
         model_storage_type: str, device: Union[str, int], data_device: Union[str, int], display_steps: int):
     logging.info({
         'dataset': dataset, 'model_params': model_params, 'train_params': train_params, 'binary_attr': binary_attr,
-        'normalize': normalize, 'make_undirected': make_undirected, 'make_unweighted': make_unweighted,
+        'make_undirected': make_undirected, 'make_unweighted': make_unweighted,
         'seed': seed, 'artifact_dir': artifact_dir, 'model_storage_type': model_storage_type, 'device': device,
         'display_steps': display_steps
     })
@@ -75,7 +74,6 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
     np.random.seed(seed)
 
     graph = prep_graph(dataset, data_device, dataset_root=data_dir,
-                       normalize=normalize,
                        make_undirected=make_undirected,
                        make_unweighted=make_unweighted,
                        binary_attr=binary_attr,
@@ -133,7 +131,6 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
     storage = Storage(artifact_dir, experiment=ex)
     params = dict(dataset=dataset,
                   binary_attr=binary_attr,
-                  normalize=normalize,
                   make_undirected=make_undirected,
                   make_unweighted=make_unweighted,
                   seed=seed, **hyperparams)

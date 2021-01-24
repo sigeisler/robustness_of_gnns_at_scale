@@ -54,16 +54,15 @@ def config():
     device = 0
     display_steps = 10
     model_label = None
-    normalize = False
     make_undirected = True
     make_unweighted = True
 
 
 @ex.automain
 def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequence[float], binary_attr: bool,
-        normalize: bool, make_undirected: bool, make_unweighted: bool, surrogate_params: Dict[str, Any],
-        seed: int, artifact_dir: str, pert_adj_storage_type: str, pert_attr_storage_type: str, model_label: str,
-        model_storage_type: str, device: Union[str, int], data_device: Union[str, int], display_steps: int):
+        make_undirected: bool, make_unweighted: bool, surrogate_params: Dict[str, Any], seed: int, artifact_dir: str,
+        pert_adj_storage_type: str, pert_attr_storage_type: str, model_label: str, model_storage_type: str,
+        device: Union[str, int], data_device: Union[str, int], display_steps: int):
     logging.info({
         'dataset': dataset, 'attack': attack, 'attack_params': attack_params, 'epsilons': epsilons,
         'binary_attr': binary_attr, 'surrogate_params': surrogate_params, 'seed': seed,
@@ -80,7 +79,6 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
 
     results = []
     graph = prep_graph(dataset, data_device, dataset_root=data_dir,
-                       normalize=normalize,
                        make_undirected=make_undirected,
                        make_unweighted=make_unweighted,
                        binary_attr=binary_attr,
@@ -95,7 +93,6 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
 
     params = dict(dataset=dataset,
                   binary_attr=binary_attr,
-                  normalize=normalize,
                   make_undirected=make_undirected,
                   make_unweighted=make_unweighted,
                   seed=seed,
@@ -170,9 +167,8 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
 
     model_params = dict(dataset=dataset,
                         binary_attr=binary_attr,
-                        # normalize=normalize,
-                        # make_undirected=make_undirected,
-                        # make_unweighted=make_unweighted,
+                        make_undirected=make_undirected,
+                        make_unweighted=make_unweighted,
                         seed=seed)
 
     if model_label is not None and model_label:
