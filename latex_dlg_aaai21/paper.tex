@@ -23,17 +23,10 @@
 % For /Author, add all authors within the parentheses, separated by commas. No accents or commands.
 % For /Title, add Title in Mixed Case. No accents or commands. Retain the parentheses.
 \pdfinfo{
-/Title ()
-/Author ()
-/TemplateVersion (2021.2)
-}
-\iffalse
-\pdfinfo{
-    /Title (Robust Graph Neural Networks at Scale)
+    /Title (Attacking Graph Neural Networks at Scale)
     /Author (Simon Geisler, Daniel Zuegner, Aleksandar Bojchevski, Stephan Guennemann)
     /TemplateVersion (2021.2)
 } %Leave this
-\fi
 % /Title ()
 % Put your actual complete title (no codes, scripts, shortcuts, or LaTeX commands) within the parentheses in mixed case
 % Leave the space between \Title and the beginning parenthesis alone
@@ -142,34 +135,27 @@
 
 %Example, Multiple Authors, ->> remove \iffalse,\fi and place them surrounding AAAI title to use it
 
-\title{Robust Graph Neural Networks at Scale}
+\title{Attacking Graph Neural Networks at Scale}
+
 \author {
-    Anonymous authors\\
+    % Authors
+    Simon Geisler,
+    Daniel Z\"ugner,
+    Aleksandar Bojchevski,
+    Stephan G\"unnemann \\
 }
 \affiliations {
-    Paper under double-blind review
+    Department of Informatics\\
+    Technical University of Munich\\
+    \texttt{\{geisler, zuegnerd, a.bojchevski, guennemann\}@in.tum.de}
 }
-\iffalse
-    \author {
-        % Authors
-        Simon Geisler,
-        Daniel Z\"ugner,
-        Aleksandar Bojchevski,
-        Stephan G\"unnemann \\
-    }
-    \affiliations {
-        Department of Informatics\\
-        Technical University of Munich\\
-        \texttt{\{geisler, zuegnerd, guennemann\}@in.tum.de}
-    }
-\fi
 
 \begin{document}
 
 \maketitle
 
 \begin{abstract}
-Adversarial robustness of Graph Neural Networks (GNNs) has become exceedingly important due to the popularity and diverse applications of GNNs. Specifically, adding or removing edges is very effective, but designing attacks is difficult because of to the discrete optimization domain. Existing adversarial attacks (for such structure perturbations) that rely on first-order optimization require a dense adjacency matrix and, therefore, can only be applied to small graphs (space complexity \(\Theta(n^2)\) in the number of nodes \(n\)). PubMed is among the largest graphs adversarial attacks and defenses have been evaluated on. However, PubMed is tiny in the context of many real-world applications. In this work-in-progress report, we propose three attacks based on first-order optimization that do not require a dense adjacency matrix and, hence, can be used on graphs more than 100 times larger than previously evaluated.
+Adversarial robustness of Graph Neural Networks (GNNs) has become exceedingly important due to the popularity and diverse applications of GNNs. Specifically, structure perturbations are very effective, but designing attacks that add or remove edges is difficult because of the discrete optimization domain. Existing adversarial attacks for structure perturbations that rely on first-order optimization require a dense adjacency matrix and, therefore, can only be applied to small graphs (space complexity \(\Theta(n^2)\) in the number of nodes \(n\)). PubMed is among the largest graphs adversarial attacks and defenses have been evaluated on. However, PubMed is tiny in the context of many real-world applications. In this work-in-progress report, we propose three attacks based on first-order optimization that do not require a dense adjacency matrix and, hence, can be used on graphs more than 100 times larger than previously evaluated. Moreover, one of the proposed attacks considers the very practical case of node injection.
 \end{abstract}
 
 \noindent \section{Introduction} % Open
@@ -202,9 +188,9 @@ Our contributions are the following:
 	\end{algorithmic}
 \end{algorithm}
 
-\textbf{Large scale optimization.} In a big data setting, the cost to calculate the gradient towards all variables can be prohibitively high. For this reason, coordinate descent has gained importance in machine learning and large scale optimization~\citep{Wright2015}. \citet{Nesterov2012} proposed (and analyzed the convergence) of Randomized Block Coordinate Descent (R-BCD) considering unconstrained and constrained optimization (see Algorithm~\ref{algo:rbcd}). In R-BCD only a subset of variables is optimized at a time and, hence, only the gradients towards those variables are required. In many cases, this allows for a lower memory footprint and in some settings even converges faster than standard methods~\citep{Nesterov2017}.
+\textbf{Large scale optimization.} In a big data setting, the cost to calculate the gradient towards all variables can be prohibitively high. For this reason, coordinate descent has gained importance in machine learning and large scale optimization~\citep{Wright2015}. \citet{Nesterov2012} proposed (and analyzed the convergence) of Randomized Block Coordinate Descent (R-BCD). For R-BCD's pseudo code see Algorithm~\ref{algo:rbcd}. In R-BCD only a subset of variables is optimized at a time and, hence, only the gradients towards those variables are required. In many cases, this allows for a lower memory footprint and in some settings even converges faster than standard methods~\citep{Nesterov2017}. Constrained optimization with first-order methods can be solved with methods such as Projected Gradient Descent (PGD) or Fast Gradient Sign Method (FGSM)~\cite{Goodfellow2015}. Similarly, one can extend R-BCD to constrained optimization~\citep{Nesterov2012}.
 
-\textbf{Attacks.} Beginning with~\citep{Dai2018, Zugner2018}, many adversarial attacks on the graph structure have been proposed~\citep{Zugner2019a, Xu2019a, Bojchevski2019, Wu2019, Wang2019, Tang2020}. We limit the scope to an adversary with perfect knowledge about the graph and GNN, since even this white-box scenario has not been studied for large graphs and our primary goal is to asses adversarial robustness. 
+\textbf{Adversarial attacks.} Beginning with~\citep{Dai2018, Zugner2018}, many adversarial attacks on the graph structure have been proposed~\citep{Zugner2019a, Xu2019a, Bojchevski2019, Wu2019, Wang2019, Tang2020}. We limit the scope to an adversary with perfect knowledge about the graph, GNN and test labels. Even this white-box scenario has not been studied for large graphs and our primary goal is to asses adversarial robustness.
 %We will consider more sophisticated threat models in future work.
 \citet{Dai2018} scale their reinforcement learning approach to a very sparse, large-scale graph for financial transactions. In contrast to our work, they only use a very small budget \(\Delta\) (their time complexity scales linearly with \(\Delta\)). \citet{Wang2019} also scale their attack to a larger graph than PubMed but they do not attack GNNs. First-order optimization attacks such as Metattack~\citep{Zugner2019a} or integrated gradients~\citep{Wu2019} rely on the gradient towards all possible entries in the \textit{dense} adjacency matrix \(\adj\) (quadratic space complexity) to solve the optimization problem for structure perturbations:
 \begin{equation}\label{eq:attack}
@@ -224,7 +210,7 @@ with the adjacency matrix \(\adj\), node features \(\features\), loss \(\mathcal
     \subfloat[]{\resizebox{0.5\linewidth}{!}{\input{assets/global_gang_cora_ml_0.25_node_degree_no_legend.pgf}}} \\
   \end{array}\)
   }
-  \caption{Influence of the degree of the added nodes on the perturbed accuracy on Cora ML. (a) shows the perturbed accuracy with a budget of changing \(\epsilon=0.1\) edges, and (b) for \(\epsilon=0.25\). The number of nodes is determined as \(\Delta_n = \nicefrac{\epsilon}{\Delta_e}\). \label{fig:gangnodeeffectiveness}}
+  \caption{Influence of the degree of the added nodes on the perturbed accuracy on Cora ML. (a) shows the perturbed accuracy with a budget of changing \(\epsilon=0.1\) edges, and (b) for \(\epsilon=0.25\). The number of nodes is determined as \(\Delta_n = \nicefrac{\epsilon}{\Delta_e}\). We report the mean perturbed accuracy and its three-sigma error over five random seeds. \label{fig:gangnodeeffectiveness}}
 \end{figure}
 
 We solve the attack optimization problem via adding nodes
@@ -240,15 +226,15 @@ The attacks add one node (or a small group of nodes) at a time to the sparse adj
 	\caption{Greedy Adversarial Node Generation (GANG)}
 	\label{algo:gang}
 	\begin{algorithmic}[1]
-		\STATE {\bfseries Input:} adjacency matrix \(\adj\), features \(\features\), GNN \(f_{\theta}(\adj, \features)\)
-		%\STATE {\bfseries Parameter:} node budget \(\Delta_n\), edge budget \(\Delta_e\), step size \(s_e\), steps of optimizing features \(s_x\)
+        \STATE {\bfseries Input:} Adj.\ \(\adj\), feat.\ \(\features\), labels\ \(\vy\), GNN \(f_{\theta}(\adj, \features)\), loss \(\mathcal{L}\)
+		\STATE {\bfseries Parameter:} budgets \(\Delta_n\) \& \(\Delta_e\), step size \(s_e\), steps features \(s_x\)
 		\STATE Initialize empty \(\adj^\prime\) and \(\features^\prime\)
 		\FOR{\(k \in \{1, \dots, \Delta_n\}\)}
 		\STATE \(\adj^\prime \leftarrow\) concatenate new node to \(\adj^\prime\) (empty row and column)
 		\STATE \(\features^\prime \leftarrow\) concatenate \(\features^\prime\) vector \(\tilde{\vx}_k \sim \Pi(\mathcal{N}(0, \sigma_n^2))\)
 		\FOR{\(j \in \{0, \dots, \Delta_e / s_e\}\)}
 		\STATE \(\hat{\vy} \leftarrow f_{\theta}(\adj | \adj^\prime, \features | \features^\prime)\)
-		\STATE \(g \leftarrow \nabla \mathcal{L}(\hat{\vy}, \vy)\) for \(k\)-th added node and if \(\hat{\vy} = \vy\)
+		\STATE \(g \leftarrow \nabla_{\adj^\prime_k} \mathcal{L}(\hat{\vy}, \vy)\) for all nodes where \(\hat{\vy} = \vy\)
 		\STATE \(\adj^\prime \leftarrow\) add the top \(s_e\) edges to \(\adj^\prime\) w.r.t.~\(g\)
 		\ENDFOR
 						
@@ -273,24 +259,27 @@ In this section we discuss the case where the attack vector is to perturb the ex
     \maximize_{\mP\,\,\text{s.t.}\, \sum \mP \le \Delta} \mathcal{L}(f_{\theta}(\adj \oplus \mP, \features))\,.
 \end{equation}
 %
-Here, \(\oplus\) stands for an element-wise exclusive or and \(\Delta\) denotes the edge budget (i.e.\ the number of altered entries in the perturbed adjacency matrix). In the following, we use set \(\sP\) and matrix notation \(\mP\) for the sparse perturbations \(\sP\) interchangeably. Naively, applying R-BCD to optimize towards the dense adjacency matrix would only save some computation on obtaining the respective gradient, but still has a space complexity of \(\mathcal{O}(n^2)\). Note that in R-BCD we interpret each possible entry in the perturbation set \(\sP\) as one dimension of our optimization problem. To mitigate the quadratic complexity, we make use of the fact that the solution is going to be sparse (\(L_0\) perturbation). As in evolutionary algorithms, in each epoch, we keep that part of the search space which is promising and resample the rest. We can view the underlying problem as a combination of \(L_0\)-norm Projected Gradient Descent and an adaptive version of Randomized Block Coordinate Descent (R-BCD). R-BCD comes with a space complexity of \(\Theta(m)\), as we typically choose \(\Delta\) to be a fraction of \(m\). We give a formal definition of Projected and Randomized Block Coordinate Descent (PR-BCD) in Algorithm~\ref{algo:prbcd}.
+Here, \(\oplus\) stands for an element-wise exclusive or and \(\Delta\) denotes the edge budget (i.e.\ the number of altered entries in the perturbed adjacency matrix). In the following, we use set \(\sP\) and matrix notation \(\mP\) for the sparse perturbations \(\sP\) interchangeably. Naively, applying R-BCD to optimize towards the dense adjacency matrix would only save some computation on obtaining the respective gradient, but still has a space complexity of \(\mathcal{O}(n^2)\). Note that in R-BCD we interpret each possible entry in the perturbation set \(\sP\) as one dimension of our optimization problem. To mitigate the quadratic complexity, we make use of the fact that the solution is going to be sparse (\(L_0\) perturbation). As in evolutionary algorithms, in each epoch, we keep that part of the search space which is promising and resample the rest. We can view the underlying problem as a combination of \(L_0\)-norm PGD and an adaptive version of Randomized Block Coordinate Descent (R-BCD). R-BCD comes with a space complexity of \(\Theta(m)\), as we typically choose \(\Delta\) to be a fraction of \(m\). We give a formal definition of Projected and Randomized Block Coordinate Descent (PR-BCD) in Algorithm~\ref{algo:prbcd}.
 
-As proposed by~\citet{Xu2019a}, \(\vp\) is interpreted as the probability mass for each potential entry in the perturbation set \(\sP\) and is used in the end to sample the final edge additions/removals. In each epoch \(e \in \{1,2, \dots, E\}\), this probability mass \(\vp\) is used as edge weight. The projection \(\Pi_{\E[\text{Bernoulli}(\vp)] = \Delta} (\vp)\) adjusts the probability mass such that \(\E[\text{Bernoulli}(\vp)] = \sum_{i \in b} \evp_i \approx \Delta\) and that \(\vp \in [0, 1]\) (line 5). If using an undirected graph, the potential edges are restricted to the the upper/lower triangular \(n \times n\) matrix. In the end we sample \(\sP \sim \text{Bernoulli}(\vp)\) (line 13).
+As proposed by~\citet{Xu2019a}, \(\vp\) is interpreted as the probability mass for each potential entry in the perturbation set \(\sP\) and is used in the end to sample the final edge additions/removals. In each epoch \(e \in \{1,2, \dots, E\}\), this probability mass \(\vp\) is used as edge weight. The projection \(\Pi_{\E[\text{Bernoulli}(\vp)] = \Delta} (\vp)\) adjusts the probability mass such that \(\E[\text{Bernoulli}(\vp)] = \sum_{i \in b} \evp_i \approx \Delta\) and that \(\vp \in [0, 1]\) (line 8). If using an undirected graph, the potential edges are restricted to the the upper/lower triangular \(n \times n\) matrix. In the end we sample \(\sP \sim \text{Bernoulli}(\vp)\) (line 16).
 
-Note that the projection of the perturbation set \(\Pi_{\E[\text{Bernoulli}(\vp)] = \Delta} (\vp)\) contains many zero elements, but is not guaranteed to be sparse. We additionally use a heuristic \(h(\vx, \nabla \mathcal{L}(\sP))\) to decide which part of the random block we keep and which part we resample randomly.
+Note that the projection of the perturbation set \(\Pi_{\E[\text{Bernoulli}(\vp)] = \Delta} (\vp)\) contains many zero elements, but is not guaranteed to be sparse. If \(\vp\) has more than 50\% non-zero entries, we remove the entries with the lowest probability mass such that 50\% of the search space is resampled. Otherwise, we resample all zero entries in \(\vp\). However, one also might apply a more sophisticated heuristic \(h(\vp)\) (see line 11).
 
-With growing \(n\) it is unrealistic that each possible entry of the adjacency matrix was part of at least one random search space of R-BCD. Apparently, with a constant search space size, the number of mutually exclusive chunks of the perturbation set grows with \(\Theta(n^2)\) and this would imply a quadratic runtime. However, as evident in randomized black-box attacks~\citep{Waniek2018}, it is not necessary to test every possible edge to obtain an effective attack. In Fig.~\ref{fig:randomblocksizeinfluence}, we analyze the influence of the random block size on the perturbed accuracy. We see that for a sufficiently large ``search space'' our method performs comparably to its dense equivalent. Surprisingly in some settings, we even outperform the baseline. Perhaps this is due to the random restarts of the resampled fraction of the search space. This is similar to the main finding of~\citet{Wong2020}.
+With growing \(n\) it is unrealistic that each possible entry of the adjacency matrix was part of at least one random search space of R-BCD. Apparently, with a constant search space size, the number of mutually exclusive chunks of the perturbation set grows with \(\Theta(n^2)\) and this would imply a quadratic runtime. However, as evident in randomized black-box attacks~\citep{Waniek2018}, it is not necessary to test every possible edge to obtain an effective attack. In Fig.~\ref{fig:randomblocksizeinfluence}, we analyze the influence of the random block size on the perturbed accuracy. For a sufficient block size \(b\) our method performs comparably to its dense equivalent.
 
-We keep the random block fixed and run \(E_{\text{resample}}\) epochs. Thereafter, we decay the learning rate as in~\cite{Xu2019a}. We also employ early stopping for both stages (\(e \le E_{\text{resample}} \text{ and } e > E_{\text{resample}}\) with the epoch \(e\)) such that we take the result of the epoch with highest loss \(\mathcal{L}\). 
+We keep the random block fixed and run \(K_{\text{resample}}\) epochs. Thereafter, we decay the learning rate as in~\cite{Xu2019a}. We also employ early stopping for both stages (\(k \le K_{\text{resample}} \text{ and } k > K_{\text{resample}}\) with the epoch \(k\)) such that we take the result of the epoch with highest loss \(\mathcal{L}\). 
 
-\begin{figure}
+
+\begin{figure}[t]
   \centering
-  \vspace{-15pt}
-  \resizebox{\linewidth}{!}{\input{assets/global_sampled_pgd_cora_ml_block_size_legend.pgf}}
-  \resizebox{0.6\linewidth}{!}{
-     \input{assets/global_sampled_pgd_cora_ml_block_size_no_legend.pgf}
+  \vspace{-15pt} \resizebox{\linewidth}{!}{\input{assets/global_PRBCD_cora_ml_0.25_block_size_legend.pgf}}
+  \makebox[\linewidth][c]{
+  \(\begin{array}{cc}
+    \subfloat[]{\resizebox{0.5\linewidth}{!}{\input{assets/global_PRBCD_cora_ml_0.1_block_size_no_legend.pgf}}} & 
+    \subfloat[]{\resizebox{0.5\linewidth}{!}{\input{assets/global_PRBCD_cora_ml_0.25_block_size_no_legend.pgf}}} \\
+  \end{array}\)
   }
-  \caption{We perform the proposed PR-BCD (solid lines) to obtain a perturbed adjacency matrix with the fraction of perturbed edges \(\epsilon=0.25\) (i.e. \(\Delta=1995\) edges). We run 50 epochs where we resample the search space and subsequently fine-tune for 250 epochs. The dashed line show the performance of vanilla PGD~\citep{Xu2019a}.\label{fig:randomblocksizeinfluence}}
+  \caption{We perform the proposed PR-BCD (solid lines) to obtain a perturbed adjacency matrix with the fraction of perturbed edges \(\epsilon=0.25\) (i.e. \(\Delta=1995\) edges). We run 50 epochs where we resample the search space and subsequently fine-tune for 250 epochs. The dashed lines show the performance of vanilla PGD~\citep{Xu2019a}. We report the mean and its three-sigma error over five random seeds. \label{fig:randomblocksizeinfluence}}
 \end{figure}
  
 \begin{algorithm}[h]
@@ -298,62 +287,64 @@ We keep the random block fixed and run \(E_{\text{resample}}\) epochs. Thereafte
 	\caption{Projected and Randomized Block Coordinate Descent (PR-BCD)}
 	\label{algo:prbcd}
 	\begin{algorithmic}[1]
-	\STATE Draw random indices \(\vi_0 \in \{0, 1, \dots, N\}^b\)
-	\STATE Initialize zeros for \(\vp_0 \in \R^b\)
-	\FOR{\(k \in \{1,2, \dots, K\}\)}
-	    \STATE \(\vp_{k} \leftarrow \vp_{k-1} + \alpha_{k-1} \nabla_{\vi_{k-1}} \mathcal{L}(\vp_{k-1})\)
-	    \STATE Projection \(\vp_{k} \leftarrow \Pi_{\E[\text{Bernoulli}(\vp_k)] = \Delta} (\vp_{k})\)
-	    \STATE \(\vi_{k} \leftarrow \vi_{k-1}\)
-	    \IF{\(e \le E_{\text{resample}}\)}
-	        \STATE \(\text{mask}_{\text{resample}} \leftarrow h(\vp_{k}, \nabla_{\vi_{k-1}} \mathcal{L}(\vp_{k-1}))\)
-	        \STATE \(\vp_k[\text{mask}_{\text{resample}}] \leftarrow \mathbf{0}\)
-	        \STATE Resample \(\vi_{k}[\text{mask}_{\text{resample}}] \in \{0, 1, \dots, N\}^{|\text{mask}_{\text{resample}}|}\)
-	    \ENDIF
-	\ENDFOR
-    \STATE Return \(\tilde{\sA}\) via sampling the edge add / rem.~w.r.t.~\(\text{Bernoulli}(\vp_{K})\) 
+        \STATE {\bfseries Input:} Adj.\ \(\adj\), feat.\ \(\features\), labels\ \(\vy\), GNN \(f_{\theta}(\adj, \features)\), loss \(\mathcal{L}\)
+        \STATE {\bfseries Parameter:} budget \(\Delta\), block size \(b\), epochs \(K\), heur.\ \(h(\dots)\)
+        \STATE Draw random indices \(\vi_0 \in \{0, 1, \dots, N\}^b\)
+        \STATE Initialize zeros for \(\vp_0 \in \R^b\)
+        \FOR{\(k \in \{1,2, \dots, K\}\)}
+            \STATE \(\hat{\vy} \leftarrow f_{\theta}(\adj \oplus \vp_{k-1}, \features)\)
+            \STATE \(\vp_{k} \leftarrow \vp_{k-1} + \alpha_{k-1} \nabla_{\vi_{k-1}} \mathcal{L}(\hat{\vy}, \vy)\)
+            %\STATE \(\vp_{k} \leftarrow \vp_{k-1} + \alpha_{k-1} \nabla_{\vi_{k-1}} \mathcal{L}(\vp_{k-1})\)
+            \STATE Projection \(\vp_{k} \leftarrow \Pi_{\E[\text{Bernoulli}(\vp_k)] = \Delta} (\vp_{k})\)
+            \STATE \(\vi_{k} \leftarrow \vi_{k-1}\)
+            \IF{\(k \le K_{\text{resample}}\)}
+                \STATE \(\text{mask}_{\text{resample}} \leftarrow h(\vp_{k})\)
+                \STATE \(\vp_k[\text{mask}_{\text{resample}}] \leftarrow \mathbf{0}\)
+                \STATE Resample \(\vi_{k}[\text{mask}_{\text{resample}}] \in \{0, 1, \dots, N\}^{|\text{mask}_{\text{resample}}|}\)
+            \ENDIF
+        \ENDFOR
+        \STATE \(\mP \sim \text{Bernoulli}(\vp_{k})\) s.t.\ \(\sum \mP \le \Delta\)
+        \STATE Return \(\adj \oplus \mP\)
+        %\STATE Return \(\tilde{\sA}\) via sampling the edge add / rem.~w.r.t.~\(\text{Bernoulli}(\vp_{K})\) 
 	\end{algorithmic}
 \end{algorithm}
 
 We also compare this approach to a Greedy R-BCD (GR-BCD), that greedily flips the entries with largest gradient in the random search space, such that after \(K\) iterations the budget requirements are met.
 
-If we performed a targeted instead of a global attack, we could further reduce the space requirements since we only need to consider the node's ``receptive field''. This attack would be very similar to adding one node in the previously introduced attack GANG with further constraints (see Section~\ref{sec:attackkdd}).
+If we performed a targeted instead of a global attack, we could further reduce the space requirements since we only need to consider the node's ``receptive field''. Such an attack could be very similar to adding one node in the introduced GANG attack with further constraints (see Section~\ref{sec:attackkdd}).
 
-\begin{table*}[ht]
+\begin{table*}
 \centering
-\caption{Perturbed accuracy for the proposed attacks (see Sections~\ref{sec:attackkdd}-\ref{sec:prbcd}) and baselines on all datasets (see Table~\ref{tab:datasets}). \(\epsilon\) denotes the fraction of edges perturbed (relative to the clean graph). The last column contains the clean accuracy. \todo{As this a work-in-progress report, the experiments for the defenses on the large datasets are due.} For each architecture we underline the strongest attack at \(\epsilon=0.1\) and embolden the strongest attack at \(\epsilon=0.25\). From an attack perspective, a lower perturbed accuracy is better. We rerun the experiments with three different seeds and for OGB we use the provided data splits.}
+\caption{Perturbed accuracy for the proposed attacks (see Sections~\ref{sec:attackkdd}-\ref{sec:prbcd}) and baselines on all datasets (see Table~\ref{tab:datasets}). \(\epsilon\) denotes the fraction of edges perturbed (relative to the clean graph). The last column contains the clean accuracy. As this a work-in-progress report, the experiments for the defenses on the large datasets are due and on Products we did not optimize the hyperparameters for GANG. For each architecture we italicize the strongest attack where \(\epsilon=0.05\), underline where \(\epsilon=0.1\), and embolden where \(\epsilon=0.25\). From an attack perspective, a lower perturbed accuracy is better. We rerun the experiments with three different seeds. For OGB we use the provided data splits and otherwise we use random split with 20 nodes per class.}
 \label{tab:global}
-\resizebox{0.9\linewidth}{!}{
-    \begin{tabular}{llccccccccccccc}
-    
+\resizebox{\linewidth}{!}{
+    \begin{tabular}{llccccccccccccccccccc}
     \toprule
-    \multirow{2}{*}{Dataset}  & \textbf{Attack}                                    & \multicolumn{2}{c}{Dice} & \multicolumn{2}{c}{GANG (ours)}          & \multicolumn{2}{c}{FGSM}  & \multicolumn{2}{c}{GR-BCD (ours)} & \multicolumn{2}{c}{PGD}            & \multicolumn{2}{c}{PR-BCD (ours)}  & \textbf{Accuracy} \\
-                              & \textbf{Frac. pert. edges} $\boldsymbol{\epsilon}$ & 0.1         & 0.25       & 0.1               & 0.25           & 0.1               & 0.25  & 0.1                 & 0.25            & 0.1               & 0.25           & 0.1               & \multicolumn{2}{l}{0.25}           \\
+                      & \textbf{Attack} & \multicolumn{3}{c}{\textbf{DICE}} & \multicolumn{3}{c}{\textbf{GANG (ours)}} & \multicolumn{3}{c}{\textbf{greedy FGSM}} & \multicolumn{3}{c}{\textbf{GR-BCD (ours)}} & \multicolumn{3}{c}{\textbf{PGD}} & \multicolumn{3}{c}{\textbf{PR-BCD (ours)}} & \textbf{Accuracy} \\
+                      & Frac. edges \(\boldsymbol{\epsilon}\) &          0.05 &    0.1 &   0.25 &                 0.05 &                0.1 &            0.25 &                 0.05 &                0.1 &            0.25 &                   0.05 &                0.1 &            0.25 &            0.05 &                0.1 &            0.25 &                   0.05 &                0.1 & \multicolumn{2}{l}{0.25} \\
     \midrule
-    \multirow{6}{*}{Cora ML}  & Vanilla GCN                                        & 0.812       & 0.785      & \underline{0.721} & 0.643          & 0.733             & 0.651 & 0.767               & 0.710           & 0.735             & 0.649          & \underline{0.721} & \textbf{0.619} & 0.829             \\
-                              & Vanilla GDC                                        & 0.811       & 0.789      & 0.764             & 0.713          & 0.722             & 0.648 & 0.761               & 0.706           & 0.730             & 0.648          & \underline{0.712} & \textbf{0.626} & 0.833             \\
-                              & SVD GCN                                            & 0.749       & 0.710      & 0.773             & 0.762          & 0.751             & 0.682 & 0.754               & 0.702           & 0.732             & 0.653          & \underline{0.731} & \textbf{0.635} & 0.777             \\
-                              & Jaccard GCN                                        & 0.801       & 0.777      & 0.764             & 0.730          & 0.731             & 0.658 & 0.762               & 0.707           & 0.731             & 0.649          & \underline{0.720} & \textbf{0.628} & 0.819             \\
-                              & RGCN                                               & 0.782       & 0.752      & 0.724             & 0.641          & 0.719             & 0.649 & 0.736               & 0.682           & 0.720             & 0.642          & \underline{0.711} & \textbf{0.630} & 0.804             \\
-                              & Soft Medoid GDC                                    & 0.813       & 0.796      & 0.786             & 0.776          & 0.750             & 0.697 & 0.772               & 0.731           & \underline{0.746} & \textbf{0.672} & 0.750             & 0.690          & 0.824             \\
-    \cline{1-15}
-    \multirow{6}{*}{Citeseer} & Vanilla GCN                                        & 0.696       & 0.678      & 0.675             & 0.621          & 0.636             & 0.554 & 0.665               & 0.612           & \underline{0.638} & \textbf{0.552} & 0.642             & 0.570          & 0.710             \\
-                              & Vanilla GDC                                        & 0.686       & 0.666      & 0.671             & 0.631          & \underline{0.620} & 0.544 & 0.660               & 0.613           & 0.625             & \textbf{0.538} & 0.635             & 0.561          & 0.709             \\
-                              & SVD GCN                                            & 0.622       & 0.582      & 0.629             & 0.577          & 0.627             & 0.566 & 0.618               & \textbf{0.248}  & 0.615             & 0.557          & \underline{0.587} & 0.519          & 0.643             \\
-                              & Jaccard GCN                                        & 0.700       & 0.683      & 0.705             & 0.697          & 0.657             & 0.593 & 0.670               & 0.630           & \underline{0.653} & \textbf{0.580} & 0.660             & 0.606          & 0.712             \\
-                              & RGCN                                               & 0.700       & 0.675      & 0.665             & 0.594          & 0.644             & 0.565 & 0.669               & 0.615           & \underline{0.642} & \textbf{0.556} & 0.644             & 0.579          & 0.719             \\
-                              & Soft Medoid GDC                                    & 0.704       & 0.694      & 0.699             & 0.691          & 0.663             & 0.620 & 0.677               & 0.647           & \underline{0.656} & \textbf{0.601} & 0.680             & 0.652          & 0.709             \\
-    \cline{1-15}
-    \multirow{5}{*}{PubMed}   & Vanilla GCN                                        & 0.748       & 0.715      & \underline{0.664} & \textbf{0.513} & -                 & -     & 0.692               & 0.605           & -                 & -              & 0.677             & 0.582          & 0.772             \\
-                              & Vanilla GDC                                        & 0.753       & 0.716      & 0.708             & 0.651          & -                 & -     & 0.695               & 0.608           & -                 & -              & \underline{0.678} & \textbf{0.593} & 0.780             \\
-                              & Jaccard GCN                                        & 0.746       & 0.713      & \underline{0.666} & \textbf{0.517} & -                 & -     & 0.692               & 0.605           & -                 & -              & 0.677             & 0.582          & 0.770             \\
-                              & RGCN                                               & 0.718       & 0.682      & 0.764             & 0.765          & -                 & -     & 0.663               & 0.591           & -                 & -              & \underline{0.660} & \textbf{0.584} & 0.744             \\
-                              & Soft Medoid GDC                                    & 0.763       & 0.742      & 0.723             & 0.719          & -                 & -     & \underline{0.705}   & 0.635           & -                 & -              & 0.710             & \textbf{0.658} & 0.776             \\
-    \cline{1-15}
-    \multirow{2}{*}{arXiv}    & Vanilla GCN                                        & 0.669       & 0.620      & \underline{0.071} & \textbf{0.040} & -                 & -     & 0.536               & 0.455           & -                 & -              & 0.535             & 0.470          & 0.700             \\
-                              & Vanilla GDC                                        & 0.642       & 0.607      & \underline{0.397} & \textbf{0.374} & -                 & -     & 0.513               & 0.448           & -                 & -              & 0.520             & 0.464          & 0.677             \\
-    \cline{1-15}
-    \multirow{2}{*}{Products} & Vanilla GCN                                        & -           & -          & -                 & -              & -                 & -     & -                   & -               & -                 & -              & -                 & -              & -                 \\
-                              & Vanilla GDC                                        & -           & -          & -                 & -              & -                 & -     & -                   & -               & -                 & -              & -                 & -              & -                 \\
+    \multirow{6}{*}{\textbf{Cora ML}} & Vanilla GCN &         0.813 &  0.806 &  0.766 &                0.766 &              0.732 &           0.658 &                0.758 &              0.719 &           0.635 &                  0.763 &              0.724 &           0.638 &           0.755 &  \underline{0.705} &  \textbf{0.590} &         \textit{0.753} &              0.711 &           0.598 &             0.825 \\
+                      & Vanilla GDC &         0.821 &  0.815 &  0.777 &                0.788 &              0.762 &           0.712 &                0.759 &              0.718 &           0.639 &                  0.765 &              0.724 &           0.642 &           0.755 &  \underline{0.704} &  \textbf{0.595} &         \textit{0.754} &              0.710 &           0.607 &             0.831 \\
+                      & SVD GCN &         0.749 &  0.736 &  0.682 &                0.764 &              0.760 &           0.722 &                0.741 &              0.715 &           0.640 &                  0.742 &              0.719 &           0.647 &  \textit{0.735} &  \underline{0.696} &  \textbf{0.603} &                  0.736 &              0.714 &           0.610 &             0.761 \\
+                      & Jaccard GCN &         0.808 &  0.802 &  0.770 &                0.788 &              0.768 &           0.737 &                0.760 &              0.722 &           0.643 &                  0.765 &              0.729 &           0.644 &           0.756 &  \underline{0.708} &  \textbf{0.601} &         \textit{0.753} &              0.716 &           0.611 &             0.819 \\
+                      & RGCN &         0.791 &  0.785 &  0.756 &       \textit{0.701} &  \underline{0.674} &           0.603 &                0.743 &              0.708 &           0.631 &                  0.746 &              0.711 &           0.638 &           0.739 &              0.699 &  \textbf{0.594} &                  0.741 &              0.704 &           0.603 &             0.800 \\
+                      & Soft Medoid GDC &         0.813 &  0.808 &  0.794 &       \textit{0.769} &              0.765 &           0.755 &                0.772 &              0.743 &           0.679 &                  0.773 &              0.745 &  \textbf{0.678} &           0.774 &              0.743 &           0.683 &                  0.770 &  \underline{0.742} &           0.689 &             0.817 \\
+    \cline{1-21}
+    \multirow{6}{*}{\textbf{Citeseer}} & Vanilla GCN &         0.702 &  0.692 &  0.670 &                0.675 &              0.644 &           0.593 &                0.669 &              0.632 &           0.540 &                  0.659 &  \underline{0.611} &  \textbf{0.523} &           0.660 &              0.618 &           0.526 &         \textit{0.657} &              0.616 &  \textbf{0.523} &             0.712 \\
+                      & Vanilla GDC &         0.694 &  0.684 &  0.657 &                0.686 &              0.662 &           0.630 &                0.659 &              0.622 &           0.533 &                  0.650 &              0.606 &           0.517 &           0.655 &              0.610 &           0.517 &         \textit{0.647} &  \underline{0.605} &  \textbf{0.515} &             0.709 \\
+                      & SVD GCN &         0.630 &  0.615 &  0.573 &                0.627 &  \underline{0.420} &           0.539 &                0.624 &              0.602 &  \textbf{0.363} &                  0.623 &              0.604 &           0.518 &  \textit{0.614} &              0.593 &           0.490 &                  0.615 &              0.581 &           0.488 &             0.641 \\
+                      & Jaccard GCN &         0.708 &  0.700 &  0.677 &                0.705 &              0.698 &           0.691 &                0.680 &              0.648 &           0.573 &                  0.675 &              0.641 &           0.568 &           0.672 &  \underline{0.639} &  \textbf{0.554} &         \textit{0.670} &              0.641 &           0.565 &             0.714 \\
+                      & RGCN &         0.634 &  0.622 &  0.596 &                0.624 &              0.601 &           0.543 &                0.608 &              0.577 &           0.513 &         \textit{0.602} &  \underline{0.574} &           0.502 &           0.607 &              0.584 &           0.504 &                  0.607 &              0.578 &  \textbf{0.498} &             0.646 \\
+                      & Soft Medoid GDC &         0.704 &  0.701 &  0.693 &                0.704 &              0.700 &           0.695 &       \textit{0.685} &  \underline{0.666} &  \textbf{0.620} &                  0.686 &              0.667 &           0.625 &  \textit{0.685} &              0.671 &           0.628 &         \textit{0.685} &              0.669 &           0.638 &             0.707 \\
+    \cline{1-21}
+    \multirow{2}{*}{\textbf{PubMed}} & Vanilla GCN &         0.757 &  0.747 &  0.708 &       \textit{0.702} &              0.688 &           0.566 &                    - &                  - &               - &                  0.725 &              0.679 &           0.590 &               - &                  - &               - &                  0.714 &  \underline{0.661} &  \textbf{0.534} &             0.774 \\
+                      & Vanilla GDC &         0.759 &  0.749 &  0.709 &                0.727 &              0.719 &           0.662 &                    - &                  - &               - &                  0.728 &              0.677 &           0.588 &               - &                  - &               - &         \textit{0.712} &  \underline{0.661} &  \textbf{0.563} &             0.776 \\
+    \cline{1-21}
+    \multirow{2}{*}{\textbf{arXiv}} & Vanilla GCN &         0.689 &  0.669 &  0.609 &                0.516 &              0.482 &  \textbf{0.291} &                    - &                  - &               - &                  0.547 &              0.482 &           0.381 &               - &                  - &               - &         \textit{0.503} &  \underline{0.427} &           0.304 &             0.705 \\
+                      & Vanilla GDC &         0.573 &  0.538 &  0.474 &                0.609 &              0.607 &           0.604 &                    - &                  - &               - &                  0.483 &              0.436 &           0.364 &               - &                  - &               - &         \textit{0.446} &  \underline{0.392} &  \textbf{0.305} &             0.618 \\
+    \cline{1-21}
+    \multirow{2}{*}{\textbf{Products}} & Vanilla GCN &         0.674 &  0.636 &  0.545 &                0.659 &              0.594 &           0.390 &                    - &                  - &               - &                  0.555 &              0.494 &  \textbf{0.388} &               - &                  - &               - &         \textit{0.535} &  \underline{0.480} &           0.450 &             0.719 \\
+                      & Vanilla GDC &         0.677 &  0.657 &  0.618 &                0.700 &              0.695 &           0.685 &                    - &                  - &               - &                  0.551 &              0.511 &  \textbf{0.442} &               - &                  - &               - &         \textit{0.543} &  \underline{0.510} &           0.492 &             0.709 \\
     \bottomrule
     \end{tabular}
 }
@@ -361,13 +352,13 @@ If we performed a targeted instead of a global attack, we could further reduce t
 
 \section{Empirical Evaluation}\label{sec:empirical}
 
-In the following, we present our experiments to show the effectiveness and scalability of our proposed attacks. We first describe our setup and then discuss the results over wide range of graphs of different scale.
+In the following, we present our experiments to show the effectiveness and scalability of our proposed attacks. We first describe our setup and then discuss the results over wide range of graphs of different scale. %Once the experiments have been finalized, we will open source the code with configuration to reproduce the results.
 
 \textbf{Defenses.} We also report the results on state of the art defenses of~\citep{Entezari2020, Geisler2020, Wu2019, Zhu2019}. For the Soft Medoid GDC, we use the temperature \(T=0.5\) as it is a good compromise between accuracy and robustness. The SVD GCN~\citep{Entezari2020} uses a (dense) low-rank approximation (here rank 50) of the adjacency matrix to filter adversarial perturbations. RGCN~\citep{Zhu2019} models the neighborhood aggregation via Gaussian distribution to filter outliers, and Jaccard GCN~\citep{Wu2019} filters edges based on attribute dissimilarity (here threshold 0.01). 
 
 %\todo{Hyperparams}
 
-\textbf{Attacks.} We compare our GANG, PR-BCD, and GR-BCD attacks (see Sections~\ref{sec:attackkdd}-\ref{sec:prbcd}) with the global Dice~\citep{Waniek2018}, PGD~\citep{Xu2019a}, and greedy FGSM attacks~\citet{Geisler2020}.
+\textbf{Attacks.} We compare our GANG, PR-BCD, and GR-BCD attacks (see Sections~\ref{sec:attackkdd}-\ref{sec:prbcd}) with the global DICE~\citep{Waniek2018}, PGD~\citep{Xu2019a}, and greedy FGSM attacks~\citet{Geisler2020}. The greedy FGSM-like attack is the dense equivalent of our GR-BCD attack with the exception of flipping one edge at a time. DICE is a greedy, randomized black-box attack that flips one randomly determined entry in the adjacency matrix at a time. An edge is deleted if both nodes share the same label and an edge is added if the labels of the nodes differ. We ensure that a single node does not become disconnected. Moreover, we use 60\% of the budget to add new edges and otherwise remove edges.
 
 \begin{table}[t]
 \centering
@@ -388,13 +379,15 @@ In the following, we present our experiments to show the effectiveness and scala
 }
 \end{table}
 
-\textbf{Datasets.} We use the common Cora ML~\citep{Bojchevski2018}, Citeseer~\citep{McCallum2000}, and PubMed~\citep{Sen2008} for comparing against the other state of the art attacks. For large scale experiments, we use two graphs of the recent Open Graph Benchmark~\citep{Hu2020}. In comparison to Pubmed, we scale by 2.5 orders of magnitude (number of nodes), or by factor 15,000 if counting the possible adjacency matrix entries (see Table~\ref{tab:datasets}). For Cora, Citeseer, as well as PubMed we use an 11GB GeForce GTX 1080 Ti and a 32GB Tesla V100 otherwise.
+\textbf{Datasets.} We use the common Cora ML~\citep{Bojchevski2018}, Citeseer~\citep{McCallum2000}, and PubMed~\citep{Sen2008} for comparing against the other state of the art attacks. For large scale experiments, we use two graphs of the recent Open Graph Benchmark~\citep{Hu2020}. In comparison to Pubmed, we scale by 2.5 orders of magnitude (number of nodes), or by factor 15,000 if counting the possible adjacency matrix entries (see Table~\ref{tab:datasets}). For Cora, Citeseer, as well as PubMed we use an 11GB GeForce GTX 1080 Ti and a 32GB Tesla V100 otherwise. We exclusively perform the calculations on GPU, but for products where we coalesce the adjacency matrix on CPU.
 
 \textbf{Checkpointing.} Empirically, almost 30 GB are required to train a three-layer GCN on Products (our largest dataset) using sparse matrices. However, obtaining the gradient, e.g.\ towards the perturbation set, requires extra memory. We notice that most operations in modern GNNs only depend on the neighborhood size (i.e.~a row in the adjacency matrix). As proposed by~\citet{Chen2016}, the gradient is obtainable with sublinear memory cost via checkpointing. The idea is to discard some intermediate results in the forward phase and recompute them in the backward phase. Specifically, we chunk some operations (e.g. matrix multiplication) within the message passing step to successfully scale to larger graphs. This allows us to attack a three-layer GCN on Products with full GPU acceleration.
 
+\textbf{Hyperparameters.} We use the same setup as~\citet{Geisler2020} in their evaluation and for models on OGB we follow~\citet{Hu2020}, For the attacks GR-BCD and PR-BCD, we run the attack for 500 epochs (100 epochs fine-tuning with PR-BCD). We choose the search space size to be at least twice the edge perturbation ratio \(\epsilon\) (depends on the dataset). Since the edge budget \(\Delta_e\) in GANG influences the perturbed accuracy (see Figure~\ref{fig:gangnodeeffectiveness}), we decide for a relatively low value of 250. As these are preliminary results, the only exception is Products on which we report the results with the budget of \(\Delta_e=25,000\). Moreover with GANG we binarize the attributes on Cora ML, Citeseer and PubMed and use \(L_0\)-norm PGD analogously to PR-BCD.
+
 \textbf{Results overview.} In~Table~\ref{tab:global} we present the preliminary experimental results for our proposed attacks. We do not observe that sampling the search space harms the attack strength. Similarly to Figure~\ref{fig:randomblocksizeinfluence}, we even outperform the dense PGD on Cora ML. We conclude that our attacks are as effective as the other state of the art attacks.
 
-\textbf{GNNs' fragility on large graphs.} In the following, we analyze the results of PR-BCD, with a budget of \(\epsilon=0.25\), and the GCN. We observe a relative drop in the perturbed accuracy by 20\% on Cora, 25\% on PubMed, 33 \% on arXiv. We conclude that there is likely some relationship between the fragility and the graph size. This relationship is similar for GR-BCD but much stronger for GANG. However, for GANG we have to consider that we may choose the attributes as well. arXiv as well as Products have \textit{dense} continuous features, and all the other datasets have \textit{sparse} continuous features. this relationship seems to persist for architectures other than GCN as well.
+\textbf{GNNs' fragility on large graphs.} In the following, we analyze the results of PR-BCD, with a budget of \(\epsilon=0.25\), and the GCN. We observe a relative drop in the perturbed accuracy by 20\% on Cora, 25\% on PubMed, 33 \% on arXiv. On products with the lower budget of \(\epsilon=0.1\), we already see a drop of the perturbed accuracy of 31\%. We conclude that there is likely some relationship between the fragility and the graph size. This relationship is similar for GR-BCD but much stronger for GANG. However, for GANG we have to consider that we may choose the attributes as well. arXiv as well as Products have \textit{dense} continuous features, and all the other datasets have \textit{sparse} continuous features. This relationship seems to persist for architectures other than GCN as well. Please note that further experiments are required to confirm this hypothesis. For example, on arXiv and products we use a three-layer GCN (to achieve state of the art accuracy) and for the other datasets we use just two layers. Moreover, the datasets have a different number of classes.
 
 \textbf{Time and memory cost.} On arXiv, we train for 500 epochs and run the PR-BCD attack for 500 epochs. The whole training and attacking procedure requires less than 2 minutes and the peak usage of GPU memory is below 2.5 GB. 
 %If we use checkpointing and chunk matrix multiplications into 16 parts, the same procedure takes 6 minutes but only requires 1.9 GB. 

@@ -372,7 +372,7 @@ class RGNNConv(ChainableGCNConv):
         x = kwargs['x']
         if not isinstance(edge_index, SparseTensor):
             edge_weights = kwargs['norm'] if 'norm' in kwargs else kwargs['edge_weight']
-            A = SparseTensor.from_edge_index(edge_index, edge_attr=edge_weights).coalesce()
+            A = SparseTensor.from_edge_index(edge_index, edge_weights, (x.size(0), x.size(0)))
             return self._mean(A, x, **self._mean_kwargs)
 
         def aggregate(edge_index: SparseTensor, x: torch.Tensor):
@@ -405,24 +405,20 @@ class RGNN(GCN):
         The desired mean (see above for the options), by default 'soft_k_medoid'
     mean_kwargs : Dict[str, Any], optional
         Arguments for the mean, by default dict(k=64, temperature=1.0, with_weight_correction=True)
-    do_omit_softmax : bool, optional
-        If you wanto omit the softmax of the output logits (for efficency), by default False
     """
 
     def __init__(self,
                  mean: str = 'soft_k_medoid',
                  mean_kwargs: Dict[str, Any] = dict(k=64, temperature=1.0,
                                                     with_weight_correction=True),
-                 do_omit_softmax=False,
                  **kwargs):
         self._mean_kwargs = dict(mean_kwargs)
         self._mean = mean
-        self.do_omit_softmax = do_omit_softmax
         super().__init__(**kwargs)
 
     def _build_conv_layer(self, in_channels: int, out_channels: int):
-        return RGNNConv(mean=self._mean, mean_kwargs=self._mean_kwargs,
-                        in_channels=in_channels, out_channels=out_channels)
+        return RGNNConv(mean=self._mean, mean_kwargs=self._mean_kwargs, in_channels=in_channels,
+                        out_channels=out_channels, do_chunk=self.do_checkpoint, n_chunks=self.n_chunks)
 
 
 class DenseGraphConvolution(nn.Module):
