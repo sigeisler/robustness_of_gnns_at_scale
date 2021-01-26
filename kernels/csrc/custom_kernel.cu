@@ -225,32 +225,33 @@ std::vector<torch::Tensor> topk_forward_cuda(
 
 at::Tensor dimmedian_idx_forward_cuda(
     torch::Tensor X,
-    torch::Tensor adj,
+    torch::Tensor edge_idx,
+    torch::Tensor edge_weights,
+    const int nnz,
+    const int n_rows,
     const int n_threads = 1024)
 {
     torch::Tensor X_argsort = X.argsort(0).to(torch::kInt32);
     torch::Tensor X_rev_argsort = X_argsort.argsort(0).to(torch::kInt32);
 
-    int64_t nnz = adj._nnz();
-    int64_t m = adj.size(0);
     int64_t d = X.size(1);
-    torch::Tensor values = adj._values().to(torch::kFloat32);
-    torch::Tensor rowIndices = adj._indices().select(0, 0);
-    torch::Tensor colIndices = adj._indices().select(0, 1);
+    torch::Tensor values = edge_weights.to(torch::kFloat32);
+    torch::Tensor rowIndices = edge_idx.select(0, 0);
+    torch::Tensor colIndices = edge_idx.select(0, 1);
 
     cusparseHandle_t handle = NULL;
     cusparseCreate(&handle);
 
     // Convert COO to CSR
-    torch::Tensor csrPtr = torch::empty({m + 1}, rowIndices.options().dtype(torch::kInt32));
+    torch::Tensor csrPtr = torch::empty({n_rows + 1}, rowIndices.options().dtype(torch::kInt32));
     torch::Tensor rowIndicesInt = torch::empty({rowIndices.size(0)}, rowIndices.options().dtype(torch::kInt32));
     rowIndicesInt.copy_(rowIndices);
     torch::Tensor colIndicesInt = torch::empty({colIndices.size(0)}, rowIndices.options().dtype(torch::kInt32));
     colIndicesInt.copy_(colIndices);
-    coo2csr(handle, rowIndicesInt.data_ptr<int32_t>(), nnz, m, csrPtr.data_ptr<int32_t>());
+    coo2csr(handle, rowIndicesInt.data_ptr<int32_t>(), nnz, n_rows, csrPtr.data_ptr<int32_t>());
 
-    const dim3 n_blocks(ceil((float)m * d / n_threads));
-    torch::Tensor outIdx = torch::ones_like(X, X.options().dtype(torch::kInt32)).neg();
+    const dim3 n_blocks(ceil((float)n_rows * d / n_threads));
+    torch::Tensor outIdx = torch::full({n_rows, d}, -1, X.options().dtype(torch::kInt32));
     AT_DISPATCH_INTEGRAL_TYPES(csrPtr.scalar_type(), "dimmedian_idx_cuda_forward", ([&] {
                                    dimmedian_idx_cuda_forward_kernel<scalar_t><<<n_blocks, n_threads>>>(
                                        csrPtr.packed_accessor32<scalar_t, 1, torch::RestrictPtrTraits>(),
@@ -260,7 +261,7 @@ at::Tensor dimmedian_idx_forward_cuda(
                                        X_argsort.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
                                        X_rev_argsort.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
                                        outIdx.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
-                                       m,
+                                       n_rows,
                                        d);
                                }));
     return outIdx.to(torch::kInt64);
