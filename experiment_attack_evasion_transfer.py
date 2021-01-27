@@ -75,8 +75,6 @@ def run(dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequ
     assert all([eps >= 0 for eps in epsilons]), 'all elements in `epsilons` must be greater than 0'
     assert 'train_params' in surrogate_params, '`surrogate` must contain the field `train_params`'
 
-    results = []
-
     graph = prep_graph(dataset, device, binary_attr=binary_attr, return_original_split=dataset.startswith('ogbn'))
     attr, adj, labels = graph[:3]
     if len(graph) == 3:
@@ -158,6 +156,7 @@ def run(dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequ
         model_params['label'] = model_label
     models_and_hyperparams = storage.find_models(model_storage_type, model_params)
 
+    results = []
     with torch.no_grad():
         for model, hyperparams in models_and_hyperparams:
             model = model.to(device)

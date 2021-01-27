@@ -175,9 +175,9 @@ def savefig(
         dpi: float = 600, format: str = 'pgf', preview: str = 'pdf',
         close_fig: bool = True, remove_preview_file_after: float = 10, **kwargs) -> Union[IFrame, None]:
     global is_production
-    if not is_production:
-        from IPython import display
-        display.display(fig)
+    if is_production:
+        # from IPython import display
+        # display.display(fig)
         return
     if fig is None:
         fig = plt.gca().figure

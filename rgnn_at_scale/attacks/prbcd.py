@@ -115,10 +115,6 @@ class PRBCD(object):
             logits = self.model(data=self.X.to(self.device), adj=(edge_index, edge_weight))
             loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
 
-            # Todo: do better
-            # entropy = torch.distributions.Bernoulli(self.modified_edge_weight_diff).entropy().mean()
-            # loss += 10 * entropy
-
             gradient = utils.grad_with_checkpoint(loss, self.modified_edge_weight_diff)[0]
 
             if self.do_synchronize:
@@ -160,9 +156,10 @@ class PRBCD(object):
             del loss
             del gradient
 
-        self.current_search_space = best_search_space.to(self.device)
-        self.modified_edge_index = best_edge_index.to(self.device)
-        self.modified_edge_weight_diff = best_edge_weight_diff.to(self.device)
+        if self.with_early_stropping:
+            self.current_search_space = best_search_space.to(self.device)
+            self.modified_edge_index = best_edge_index.to(self.device)
+            self.modified_edge_weight_diff = best_edge_weight_diff.to(self.device)
 
         edge_index = self.sample_edges(n_perturbations)[0]
 
