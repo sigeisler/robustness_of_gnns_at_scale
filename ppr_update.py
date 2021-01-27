@@ -24,18 +24,24 @@ setup_logging()
 
 device = 0 if torch.cuda.is_available() else 'cpu'
 A_dense = torch.tensor([[0, 1, 0, 1],
-                        [1, 0, 0, 0],
+                        [1, 0, 1, 0],
                         [0, 0, 0, 1],
                         [1, 0, 1, 0]],
                        dtype=torch.float32,
                        device=device)
 
-A_pert = A_dense + torch.tensor([[0, -1, 1, 0],
-                                 [0, 0, 0, 0],
-                                 [0, 0, 0, 0],
-                                 [0, 0, 0, 0]],
-                                dtype=torch.float32,
-                                device=device)
+u = torch.tensor([[0],
+                  [1],
+                  [-1],
+                  [0]],
+                 dtype=torch.float32,
+                 device=device)
+v = torch.tensor([[-1, 0, 0, 1]],
+                 dtype=torch.float32,
+                 device=device)
+
+A_pert = A_dense + u@v
+
 
 num_nodes = A_dense.shape[0]
 
@@ -69,23 +75,13 @@ ppr_pert_exact = calc_ppr_exact_row(A_pert, alpha=alpha)
 
 
 D_vec = (torch.eye(num_nodes) + A_dense).sum(-1)
-P_inv = (1 / alpha) * ppr_exact
-
 norm_const = 1 / D_vec[:, None] * (alpha - 1)
-u = norm_const * torch.tensor([[1],
-                               [0],
-                               [0],
-                               [0]],
-                              dtype=torch.float32,
-                              device=device)
+u = u * norm_const
 u_hat = u / (alpha - 1)
 
 
-v = torch.tensor([[0, -1, 1, 0]],
-                 dtype=torch.float32,
-                 device=device)
-
 # Sherman Morrison Formular for (P + uv)^-1
+P_inv = (1 / alpha) * ppr_exact
 P_uv_inv = P_inv - (P_inv @ u @ v @ P_inv) / (1 + v @ P_inv @ u)
 
 # to assert P_uv_inv is calculated correctly:
