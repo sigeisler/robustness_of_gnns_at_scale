@@ -120,7 +120,8 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
 
     # For really large graphs we don't want to compute predictions for all nodes, just the test nodes is enough.
     if isinstance(model, PPRGoWrapperBase):
-        prediction = model(attr, adj, ppr_idx=idx_test)
+        with torch.no_grad():
+            prediction = model(attr, adj, ppr_idx=idx_test)
         test_accuracy = (prediction.cpu().argmax(1) == labels.cpu()[idx_test]).float().mean().item()
     else:
         prediction = model(attr, adj)

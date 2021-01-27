@@ -670,7 +670,7 @@ def prep_graph(name: str,
         if normalize:
             adj = utils.calc_A_hat(adj)
 
-        adj = torch_sparse.SparseTensor.from_scipy(adj).coalesce()
+        #adj = torch_sparse.SparseTensor.from_scipy(adj).coalesce()
 
         del edge_index
         del edge_weight

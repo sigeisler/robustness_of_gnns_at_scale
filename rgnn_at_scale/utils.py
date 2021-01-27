@@ -57,7 +57,7 @@ def calc_A_hat(adj_matrix: sp.spmatrix) -> sp.spmatrix:
     return D_invsqrt_corr @ A @ D_invsqrt_corr
 
 
-def calc_ppr_exact(adj_matrix: sp.spmatrix, alpha: float) -> np.ndarray:
+def calc_ppr_exact_sym(adj_matrix: sp.spmatrix, alpha: float) -> np.ndarray:
     """
     From https://github.com/klicperajo/ppnp
     """
@@ -65,6 +65,23 @@ def calc_ppr_exact(adj_matrix: sp.spmatrix, alpha: float) -> np.ndarray:
     M = calc_A_hat(adj_matrix)
     A_inner = sp.eye(nnodes) - (1 - alpha) * M
     return alpha * np.linalg.inv(A_inner.toarray())
+
+
+def calc_A_row(adj_matrix: sp.spmatrix) -> sp.spmatrix:
+    """
+    From https://github.com/klicperajo/ppnp
+    """
+    nnodes = adj_matrix.shape[0]
+    A = adj_matrix + sp.eye(nnodes)
+    D_vec = np.sum(A > 0, axis=1).A1
+    return A / D_vec[:, np.newaxis]
+
+
+def calc_ppr_exact_row(adj_matrix: sp.spmatrix, alpha: float) -> np.ndarray:
+    nnodes = adj_matrix.shape[0]
+    M = calc_A_row(adj_matrix)
+    A_inner = sp.eye(nnodes) - (1 - alpha) * M
+    return alpha * np.linalg.inv(A_inner)
 
 
 def get_ppr_matrix(adjacency_matrix: torch.Tensor,
