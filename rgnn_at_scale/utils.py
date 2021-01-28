@@ -67,21 +67,42 @@ def calc_ppr_exact_sym(adj_matrix: sp.spmatrix, alpha: float) -> np.ndarray:
     return alpha * np.linalg.inv(A_inner.toarray())
 
 
-def calc_A_row(adj_matrix: sp.spmatrix) -> sp.spmatrix:
-    """
-    From https://github.com/klicperajo/ppnp
-    """
-    nnodes = adj_matrix.shape[0]
-    A = adj_matrix + sp.eye(nnodes)
-    D_vec = np.sum(A > 0, axis=1).A1
-    return A / D_vec[:, np.newaxis]
+def calc_A_row(A):
+    return A / A.sum(-1)[:, None]
 
 
-def calc_ppr_exact_row(adj_matrix: sp.spmatrix, alpha: float) -> np.ndarray:
-    nnodes = adj_matrix.shape[0]
-    M = calc_A_row(adj_matrix)
-    A_inner = sp.eye(nnodes) - (1 - alpha) * M
-    return alpha * np.linalg.inv(A_inner)
+def calc_ppr_exact_row(A, alpha):
+    A_norm = calc_A_row(A)
+    return alpha * torch.inverse(torch.eye(4) + (alpha - 1) * A_norm)
+
+
+def calc_ppr_update_dense(ppr: torch.Tensor,
+                          A: torch.Tensor,
+                          p: torch.Tensor,
+                          i: int,
+                          alpha: float):
+    num_nodes = A.shape[0]
+    assert ppr.shape == A.shape, "shapes of ppr and adjacency must be the same"
+    assert (torch.diag(A) == torch.zeros(num_nodes)).all().item(), "The adjacency's must not have self loops"
+    assert (torch.logical_or(A == 1, A == 0)).all().item(), "The adjacency must be unweighted"
+    assert torch.allclose(ppr.sum(-1), torch.ones(num_nodes), atol=1e-16), "The ppr must be row normalized"
+
+    u = torch.zeros((num_nodes, 1),
+                    dtype=torch.float32)
+    u[i] = 1
+    v = torch.where(A[i] > 0, -p, p)
+
+    row = A[2] + v
+    row_norm = row / row.sum()
+    row_diff = row_norm - A[2]
+    row_diff_norm = (alpha - 1) * row_diff
+
+    # Sherman Morrison Formular for (P + uv)^-1
+    P_inv = (1 / alpha) * ppr
+    P_uv_inv = P_inv - (P_inv @ u @ row_diff_norm @ P_inv) / (1 + row_diff_norm @ P_inv @ u)
+
+    ppr_pert_update = alpha * (P_uv_inv)
+    return ppr_pert_update
 
 
 def get_ppr_matrix(adjacency_matrix: torch.Tensor,
