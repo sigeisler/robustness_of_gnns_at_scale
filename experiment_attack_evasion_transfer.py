@@ -167,8 +167,6 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
 
     model_params = dict(dataset=dataset,
                         binary_attr=binary_attr,
-                        make_undirected=make_undirected,
-                        make_unweighted=make_unweighted,
                         seed=seed)
 
     if model_label is not None and model_label:
