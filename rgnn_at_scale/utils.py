@@ -10,6 +10,7 @@ import torch
 from torch_geometric.utils import from_scipy_sparse_matrix, add_remaining_self_loops
 import torch_scatter
 import torch_sparse
+from torch_sparse import SparseTensor
 
 
 # TODO: Move to base attack
@@ -72,8 +73,119 @@ def calc_A_row(A):
 
 
 def calc_ppr_exact_row(A, alpha):
+    num_nodes = A.shape[0]
     A_norm = calc_A_row(A)
-    return alpha * torch.inverse(torch.eye(4) + (alpha - 1) * A_norm)
+    return alpha * torch.inverse(torch.eye(num_nodes) + (alpha - 1) * A_norm)
+
+
+def calc_ppr_update(ppr: SparseTensor,
+                    A: SparseTensor,
+                    p: SparseTensor,
+                    i: int,
+                    alpha: float):
+    num_nodes = A.size(0)
+    assert ppr.sizes() == A.sizes(), "shapes of ppr and adjacency must be the same"
+
+    # get_diag is only availbe in the nightly built of torch_sparse
+    # assert SparseTensor.get_diag(A).sum() == 0, "The adjacency's must not have self loops"
+    assert (torch.logical_or(A.storage.value() == 1, A.storage.value() == 0)
+            ).all().item(), "The adjacency must be unweighted"
+    assert p[0, i].sum() == 0, "Self loops must not be perturbed"
+
+    v_rows, v_cols, v_vals = p.coo()
+    v_idx = torch.stack([v_rows, v_cols], dim=0)
+
+    Ai_rows, Ai_cols, Ai_vals = A[i].coo()
+    Ai_idx = torch.stack([Ai_rows, Ai_cols], dim=0)
+
+    ppr_rows, ppr_cols, ppr_vals = ppr.coo()
+    ppr_idx = torch.stack([ppr_rows, ppr_cols], dim=0)
+
+    v_vals[(v_cols == Ai_cols)] *= -1
+
+    u = SparseTensor.from_edge_index(edge_index=torch.tensor([[i], [0]]),
+                                     edge_attr=torch.tensor([1], dtype=torch.float32),
+                                     sparse_sizes=(num_nodes, 1))
+
+    # sparse addition: row = A[i] + v
+    row_idx = torch.cat((v_idx, Ai_idx), dim=-1)
+    row_weights = torch.cat((v_vals, Ai_vals))
+    row_idx, row_weights = torch_sparse.coalesce(
+        row_idx,
+        row_weights,
+        m=1,
+        n=num_nodes,
+        op='sum'
+    )
+
+    # sparse normalization: row_diff = row / row.sum()
+    row_weights /= row_weights.sum()
+
+    # sparse subtraction: v - A[i]
+    row_idx = torch.cat((row_idx, Ai_idx), dim=-1)
+    row_weights = torch.cat((row_weights, Ai_vals * - 1))
+    row_idx, row_weights = torch_sparse.coalesce(
+        row_idx,
+        row_weights,
+        m=1,
+        n=num_nodes,
+        op='sum'
+    )
+
+    # sparse normalization with const: (alpha - 1) * row_diff
+    row_weights *= (alpha - 1)
+
+    row = SparseTensor.from_edge_index(edge_index=row_idx,
+                                       edge_attr=row_weights,
+                                       sparse_sizes=(1, num_nodes))
+
+    P_inv = SparseTensor.from_edge_index(edge_index=ppr_idx,
+                                         edge_attr=(1 / alpha) * ppr_vals,
+                                         sparse_sizes=(num_nodes, num_nodes))
+    # P_inv @ u
+    P_inv_at_u = P_inv @ u
+
+    # (1 + row_diff_norm @ P_inv @ u)
+    P_uv_inv_norm_const = row @ P_inv_at_u
+    P_uv_inv_norm_const_vals = P_uv_inv_norm_const.storage.value()
+    P_uv_inv_norm_const_vals += 1
+
+    P_uv_inv_diff = P_inv_at_u @ (row @ P_inv)
+    P_uv_inv_diff_rows, P_uv_inv_diff_cols, P_uv_inv_diff_vals = P_uv_inv_diff.coo()
+    P_uv_inv_diff_idx = torch.stack([P_uv_inv_diff_rows, P_uv_inv_diff_cols], dim=0)
+
+    P_uv_inv_diff_vals /= P_uv_inv_norm_const_vals
+
+    # sparse subtraction: P_uv_inv = P_inv - P_uv_inv_diff
+    P_inv_rows, P_inv_cols, P_inv_vals = P_inv.coo()
+    P_inv_idx = torch.stack([P_inv_rows, P_inv_cols], dim=0)
+
+    P_uv_inv_idx = torch.cat((P_inv_idx, P_uv_inv_diff_idx), dim=-1)
+    P_uv_inv_weights = torch.cat((P_inv_vals, P_uv_inv_diff_vals * -1))
+
+    P_uv_inv_idx, P_uv_inv_weights = torch_sparse.coalesce(
+        P_uv_inv_idx,
+        P_uv_inv_weights,
+        m=num_nodes,
+        n=num_nodes,
+        op='sum'
+    )
+
+    # ppr_pert_update = alpha * (P_uv_inv)
+    P_uv_inv_weights *= alpha
+
+    return SparseTensor.from_edge_index(edge_index=P_uv_inv_idx,
+                                        edge_attr=P_uv_inv_weights,
+                                        sparse_sizes=(num_nodes, num_nodes))
+
+
+def calc_ppr_update_topk(ppr: SparseTensor,
+                         A: SparseTensor,
+                         p: torch.Tensor,
+                         i: int,
+                         alpha: float,
+                         topk: int):
+    pass
 
 
 def calc_ppr_update_dense(ppr: torch.Tensor,
@@ -85,16 +197,15 @@ def calc_ppr_update_dense(ppr: torch.Tensor,
     assert ppr.shape == A.shape, "shapes of ppr and adjacency must be the same"
     assert (torch.diag(A) == torch.zeros(num_nodes)).all().item(), "The adjacency's must not have self loops"
     assert (torch.logical_or(A == 1, A == 0)).all().item(), "The adjacency must be unweighted"
-    assert torch.allclose(ppr.sum(-1), torch.ones(num_nodes), atol=1e-16), "The ppr must be row normalized"
 
     u = torch.zeros((num_nodes, 1),
                     dtype=torch.float32)
     u[i] = 1
     v = torch.where(A[i] > 0, -p, p)
 
-    row = A[2] + v
+    row = A[i] + v
     row_norm = row / row.sum()
-    row_diff = row_norm - A[2]
+    row_diff = row_norm - A[i]
     row_diff_norm = (alpha - 1) * row_diff
 
     # Sherman Morrison Formular for (P + uv)^-1
@@ -103,6 +214,20 @@ def calc_ppr_update_dense(ppr: torch.Tensor,
 
     ppr_pert_update = alpha * (P_uv_inv)
     return ppr_pert_update
+
+
+def calc_ppr_update_topk_dense(ppr: torch.Tensor,
+                               A: torch.Tensor,
+                               p: torch.Tensor,
+                               i: int,
+                               alpha: float,
+                               topk: int):
+    num_nodes = A.shape[0]
+    ppr_pert_update = calc_ppr_update_dense(ppr, A, p, i, alpha)
+    values, indices = torch.topk(ppr_pert_update, topk, dim=-1)
+    col_ind = indices.flatten()
+    row_idx = torch.arange(num_nodes)[:, None].expand(num_nodes, topk).flatten()
+    return torch.sparse.FloatTensor(torch.stack([row_idx, col_ind]), values.flatten()).coalesce().to_dense()
 
 
 def get_ppr_matrix(adjacency_matrix: torch.Tensor,
