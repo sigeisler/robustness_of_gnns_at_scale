@@ -22,10 +22,10 @@ class TestPPRUpdate():
         i = 2
         A_dense = torch.tensor([[0, 1, 0, 1],
                                 [1, 0, 1, 0],
-                                [0, 1, 0, 1],
+                                [1, 1, 0, 1],
                                 [1, 1, 1, 0]],
                                dtype=torch.float32)
-        # p = torch.tensor([[0.5, 0.0, 0, 0.3]],
+        # p = torch.tensor([[0, 0.0, 0, 0.3]],
         #                  dtype=torch.float32,
         #                  requires_grad=True)
         # A_dense = torch.tensor([[0, 1, 0, 1],
@@ -180,7 +180,7 @@ class TestPPRUpdate():
         A_pert = A_dense + u@v
         ppr_pert_exact = calc_ppr_exact_row(A_pert, alpha=alpha)
 
-        assert torch.allclose(ppr_pert_update, ppr_pert_exact, atol=1e-05)
+        assert torch.allclose(ppr_pert_update.to_dense(), ppr_pert_exact, atol=1e-05)
 
         ppr_pert_update.sum().backward()
         assert p.grad is not None

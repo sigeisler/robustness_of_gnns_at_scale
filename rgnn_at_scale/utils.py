@@ -121,9 +121,12 @@ def calc_ppr_update(ppr: SparseTensor,
     # sparse normalization: row_diff = row / row.sum()
     row_weights /= row_weights.sum()
 
-    # sparse subtraction: v - A[i]
+    # A_norm = A[i] / A[i].sum()
+    Ai_norm_val = Ai_vals / Ai_vals.sum()
+
+    # sparse subtraction: row_diff = row - A_norm
     row_idx = torch.cat((row_idx, Ai_idx), dim=-1)
-    row_weights = torch.cat((row_weights, Ai_vals * - 1))
+    row_weights = torch.cat((row_weights, Ai_norm_val * - 1))
     row_idx, row_weights = torch_sparse.coalesce(
         row_idx,
         row_weights,
@@ -204,8 +207,9 @@ def calc_ppr_update_dense(ppr: torch.Tensor,
     v = torch.where(A[i] > 0, -p, p)
 
     row = A[i] + v
-    row_norm = row / row.sum()
-    row_diff = row_norm - A[i]
+    row = row / row.sum()
+    A_norm = A[i] / A[i].sum()
+    row_diff = row - A_norm
     row_diff_norm = (alpha - 1) * row_diff
 
     # Sherman Morrison Formular for (P + uv)^-1
