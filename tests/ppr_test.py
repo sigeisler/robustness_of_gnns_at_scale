@@ -50,7 +50,7 @@ class TestPPRUpdate():
                         dtype=torch.float32)
         u[i] = 1
         v = torch.where(A_dense[i] > 0, -p, p)
-        A_pert = A_dense + u@v
+        A_pert = A_dense + u @ v
         ppr_pert_exact = calc_ppr_exact_row(A_pert, alpha=alpha)
 
         assert torch.allclose(ppr_pert_update, ppr_pert_exact, atol=1e-05)
@@ -91,7 +91,7 @@ class TestPPRUpdate():
                         dtype=torch.float32)
         u[i] = 1
         v = torch.where(A_dense[i] > 0, -p, p)
-        A_pert = A_dense + u@v
+        A_pert = A_dense + u @ v
         ppr_pert_exact = calc_ppr_exact_row(A_pert, alpha=alpha)
 
         assert torch.allclose(ppr_pert_update, ppr_pert_exact, atol=1e-05)
@@ -140,7 +140,7 @@ class TestPPRUpdate():
                         dtype=torch.float32)
         u[i] = 1
         v = torch.where(A_dense[i] > 0, -p, p)
-        A_pert = A_dense + u@v
+        A_pert = A_dense + u @ v
         ppr_pert_exact = calc_ppr_exact_row(A_pert, alpha=alpha)
 
         assert torch.allclose(ppr_pert_update_topk, ppr_pert_exact, atol=1e-02)
@@ -169,7 +169,7 @@ class TestPPRUpdate():
         p = SparseTensor.from_dense(p_dense)
 
         ppr_pert_update = calc_ppr_update(ppr=ppr_exact_sparse,
-                                          A=A_sparse,
+                                          Ai=A_sparse[i],
                                           p=p,
                                           i=i,
                                           alpha=alpha)
@@ -177,7 +177,7 @@ class TestPPRUpdate():
                         dtype=torch.float32)
         u[i] = 1
         v = torch.where(A_dense[i] > 0, -p_dense, p_dense)
-        A_pert = A_dense + u@v
+        A_pert = A_dense + u @ v
         ppr_pert_exact = calc_ppr_exact_row(A_pert, alpha=alpha)
 
         assert torch.allclose(ppr_pert_update.to_dense(), ppr_pert_exact, atol=1e-05)
