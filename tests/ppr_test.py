@@ -221,3 +221,6 @@ class TestPPRUpdate():
         ppr_pert_exact = calc_ppr_exact_row(A_pert, alpha=alpha)
 
         assert torch.allclose(ppr_pert_update, ppr_pert_exact[i], atol=1e-05)
+
+        ppr_pert_update.sum().backward()
+        assert p_dense.grad is not None
