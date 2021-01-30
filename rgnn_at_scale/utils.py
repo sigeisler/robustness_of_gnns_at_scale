@@ -10,7 +10,7 @@ import torch
 from torch_geometric.utils import from_scipy_sparse_matrix, add_remaining_self_loops
 import torch_scatter
 import torch_sparse
-from torch_sparse import SparseTensor
+from torch_sparse import SparseTensor, transpose, spmm, coalesce
 
 
 # TODO: Move to base attack
@@ -111,7 +111,7 @@ def calc_ppr_update(ppr: SparseTensor,
     row_sum = Ai.sum() + v_vals.sum()
     row_idx = torch.cat((v_idx, Ai_idx), dim=-1)
     row_weights = torch.cat((v_vals, Ai_vals))
-    row_idx, row_weights = torch_sparse.coalesce(
+    row_idx, row_weights = coalesce(
         row_idx,
         row_weights,
         m=1,
@@ -119,7 +119,7 @@ def calc_ppr_update(ppr: SparseTensor,
         op='sum'
     )
     # Works since the attack will always assign at least a small constant the elements in p
-    row_weights[row_weights > 1] = -row_weights[row_weights > 1] + 2
+    # row_weights[row_weights > 1] = -row_weights[row_weights > 1] + 2
 
     # sparse normalization: row_diff = row / row.sum()
     row_weights /= row_sum
@@ -128,7 +128,7 @@ def calc_ppr_update(ppr: SparseTensor,
     # sparse subtraction: row_diff = row - A_norm
     row_idx = torch.cat((row_idx, Ai_idx), dim=-1)
     row_weights = torch.cat((row_weights, -Ai_norm_val))
-    row_idx, row_weights = torch_sparse.coalesce(
+    row_idx, row_weights = coalesce(
         row_idx,
         row_weights,
         m=1,
@@ -181,6 +181,109 @@ def calc_ppr_update(ppr: SparseTensor,
     return SparseTensor.from_edge_index(edge_index=P_uv_inv_idx,
                                         edge_attr=P_uv_inv_weights,
                                         sparse_sizes=(num_nodes, num_nodes))
+
+
+def calc_ppr_update_sparse_result(ppr: SparseTensor,
+                                  Ai: SparseTensor,
+                                  p: SparseTensor,
+                                  i: int,
+                                  alpha: float):
+    """
+        Returns only the i-th row of the updated ppr
+    """
+    num_nodes = ppr.size(0)
+    assert ppr.size(1) == Ai.size(1), "shapes of ppr and adjacency must be the same"
+    assert Ai[0, i].nnz() == 0, "The adjacency's must not have self loops"
+    assert (torch.logical_or(Ai.storage.value() == 1, Ai.storage.value() == 0)
+            ).all().item(), "The adjacency must be unweighted"
+    assert p[0, i].sum() == 0, "Self loops must not be perturbed"
+    assert torch.all(p.storage._value > 0), "For technical reasons all values in p must be greater than 0"
+
+    v_rows, v_cols, v_vals = p.coo()
+    v_idx = torch.stack([v_rows, v_cols], dim=0)
+
+    Ai_rows, Ai_cols, Ai_vals = Ai.coo()
+    Ai_idx = torch.stack([Ai_rows, Ai_cols], dim=0)
+
+    ppr_rows, ppr_cols, ppr_vals = ppr.coo()
+    ppr_idx = torch.stack([ppr_rows, ppr_cols], dim=0)
+
+    # A_norm = A[i] / A[i].sum()
+    Ai_norm_val = Ai_vals / Ai_vals.sum()
+
+    # sparse addition: row = A[i] + v
+    row_sum = Ai.sum() + v_vals.sum()
+    row_idx = torch.cat((v_idx, Ai_idx), dim=-1)
+    row_weights = torch.cat((v_vals, Ai_vals))
+    row_idx, row_weights = coalesce(
+        row_idx,
+        row_weights,
+        m=1,
+        n=num_nodes,
+        op='sum'
+    )
+    # Works since the attack will always assign at least a small constant the elements in p
+    row_weights[row_weights > 1] = -row_weights[row_weights > 1] + 2
+
+    # sparse normalization: row_diff = row / row.sum()
+    row_weights /= row_sum
+    v_vals /= row_sum
+
+    # sparse subtraction: row_diff = row - A_norm
+    row_idx = torch.cat((row_idx, Ai_idx), dim=-1)
+    row_weights = torch.cat((row_weights, -Ai_norm_val))
+    row_idx, row_weights = coalesce(
+        row_idx,
+        row_weights,
+        m=1,
+        n=num_nodes,
+        op='sum'
+    )
+
+    # sparse normalization with const: (alpha - 1) * row_diff
+    row_weights *= (alpha - 1)
+
+    # row can be dense
+    row = SparseTensor.from_edge_index(edge_index=row_idx,
+                                       edge_attr=row_weights,
+                                       sparse_sizes=(1, num_nodes)).to_dense()
+
+    # P_inv must be sparse, because we need the full matrix
+    P_inv = SparseTensor.from_edge_index(edge_index=ppr_idx,
+                                         edge_attr=(1 / alpha) * ppr_vals,
+                                         sparse_sizes=(num_nodes, num_nodes))
+    P_inv_rows, P_inv_cols, P_inv_vals = P_inv.coo()
+    P_inv_idx = torch.stack([P_inv_rows, P_inv_cols], dim=0)
+    P_inv_transpose_idx, P_inv_transpose_vals = transpose(P_inv_idx,
+                                                          P_inv_vals,
+                                                          num_nodes, num_nodes)
+
+    # P_inv @ u
+    P_inv_at_u = P_inv[:, i]
+
+    P_inv_at_u_rows, P_inv_at_u_cols, P_inv_at_u_vals = P_inv_at_u.coo()
+    P_inv_at_u_idx = torch.stack([P_inv_at_u_rows, P_inv_at_u_cols], dim=0)
+
+    P_inv_at_u_transpose_idx, P_inv_at_u_transpose_vals = transpose(P_inv_at_u_idx,
+                                                                    P_inv_at_u_vals,
+                                                                    num_nodes, num_nodes)
+
+    # (1 + row_diff_norm @ P_inv @ u)
+    P_uv_inv_norm_const = 1 + (spmm(P_inv_at_u_transpose_idx, P_inv_at_u_transpose_vals, 1, num_nodes, row.T))
+
+    # (P_inv @ u @ row_diff_norm @ P_inv)
+    # unfortunately for this operation we need the fill P_inv matrix...
+    P_uv_inv_diff = P_inv_at_u[i] @ (spmm(P_inv_transpose_idx, P_inv_transpose_vals, num_nodes, num_nodes, row.T)).T
+
+    P_uv_inv_diff /= P_uv_inv_norm_const
+
+    # sparse subtraction: P_uv_inv = P_inv[:,i] - P_uv_inv_diff
+
+    P_uv_inv = P_inv[i].to_dense() - P_uv_inv_diff
+
+    ppr_pert_update = alpha * (P_uv_inv)
+
+    return ppr_pert_update
 
 
 def calc_ppr_update_topk(ppr: SparseTensor,
