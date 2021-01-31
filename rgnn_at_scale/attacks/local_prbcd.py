@@ -3,6 +3,7 @@ from copy import deepcopy
 import math
 from typing import Dict, Optional, Tuple, Union
 import warnings
+from numpy.core.numeric import identity
 
 from tqdm import tqdm
 from torch.nn import functional as F
@@ -27,7 +28,8 @@ class LocalPRBCD(PRBCD):
                  model: Union[RobustPPRGoWrapper, PPRGoWrapper],
                  device: Union[str, int, torch.device],
                  ppr_matrix: Optional[SparseTensor] = None,
-                 loss_type: str = 'CE',  # 'CW', 'LeakyCW'  # 'CE', 'MCE', 'Margin'
+                 loss_type: str = 'Margin',  # 'CW', 'LeakyCW'  # 'CE', 'MCE', 'Margin'
+                 lr_factor: float = 1.0,
                  lr_n_perturbations_factor: float = 0.1,
                  display_step: int = 20,
                  epochs: int = 400,
@@ -47,9 +49,14 @@ class LocalPRBCD(PRBCD):
         for p in self.model.parameters():
             p.requires_grad = False
 
-        self.adj = adj
         # TODO: Replace adj or remove
         edge_index_rows, edge_index_cols, edge_weight = adj.coo()
+        diagonal_mask = edge_index_rows == edge_index_cols
+        edge_index_rows = edge_index_rows[diagonal_mask]
+        edge_index_cols = edge_index_cols[diagonal_mask]
+        edge_weight = edge_weight[diagonal_mask]
+        self.adj = SparseTensor(row=edge_index_rows, col=edge_index_cols, value=edge_weight, sparse_sizes=adj.sizes())
+
         self.edge_index = torch.stack([edge_index_rows, edge_index_cols], dim=0).cpu()
         self.edge_weight = edge_weight.cpu()
         self.n = adj.size(0)
@@ -60,8 +67,8 @@ class LocalPRBCD(PRBCD):
         self.ppr_alpha = model.alpha
         if ppr_matrix is None:
             self.ppr_matrix = SparseTensor.from_scipy(
-                ppr.topk_ppr_matrix(adj.to_scipy(layout="csr"), model.alpha, model.eps, np.arange(self.n),
-                                    model.topk,  normalization=model.ppr_normalization)
+                ppr.topk_ppr_matrix(adj.to_scipy(layout="csr"), model.alpha, model.eps,
+                                    np.arange(self.n), model.topk,  normalization=model.ppr_normalization)
             ).to(device)
         else:
             self.ppr_matrix = ppr_matrix
@@ -85,10 +92,7 @@ class LocalPRBCD(PRBCD):
         self.modified_edge_index: torch.Tensor = None
         self.modified_edge_weight_diff: torch.Tensor = None
 
-        if self.loss_type == 'CW':
-            self.lr_factor = .005
-        else:
-            self.lr_factor = 0.1
+        self.lr_factor = lr_factor
         self.lr_factor *= max(math.sqrt(self.n / self.search_space_size), 1.)
 
     def attack(self, node_idx: int, n_perturbations: int):
@@ -105,6 +109,16 @@ class LocalPRBCD(PRBCD):
 
             logits = F.log_softmax(self.model.forward(self.X, None, ppr_scores=updated_ppr_vector), dim=-1)
             loss = self.calculate_loss(logits, self.labels[node_idx][None])
+
+            classification_statistics = LocalPRBCD.classification_statistics(logits, self.labels[node_idx])
+            if epoch == 0:
+                print(f'Initial: Loss: {loss.item()} Statstics: {classification_statistics} %\n')
+                with torch.no_grad():
+                    ppr_scores_orig = self.ppr_matrix[node_idx]
+                    logits_orig = F.log_softmax(self.model.forward(self.X, None, ppr_scores=ppr_scores_orig), dim=-1)
+                    loss_orig = self.calculate_loss(logits_orig, self.labels[node_idx][None])
+                    statistics_orig = LocalPRBCD.classification_statistics(logits_orig, self.labels[node_idx])
+                    print(f'Original: Loss: {loss_orig.item()} Statstics: {statistics_orig} %\n')
 
             gradient = grad_with_checkpoint(loss, self.modified_edge_weight_diff)[0]
 
@@ -134,14 +148,10 @@ class LocalPRBCD(PRBCD):
             del loss
             del gradient
 
-        edge_index = self.sample_edges(n_perturbations)[0]
+        self.updated_ppr_vector = self.sample_edges(node_idx, n_perturbations)
 
-        self.adj_adversary = SparseTensor.from_edge_index(
-            edge_index,
-            torch.ones_like(edge_index[0], dtype=torch.float32),
-            (self.n, self.n)
-        ).coalesce().detach()
-        self.attr_adversary = self.X
+        logits = F.log_softmax(self.model.forward(self.X, None, ppr_scores=self.updated_ppr_vector), dim=-1)
+        return logits
 
     def get_updated_ppr_vector(self, node_idx: int) -> SparseTensor:
         modified_edge_weight_diff = SparseTensor(row=torch.zeros_like(self.current_search_space),
@@ -152,6 +162,7 @@ class LocalPRBCD(PRBCD):
         A_row = self.adj[node_idx].to(self.device)
         updated_ppr_vector = calc_ppr_update_sparse_result(self.ppr_matrix, A_row,
                                                            modified_edge_weight_diff, node_idx, self.ppr_alpha)
+        # updated_ppr_vector /= updated_ppr_vector.sum()
 
         # modified_adj = SparseTensor(
         #     row=torch.full_like(self.current_search_space, node_idx),
@@ -173,6 +184,7 @@ class LocalPRBCD(PRBCD):
                                 self.model.eps, np.arange(self.n), self.model.topk,
                                 normalization=self.model.ppr_normalization)
         ).to(self.device)[node_idx]
+        # approx_ppr_vector.storage._value /= approx_ppr_vector.sum()
 
         diff_approx_exact = torch.norm(approx_ppr_vector.to_dense() - exact_ppr_vector)
         diff_approx_updated = torch.norm(approx_ppr_vector.to_dense() - updated_ppr_vector)
@@ -252,3 +264,34 @@ class LocalPRBCD(PRBCD):
 
             if self.current_search_space.size(0) > n_perturbations:
                 break
+
+    def sample_edges(self, node_idx: int, n_perturbations: int) -> SparseTensor:
+        best_margin = float('-Inf')
+        with torch.no_grad():
+            current_search_space = self.current_search_space.clone()
+            s = self.modified_edge_weight_diff.abs().detach()
+            s[s == self.eps] = 0
+            # TODO: Why numpy?
+            s = s.cpu().numpy()
+            while best_margin == float('-Inf'):
+                for i in range(self.K):
+                    sampled = np.random.binomial(1, s)
+
+                    if sampled.sum() > n_perturbations:
+                        continue
+                    self.modified_edge_weight_diff = torch.from_numpy(sampled).to(self.device).float()
+                    self.current_search_space = current_search_space[self.modified_edge_weight_diff == 1]
+                    self.modified_edge_weight_diff = self.modified_edge_weight_diff[self.modified_edge_weight_diff == 1]
+
+                    updated_ppr_vector = self.get_updated_ppr_vector(node_idx)
+                    logits = F.log_softmax(self.model.forward(self.X, None, ppr_scores=updated_ppr_vector), dim=-1)
+                    margin = LocalPRBCD.classification_statistics(logits, self.labels[node_idx])['margin']
+                    if best_margin < margin:
+                        best_margin = margin
+                        best_weights = self.modified_edge_weight_diff.clone().cpu()
+                        best_search_space = self.current_search_space.clone().cpu()
+            self.modified_edge_weight_diff = best_weights.to(self.device).float()
+            self.current_search_space = best_search_space.to(self.device).long()
+
+            updated_ppr_vector = self.get_updated_ppr_vector(node_idx)
+        return updated_ppr_vector

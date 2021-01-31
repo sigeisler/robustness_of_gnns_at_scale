@@ -180,6 +180,7 @@ class PRBCD(object):
         with torch.no_grad():
             s = self.modified_edge_weight_diff.abs().detach()
             s[s == self.eps] = 0
+            # TODO: Why numpy?
             s = s.cpu().numpy()
             while best_accuracy == float('Inf'):
                 for i in range(self.K):
@@ -210,10 +211,11 @@ class PRBCD(object):
 
     def calculate_loss(self, logits, labels):
         if self.loss_type == 'CW':
-            second_best_class = logits.argsort(-1)[:, -2]
+            sorted = logits.argsort(-1)
+            best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
             margin = (
                 logits[np.arange(logits.size(0)), labels]
-                - logits[np.arange(logits.size(0)), second_best_class]
+                - logits[np.arange(logits.size(0)), best_non_target_class]
             )
             loss = -torch.clamp(margin, min=0).mean()
         elif self.loss_type == 'LCW':
@@ -245,6 +247,14 @@ class PRBCD(object):
                 weighting_not_flipped * loss_not_flipped
                 + 0.25 * weighting_flipped * loss_flipped
             )
+        if self.loss_type == 'Margin':
+            sorted = logits.argsort(-1)
+            best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
+            margin = (
+                logits[np.arange(logits.size(0)), labels]
+                - logits[np.arange(logits.size(0)), best_non_target_class]
+            )
+            loss = -margin.mean()
         # TODO: Is it worth trying? CW should be quite similar
         # elif self.loss_type == 'Margin':
         #    loss = F.multi_margin_loss(torch.exp(logits), labels)
