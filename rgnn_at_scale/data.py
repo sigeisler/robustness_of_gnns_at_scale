@@ -739,10 +739,10 @@ class RobustPPRDataset(torch.utils.data.Dataset):
             ppr_matrix = matrix_to_torch(self.ppr_matrix[idx])
 
             # shape (ppr_num_nonzeros)
-            _, neighbor_idx, _ = ppr_matrix.coo()
+            source_idx, neighbor_idx, ppr_scores = ppr_matrix.coo()
 
-            ppr_matrix = ppr_matrix[:, neighbor_idx]
-            attr_matrix = self.attr_matrix_all[neighbor_idx]
+            ppr_matrix = ppr_matrix[:, neighbor_idx.unique()]
+            attr_matrix = self.attr_matrix_all[neighbor_idx.unique()]
 
             if self.labels_all is None:
                 labels = None
