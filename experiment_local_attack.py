@@ -40,7 +40,7 @@ def config():
     seed = 0
     artifact_dir = 'cache_debug'
     model_storage_type = 'pretrained'
-    device = 0
+    device = "cpu"
     display_steps = 10
     model_label = 'Vanilla PPRGo'
     make_undirected = True

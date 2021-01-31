@@ -40,6 +40,7 @@ def config():
         'n_filters': 64,
         'gdc_params': None,
         'svd_params': None,
+        'batch_norm': False,
         'jaccard_params': None,
         'do_cache_adj_prep': True
     }
@@ -134,6 +135,8 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
     storage = Storage(artifact_dir, experiment=ex)
     params = dict(dataset=dataset,
                   binary_attr=binary_attr,
+                  make_undirected=make_undirected,
+                  make_unweighted=make_unweighted,
                   seed=seed, **hyperparams)
     model_path = storage.save_model(model_storage_type, params, model)
 
