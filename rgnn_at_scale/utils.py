@@ -270,13 +270,23 @@ def calc_ppr_update_sparse_result(ppr: SparseTensor,
     return ppr_pert_update
 
 
-def calc_ppr_update_topk(ppr: SparseTensor,
-                         A: SparseTensor,
-                         p: torch.Tensor,
-                         i: int,
-                         alpha: float,
-                         topk: int):
-    pass
+def calc_ppr_update_topk_sparse(ppr: SparseTensor,
+                                Ai: SparseTensor,
+                                p: torch.Tensor,
+                                i: int,
+                                alpha: float,
+                                topk: int):
+
+    num_nodes = Ai.size(1)
+    ppr_pert_update = calc_ppr_update_sparse_result(ppr=ppr,
+                                                    Ai=Ai,
+                                                    p=p,
+                                                    i=i,
+                                                    alpha=alpha,)
+    values, indices = torch.topk(ppr_pert_update, topk, dim=-1)
+    col_ind = indices.flatten()
+    row_idx = torch.zeros(topk, dtype=torch.long)
+    return torch.sparse.FloatTensor(torch.stack([row_idx, col_ind]), values.flatten(), (1, num_nodes)).to_dense()
 
 
 def calc_ppr_update_dense(ppr: torch.Tensor,
