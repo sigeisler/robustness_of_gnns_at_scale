@@ -75,7 +75,7 @@ def calc_A_row(A):
 def calc_ppr_exact_row(A, alpha):
     num_nodes = A.shape[0]
     A_norm = calc_A_row(A)
-    return alpha * torch.inverse(torch.eye(num_nodes) + (alpha - 1) * A_norm)
+    return alpha * torch.inverse(torch.eye(num_nodes, device=A.device) + (alpha - 1) * A_norm)
 
 
 def calc_ppr_update(ppr: SparseTensor,
@@ -193,11 +193,12 @@ def calc_ppr_update_sparse_result(ppr: SparseTensor,
     """
     num_nodes = ppr.size(0)
     assert ppr.size(1) == Ai.size(1), "shapes of ppr and adjacency must be the same"
-    assert Ai[0, i].nnz() == 0, "The adjacency's must not have self loops"
+    #assert Ai[0, i].nnz() == 0, "The adjacency's must not have self loops"
     assert (torch.logical_or(Ai.storage.value() == 1, Ai.storage.value() == 0)
             ).all().item(), "The adjacency must be unweighted"
     assert p[0, i].sum() == 0, "Self loops must not be perturbed"
-    assert torch.all(p.storage._value > 0), "For technical reasons all values in p must be greater than 0"
+    assert torch.all(p.storage.value() > 0), "For technical reasons all values in p must be greater than 0"
+    assert torch.all(p.storage.value() <= 1), "All values in p must be less than 1"
 
     v_rows, v_cols, v_vals = p.coo()
     v_idx = torch.stack([v_rows, v_cols], dim=0)
@@ -205,14 +206,10 @@ def calc_ppr_update_sparse_result(ppr: SparseTensor,
     Ai_rows, Ai_cols, Ai_vals = Ai.coo()
     Ai_idx = torch.stack([Ai_rows, Ai_cols], dim=0)
 
-    ppr_rows, ppr_cols, ppr_vals = ppr.coo()
-    ppr_idx = torch.stack([ppr_rows, ppr_cols], dim=0)
-
     # A_norm = A[i] / A[i].sum()
     Ai_norm_val = Ai_vals / Ai_vals.sum()
 
     # sparse addition: row = A[i] + v
-    row_sum = Ai.sum() + v_vals.sum()
     row_idx = torch.cat((v_idx, Ai_idx), dim=-1)
     row_weights = torch.cat((v_vals, Ai_vals))
     row_idx, row_weights = coalesce(
@@ -226,8 +223,8 @@ def calc_ppr_update_sparse_result(ppr: SparseTensor,
     row_weights[row_weights > 1] = -row_weights[row_weights > 1] + 2
 
     # sparse normalization: row_diff = row / row.sum()
+    row_sum = row_weights.sum()
     row_weights /= row_sum
-    v_vals /= row_sum
 
     # sparse subtraction: row_diff = row - A_norm
     row_idx = torch.cat((row_idx, Ai_idx), dim=-1)
@@ -246,42 +243,29 @@ def calc_ppr_update_sparse_result(ppr: SparseTensor,
     # row can be dense
     row = SparseTensor.from_edge_index(edge_index=row_idx,
                                        edge_attr=row_weights,
-                                       sparse_sizes=(1, num_nodes)).to_dense()
+                                       sparse_sizes=(1, num_nodes))
 
     # P_inv must be sparse, because we need the full matrix
-    P_inv = SparseTensor.from_edge_index(edge_index=ppr_idx,
-                                         edge_attr=(1 / alpha) * ppr_vals,
-                                         sparse_sizes=(num_nodes, num_nodes))
-    P_inv_rows, P_inv_cols, P_inv_vals = P_inv.coo()
-    P_inv_idx = torch.stack([P_inv_rows, P_inv_cols], dim=0)
-    P_inv_transpose_idx, P_inv_transpose_vals = transpose(P_inv_idx,
-                                                          P_inv_vals,
-                                                          num_nodes, num_nodes)
+    P_inv_t = ppr.t().clone()
+    P_inv_t.storage._value /= alpha
 
-    # P_inv @ u
-    P_inv_at_u = P_inv[:, i]
-
-    P_inv_at_u_rows, P_inv_at_u_cols, P_inv_at_u_vals = P_inv_at_u.coo()
-    P_inv_at_u_idx = torch.stack([P_inv_at_u_rows, P_inv_at_u_cols], dim=0)
-
-    P_inv_at_u_transpose_idx, P_inv_at_u_transpose_vals = transpose(P_inv_at_u_idx,
-                                                                    P_inv_at_u_vals,
-                                                                    num_nodes, num_nodes)
+    # (P_inv @ u)^T = u^T @ P_inv^T
+    P_inv_at_u_t = P_inv_t[i]
 
     # (1 + row_diff_norm @ P_inv @ u)
-    P_uv_inv_norm_const = 1 + (spmm(P_inv_at_u_transpose_idx, P_inv_at_u_transpose_vals, 1, num_nodes, row.T))
+    P_uv_inv_norm_const = 1 + P_inv_at_u_t[:, row.storage.col()] @ row.storage.value()[:, None]
 
     # (P_inv @ u @ row_diff_norm @ P_inv)
     # unfortunately for this operation we need the fill P_inv matrix...
-    P_uv_inv_diff = P_inv_at_u[i] @ (spmm(P_inv_transpose_idx, P_inv_transpose_vals, num_nodes, num_nodes, row.T)).T
+    P_uv_inv_diff = P_inv_at_u_t[0, i] @ (P_inv_t[:, row.storage.col()] @ row.storage.value()[:, None]).T
 
     P_uv_inv_diff /= P_uv_inv_norm_const
 
     # sparse subtraction: P_uv_inv = P_inv[:,i] - P_uv_inv_diff
 
-    P_uv_inv = P_inv[i].to_dense() - P_uv_inv_diff
+    P_uv_inv = P_inv_t[:, i].to_dense().T - P_uv_inv_diff
 
-    ppr_pert_update = alpha * (P_uv_inv)
+    ppr_pert_update = alpha * P_uv_inv
 
     return ppr_pert_update
 

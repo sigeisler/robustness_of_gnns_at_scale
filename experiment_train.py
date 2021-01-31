@@ -57,6 +57,8 @@ def config():
     model_storage_type = 'pretrained'
     device = 0
     display_steps = 10
+    data_dir = './dataset'
+    data_device = 'cpu'
 
 
 @ex.automain

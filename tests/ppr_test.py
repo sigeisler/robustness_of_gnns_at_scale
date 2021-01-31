@@ -187,7 +187,6 @@ class TestPPRUpdate():
 
     def test_simple_example_sparse_result(self):
         alpha = 0.1
-        i = 2
         A_dense = torch.tensor([[0, 1, 0, 1],
                                 [1, 0, 1, 0],
                                 [0, 1, 0, 1],
@@ -199,28 +198,69 @@ class TestPPRUpdate():
         A_sparse = SparseTensor.from_dense(A_dense)
 
         num_nodes = A_dense.shape[0]
-        # p_sample_size = 100
-        # p_idx = torch.randint(num_nodes, (p_sample_size,)).unique()
-        # p_val = torch.rand(p_idx.shape[0])
 
-        p_dense = torch.tensor([[0.5, 0.0, 0, 0]],
-                               dtype=torch.float32,
-                               requires_grad=True)
-        p = SparseTensor.from_dense(p_dense)
+        for i in range(num_nodes):
+            p_dense = torch.tensor([[0.5, 0.3, 0, 0.3]],
+                                   dtype=torch.float32)
+            p_dense[0, i] = 0
+            p_dense.requires_grad = True
+            p = SparseTensor.from_dense(p_dense)
 
-        ppr_pert_update = calc_ppr_update_sparse_result(ppr=ppr_exact_sparse,
-                                                        Ai=A_sparse[i],
-                                                        p=p,
-                                                        i=i,
-                                                        alpha=alpha)
-        u = torch.zeros((num_nodes, 1),
-                        dtype=torch.float32)
-        u[i] = 1
-        v = torch.where(A_dense[i] > 0, -p_dense, p_dense)
-        A_pert = A_dense + u @ v
-        ppr_pert_exact = calc_ppr_exact_row(A_pert, alpha=alpha)
+            ppr_pert_update = calc_ppr_update_sparse_result(ppr=ppr_exact_sparse,
+                                                            Ai=A_sparse[i],
+                                                            p=p,
+                                                            i=i,
+                                                            alpha=alpha)
+            u = torch.zeros((num_nodes, 1),
+                            dtype=torch.float32)
+            u[i] = 1
+            v = torch.where(A_dense[i] > 0, -p_dense, p_dense)
+            A_pert = A_dense + u @ v
+            ppr_pert_exact = calc_ppr_exact_row(A_pert, alpha=alpha)
 
-        assert torch.allclose(ppr_pert_update, ppr_pert_exact[i], atol=1e-05)
+            assert torch.allclose(ppr_pert_update, ppr_pert_exact[i], atol=1e-05)
 
-        ppr_pert_update.sum().backward()
-        assert p_dense.grad is not None
+            ppr_pert_update.sum().backward()
+            assert p_dense.grad is not None
+
+    def test_random_sparse_result(self):
+        alpha = 0.1
+        prob_edge = 0.1
+        num_nodes = 100
+        vector_size = int(0.1 * num_nodes)
+
+        A_dense = torch.bernoulli(torch.full((num_nodes, num_nodes), prob_edge, dtype=torch.float32))
+        ppr_exact = calc_ppr_exact_row(A_dense, alpha=alpha)
+
+        ppr_exact_sparse = SparseTensor.from_dense(ppr_exact)
+        A_sparse = SparseTensor.from_dense(A_dense)
+
+        for i in tqdm(range(num_nodes)):
+            p = torch.zeros((1, vector_size)).uniform_()
+            p_dense = torch.zeros((1, num_nodes))
+
+            col = torch.randperm(num_nodes)
+            col = col[col != i]
+            col = col[:vector_size]
+
+            p_dense[0, col] = p
+            p_dense.requires_grad = True
+
+            p = SparseTensor.from_dense(p_dense)
+
+            ppr_pert_update = calc_ppr_update_sparse_result(ppr=ppr_exact_sparse,
+                                                            Ai=A_sparse[i],
+                                                            p=p,
+                                                            i=i,
+                                                            alpha=alpha)
+            u = torch.zeros((num_nodes, 1),
+                            dtype=torch.float32)
+            u[i] = 1
+            v = torch.where(A_dense[i] > 0, -p_dense, p_dense)
+            A_pert = A_dense + u @ v
+            ppr_pert_exact = calc_ppr_exact_row(A_pert, alpha=alpha)
+
+            assert torch.allclose(ppr_pert_update, ppr_pert_exact[i], atol=1e-05)
+
+            ppr_pert_update.sum().backward()
+            assert p_dense.grad is not None

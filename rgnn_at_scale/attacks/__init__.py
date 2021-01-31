@@ -6,10 +6,12 @@ from .dice import DICE
 from .fgsm import FGSM
 from .gang import GANG
 from .greedy_rbcd import GreedyRBCD
+from .local_prbcd import LocalPRBCD
 from .pgd import PGD
 from .prbcd import PRBCD
-ATTACK_TYPE = Union[DICE, FGSM, GANG, GreedyRBCD, PGD, PRBCD]
+ATTACK_TYPE = Union[DICE, FGSM, GANG, GreedyRBCD, LocalPRBCD, PGD, PRBCD]
 SPARSE_ATTACKS = [GANG.__name__, GreedyRBCD.__name__, PRBCD.__name__, DICE.__name__]
+LOCAL_ATTACKS = [LocalPRBCD.__name__]
 
 
 def create_attack(attack: str, binary_attr: bool, attr: torch.Tensor, **kwargs) -> ATTACK_TYPE:
@@ -51,4 +53,4 @@ def create_attack(attack: str, binary_attr: bool, attr: torch.Tensor, **kwargs) 
     return globals()[attack](**kwargs)
 
 
-__all__ = [FGSM, GANG, GreedyRBCD, PRBCD, create_attack, ATTACK_TYPE, SPARSE_ATTACKS]
+__all__ = [FGSM, GANG, GreedyRBCD, LocalPRBCD, PRBCD, create_attack, ATTACK_TYPE, SPARSE_ATTACKS]
