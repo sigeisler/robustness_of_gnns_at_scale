@@ -34,8 +34,8 @@ def config():
     dataset = 'cora_ml'  # Options are 'cora_ml' and 'citeseer' (or with a big GPU 'pubmed')
     attack = 'LocalPRBCD'
     attack_params = {}
-    nodes = [0, 1, 2]
-    epsilons = [10] #0.1, 0.25, 0.5, 1]
+    nodes = [1523, 27, 25]
+    epsilons = [1]
     binary_attr = False
     seed = 0
     artifact_dir = 'cache_debug'
@@ -120,8 +120,10 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                     'n_perturbations': n_perturbations,
                     'degree': int(degree.item()),
                     'logits': logits,
+                    'larget': labels[node],
                     'node_id': node,
                 })
+                results[-1].update(adversary.classification_statistics(logits, labels[node]))
 
     return {
         'results': results

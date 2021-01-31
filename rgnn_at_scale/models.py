@@ -858,6 +858,7 @@ class RobustPPRGoWrapper(RobustPPRGo, PPRGoWrapperBase):
 
 
 MODEL_TYPE = Union[GCN, RGNN, RGCN, RobustPPRGoWrapper, PPRGoWrapper]
+BATCHED_PPR_MODELS = Union[RobustPPRGoWrapper, PPRGoWrapper]
 
 
 def create_model(hyperparams: Dict[str, Any]) -> MODEL_TYPE:
