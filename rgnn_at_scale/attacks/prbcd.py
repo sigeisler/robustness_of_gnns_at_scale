@@ -247,7 +247,7 @@ class PRBCD(object):
                 weighting_not_flipped * loss_not_flipped
                 + 0.25 * weighting_flipped * loss_flipped
             )
-        if self.loss_type == 'Margin':
+        elif self.loss_type == 'Margin':
             sorted = logits.argsort(-1)
             best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
             margin = (

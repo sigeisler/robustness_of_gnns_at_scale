@@ -61,7 +61,6 @@ def config():
     data_dir = './datasets'
     data_device = 'cpu'
 
-
 @ex.automain
 def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params: Dict[str, Any], binary_attr: bool,
         make_undirected: bool, make_unweighted: bool, seed: int, artifact_dir: str,

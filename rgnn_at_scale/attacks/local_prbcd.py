@@ -107,22 +107,22 @@ class LocalPRBCD(PRBCD):
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
 
-            logits = self.get_logits(updated_vector_or_graph)
+            logits = self.get_logits(node_idx, updated_vector_or_graph)
             loss = self.calculate_loss(logits, self.labels[node_idx][None])
 
             classification_statistics = LocalPRBCD.classification_statistics(logits, self.labels[node_idx])
             if epoch == 0:
-                print(f'Initial: Loss: {loss.item()} Statstics: {classification_statistics} %\n')
+                print(f'Initial: Loss: {loss.item()} Statstics: {classification_statistics}\n')
                 with torch.no_grad():
                     if type(self.model) in BATCHED_PPR_MODELS.__args__:
                         updated_vector_or_graph_orig = self.ppr_matrix[node_idx]
                     else:
                         updated_vector_or_graph_orig = self.adj.to(self.device)
-                    logits_orig = self.get_logits(updated_vector_or_graph_orig)
+                    logits_orig = self.get_logits(node_idx, updated_vector_or_graph_orig)
                     loss_orig = self.calculate_loss(logits_orig, self.labels[node_idx][None])
                     statistics_orig = LocalPRBCD.classification_statistics(logits_orig,
                                                                            self.labels[node_idx])
-                    print(f'Original: Loss: {loss_orig.item()} Statstics: {statistics_orig} %\n')
+                    print(f'Original: Loss: {loss_orig.item()} Statstics: {statistics_orig}\n')
 
             gradient = grad_with_checkpoint(loss, self.modified_edge_weight_diff)[0]
 
@@ -139,10 +139,10 @@ class LocalPRBCD(PRBCD):
                 )
 
                 updated_vector_or_graph = self.get_updated_vector_or_graph(node_idx)
-                logits = self.get_logits(updated_vector_or_graph)
+                logits = self.get_logits(node_idx, updated_vector_or_graph)
                 classification_statistics = LocalPRBCD.classification_statistics(logits, self.labels[node_idx])
                 if epoch % self.display_step == 0:
-                    print(f'\nEpoch: {epoch} Loss: {loss.item()} Statstics: {classification_statistics} %\n')
+                    print(f'\nEpoch: {epoch} Loss: {loss.item()} Statstics: {classification_statistics}\n')
 
                 self._append_attack_statistics(loss.item(), classification_statistics)
 
@@ -154,14 +154,14 @@ class LocalPRBCD(PRBCD):
 
         self.updated_vector_or_graph = self.sample_edges(node_idx, n_perturbations)
 
-        logits = self.get_logits(updated_vector_or_graph)
+        logits = self.get_logits(node_idx, updated_vector_or_graph)
         return logits
 
-    def get_logits(self, updated_vector_or_graph: SparseTensor) -> torch.Tensor:
+    def get_logits(self, node_idx: int, updated_vector_or_graph: SparseTensor) -> torch.Tensor:
         if type(self.model) in BATCHED_PPR_MODELS.__args__:
             return F.log_softmax(self.model.forward(self.X, None, ppr_scores=updated_vector_or_graph), dim=-1)
         else:
-            return self.model(data=self.X.to(self.device), adj=updated_vector_or_graph)
+            return self.model(data=self.X.to(self.device), adj=updated_vector_or_graph)[node_idx:node_idx + 1]
 
     def get_updated_vector_or_graph(self, node_idx: int) -> SparseTensor:
         modified_edge_weight_diff = SparseTensor(row=torch.zeros_like(self.current_search_space),
@@ -208,6 +208,7 @@ class LocalPRBCD(PRBCD):
             return SparseTensor.from_dense(updated_vector_or_graph)
         else:
             v_rows, v_cols, v_vals = modified_edge_weight_diff.coo()
+            v_rows += node_idx
             v_idx = torch.stack([v_rows, v_cols], dim=0)
 
             A_rows, A_cols, A_vals = self.adj.to(self.device).coo()
@@ -317,7 +318,7 @@ class LocalPRBCD(PRBCD):
                     self.modified_edge_weight_diff = self.modified_edge_weight_diff[self.modified_edge_weight_diff == 1]
 
                     updated_vector_or_graph = self.get_updated_vector_or_graph(node_idx)
-                    logits = self.get_logits(updated_vector_or_graph)
+                    logits = self.get_logits(node_idx, updated_vector_or_graph)
                     margin = LocalPRBCD.classification_statistics(logits, self.labels[node_idx])['margin']
                     if best_margin < margin:
                         best_margin = margin
