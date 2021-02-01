@@ -102,7 +102,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                                   model=model, idx_attack=idx_test, device=device, **attack_params)
 
         for node in nodes:
-            degree = adj[node].sum()
+            degree = adj[node].sum() + 1
             for eps in epsilons:
                 n_perturbations = int((eps * degree).round().item())
                 if n_perturbations == 0:
@@ -121,11 +121,11 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                     'epsilon': eps,
                     'n_perturbations': n_perturbations,
                     'degree': int(degree.item()),
-                    'logits': logits,
-                    'larget': labels[node],
+                    'logits': logits.cpu(),
+                    'larget': labels[node].item(),
                     'node_id': node,
                 })
-                results[-1].update(adversary.classification_statistics(logits, labels[node]))
+                results[-1].update(adversary.classification_statistics(logits.cpu(), labels[node].cpu()))
 
     return {
         'results': results

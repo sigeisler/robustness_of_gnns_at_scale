@@ -27,6 +27,7 @@ class LocalPRBCD(PRBCD):
                  model: MODEL_TYPE,
                  device: Union[str, int, torch.device],
                  ppr_matrix: Optional[SparseTensor] = None,
+                 ppr_recalc_at_end: bool = False,
                  loss_type: str = 'Margin',  # 'CW', 'LeakyCW'  # 'CE', 'MCE', 'Margin'
                  lr_factor: float = 1.0,
                  lr_n_perturbations_factor: float = 0.1,
@@ -63,6 +64,7 @@ class LocalPRBCD(PRBCD):
         self.d = X.shape[1]
         self.labels = labels.to(self.device)
         self.idx_attack = idx_attack
+        self.ppr_recalc_at_end = False
         if type(model) in BATCHED_PPR_MODELS.__args__:
             self.ppr_alpha = model.alpha
             if ppr_matrix is None:
@@ -72,6 +74,7 @@ class LocalPRBCD(PRBCD):
                 ).to(device)
             else:
                 self.ppr_matrix = ppr_matrix
+            self.ppr_recalc_at_end = ppr_recalc_at_end
 
         self.loss_type = loss_type
         self.lr_n_perturbations_factor = lr_n_perturbations_factor
@@ -156,6 +159,10 @@ class LocalPRBCD(PRBCD):
         logits = self.get_logits(node_idx, updated_vector_or_graph)
         self.perturbed_edges = self.get_perturbed_edges(node_idx)
 
+        if self.ppr_recalc_at_end:
+            adj = self.get_updated_vector_or_graph(node_idx, only_update_adj=True)
+            logits = F.log_softmax(self.model.forward(self.X, adj, ppr_idx=np.array([node_idx])), dim=-1)
+
         return logits
 
     def get_logits(self, node_idx: int, updated_vector_or_graph: SparseTensor) -> torch.Tensor:
@@ -171,47 +178,47 @@ class LocalPRBCD(PRBCD):
         source, target = torch.where(~flip_order_mask, source, target), torch.where(flip_order_mask, source, target)
         return torch.stack((source, target), dim=0)
 
-    def get_updated_vector_or_graph(self, node_idx: int) -> SparseTensor:
+    def get_updated_vector_or_graph(self, node_idx: int, only_update_adj: bool = False) -> SparseTensor:
         modified_edge_weight_diff = SparseTensor(row=torch.zeros_like(self.current_search_space),
                                                  col=self.current_search_space,
                                                  value=self.modified_edge_weight_diff,
                                                  sparse_sizes=(1, self.n))
-        if type(self.model) in BATCHED_PPR_MODELS.__args__:
+        if type(self.model) in BATCHED_PPR_MODELS.__args__ and not only_update_adj:
             A_row = self.adj[node_idx].to(self.device)
             updated_vector_or_graph = calc_ppr_update_sparse_result(self.ppr_matrix, A_row,
                                                                     modified_edge_weight_diff, node_idx, self.ppr_alpha)
             # updated_vector_or_graph /= updated_vector_or_graph.sum()
 
-            # modified_adj = SparseTensor(
-            #     row=torch.full_like(self.current_search_space, node_idx),
-            #     col=self.current_search_space,
-            #     value=self.modified_edge_weight_diff,
-            #     sparse_sizes=(self.n, self.n)
-            # ).to_scipy(layout="csr") + self.adj.to_scipy(layout="csr")
+            # # modified_adj = SparseTensor(
+            # #     row=torch.full_like(self.current_search_space, node_idx),
+            # #     col=self.current_search_space,
+            # #     value=self.modified_edge_weight_diff,
+            # #     sparse_sizes=(self.n, self.n)
+            # # ).to_scipy(layout="csr") + self.adj.to_scipy(layout="csr")
 
-            u = torch.zeros((self.n, 1), dtype=torch.float32, device=self.device)
-            u[node_idx] = 1
-            p_dense = modified_edge_weight_diff.to_dense()
-            A_dense = self.adj.to(self.device).to_dense()
-            v = torch.where(A_dense[node_idx, :] > 0, -p_dense, p_dense)
-            A_pert = A_dense + u @ v
-            exact_ppr_vector = calc_ppr_exact_row(A_pert, alpha=self.ppr_alpha)[node_idx]
+            # u = torch.zeros((self.n, 1), dtype=torch.float32, device=self.device)
+            # u[node_idx] = 1
+            # p_dense = modified_edge_weight_diff.to_dense()
+            # A_dense = self.adj.to(self.device).to_dense()
+            # v = torch.where(A_dense[node_idx, :] > 0, -p_dense, p_dense)
+            # A_pert = A_dense + u @ v
+            # exact_ppr_vector = calc_ppr_exact_row(A_pert, alpha=self.ppr_alpha)[node_idx]
 
-            approx_ppr_vector = SparseTensor.from_scipy(
-                ppr.topk_ppr_matrix(SparseTensor.from_dense(A_pert).to_scipy(layout="csr"), self.model.alpha,
-                                    self.model.eps, np.arange(self.n), self.model.topk,
-                                    normalization=self.model.ppr_normalization)
-            ).to(self.device)[node_idx]
-            # approx_ppr_vector.storage._value /= approx_ppr_vector.sum()
+            # approx_ppr_vector = SparseTensor.from_scipy(
+            #     ppr.topk_ppr_matrix(SparseTensor.from_dense(A_pert).to_scipy(layout="csr"), self.model.alpha,
+            #                         self.model.eps, np.arange(self.n), self.model.topk,
+            #                         normalization=self.model.ppr_normalization)
+            # ).to(self.device)[node_idx]
+            # # approx_ppr_vector.storage._value /= approx_ppr_vector.sum()
 
-            diff_approx_exact = torch.norm(approx_ppr_vector.to_dense() - exact_ppr_vector)
-            diff_approx_updated = torch.norm(approx_ppr_vector.to_dense() - updated_vector_or_graph)
-            diff_exact_updated = torch.norm(exact_ppr_vector - updated_vector_or_graph)
+            # diff_approx_exact = torch.norm(approx_ppr_vector.to_dense() - exact_ppr_vector)
+            # diff_approx_updated = torch.norm(approx_ppr_vector.to_dense() - updated_vector_or_graph)
+            # diff_exact_updated = torch.norm(exact_ppr_vector - updated_vector_or_graph)
 
-            if diff_exact_updated > diff_approx_exact or diff_exact_updated > diff_approx_updated:
-                warnings.warn(f'Error os large diff_approx_exact={diff_approx_exact:.3f} '
-                              f'diff_approx_updated={diff_approx_updated:.3f} '
-                              f'diff_exact_updated={diff_exact_updated:.3f}')
+            # if diff_exact_updated > diff_approx_exact or diff_exact_updated > diff_approx_updated:
+            #     warnings.warn(f'Error os large diff_approx_exact={diff_approx_exact:.3f} '
+            #                   f'diff_approx_updated={diff_approx_updated:.3f} '
+            #                   f'diff_exact_updated={diff_exact_updated:.3f}')
 
             return SparseTensor.from_dense(updated_vector_or_graph)
         else:
