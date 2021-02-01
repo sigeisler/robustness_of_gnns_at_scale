@@ -581,8 +581,13 @@ def prep_cora_citeseer_pubmed(name: str,
         else:
             adj_norm = adj_matrix
 
+    # remove self loops, because standardize no_self_loops=True does't always work
+    adj_norm.setdiag(0)
+    adj_norm.eliminate_zeros()
+
     attr = torch.FloatTensor(graph.attr_matrix.toarray()).to(device)
     adj = utils.sparse_tensor(adj_norm.tocoo()).to(device)
+
     labels = torch.LongTensor(graph.labels).to(device)
 
     return attr, adj, labels
