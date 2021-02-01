@@ -152,9 +152,10 @@ class LocalPRBCD(PRBCD):
             del loss
             del gradient
 
-        self.updated_vector_or_graph = self.sample_edges(node_idx, n_perturbations)
-
+        updated_vector_or_graph = self.sample_edges(node_idx, n_perturbations)
         logits = self.get_logits(node_idx, updated_vector_or_graph)
+        self.perturbed_edges = self.get_perturbed_edges(node_idx)
+
         return logits
 
     def get_logits(self, node_idx: int, updated_vector_or_graph: SparseTensor) -> torch.Tensor:
@@ -162,6 +163,13 @@ class LocalPRBCD(PRBCD):
             return F.log_softmax(self.model.forward(self.X, None, ppr_scores=updated_vector_or_graph), dim=-1)
         else:
             return self.model(data=self.X.to(self.device), adj=updated_vector_or_graph)[node_idx:node_idx + 1]
+
+    def get_perturbed_edges(self, node_idx: int) -> torch.Tensor:
+        source = torch.full_like(self.current_search_space, node_idx).cpu()
+        target = self.current_search_space.cpu()
+        flip_order_mask = source > target
+        source, target = torch.where(~flip_order_mask, source, target), torch.where(flip_order_mask, source, target)
+        return torch.stack((source, target), dim=0)
 
     def get_updated_vector_or_graph(self, node_idx: int) -> SparseTensor:
         modified_edge_weight_diff = SparseTensor(row=torch.zeros_like(self.current_search_space),
@@ -300,27 +308,32 @@ class LocalPRBCD(PRBCD):
                 break
 
     def sample_edges(self, node_idx: int, n_perturbations: int) -> SparseTensor:
-        best_margin = float('-Inf')
+        best_margin = float('Inf')
         with torch.no_grad():
             current_search_space = self.current_search_space.clone()
             s = self.modified_edge_weight_diff.abs().detach()
             s[s == self.eps] = 0
             # TODO: Why numpy?
-            s = s.cpu().numpy()
-            while best_margin == float('-Inf'):
+            #s = s.cpu().numpy()
+            while best_margin == float('Inf'):
                 for i in range(self.K):
-                    sampled = np.random.binomial(1, s)
+                    if best_margin == float('Inf'):
+                        sampled = torch.zeros_like(s)
+                        sampled[torch.topk(s, n_perturbations).indices] = 1
+                    else:
+                        sampled = torch.bernoulli(s).float()
 
-                    if sampled.sum() > n_perturbations:
+                    if sampled.sum() > n_perturbations or sampled.sum() == 0:
                         continue
-                    self.modified_edge_weight_diff = torch.from_numpy(sampled).to(self.device).float()
+
+                    self.modified_edge_weight_diff = sampled
                     self.current_search_space = current_search_space[self.modified_edge_weight_diff == 1]
                     self.modified_edge_weight_diff = self.modified_edge_weight_diff[self.modified_edge_weight_diff == 1]
 
                     updated_vector_or_graph = self.get_updated_vector_or_graph(node_idx)
                     logits = self.get_logits(node_idx, updated_vector_or_graph)
                     margin = LocalPRBCD.classification_statistics(logits, self.labels[node_idx])['margin']
-                    if best_margin < margin:
+                    if best_margin > margin:
                         best_margin = margin
                         best_weights = self.modified_edge_weight_diff.clone().cpu()
                         best_search_space = self.current_search_space.clone().cpu()
