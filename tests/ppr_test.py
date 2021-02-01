@@ -105,7 +105,7 @@ class TestPPRUpdate():
         i = 0
 
         eps = 1e-4
-        topk = 128
+        topk = 64
 
         graph = prep_graph("cora_ml", device,  # dataset_root=data_dir,
                            make_undirected=True,
@@ -119,31 +119,23 @@ class TestPPRUpdate():
 
         A_dense = adj.to_dense()
         num_nodes = A_dense.shape[0]
-        A_dense -= torch.eye(num_nodes)
-        adj = SparseTensor.from_dense(A_dense)
 
-        # p = torch.rand((1, num_nodes),
-        #                requires_grad=True)
-
-        p = torch.ones((1, num_nodes),
-                       requires_grad=True) * 1e-14
+        p = torch.rand((1, num_nodes),
+                       requires_grad=True)
 
         p[0, i] = 0
 
-        ppr_idx = np.concatenate((np.arange(0, i), np.arange(i + 1, num_nodes)))
-        ppr_idx_i = np.array([i])
+        ppr_idx = np.arange(num_nodes)
 
         A_sp = SparseTensor.from_dense(calc_A_row(A_dense)).to_scipy(layout="csr")
 
-        ppr_topk_i = matrix_to_torch(topk_ppr_matrix(A_sp, alpha, eps, ppr_idx_i, topk, normalization='row')).to_dense()
-        ppr_topk = matrix_to_torch(topk_ppr_matrix(A_sp, alpha, eps, ppr_idx, topk, normalization='row')).to_dense()
+        ppr_topk_i = matrix_to_torch(topk_ppr_matrix(
+            A_sp, alpha, 1e-6, np.array([i]), num_nodes, normalization='row')).to_dense()
+        ppr_topk = matrix_to_torch(topk_ppr_matrix(
+            A_sp, alpha, eps, ppr_idx, topk, normalization='row')).to_dense()
+
+        ppr_topk[i] = ppr_topk_i
         ppr_exact = calc_ppr_exact_row(A_dense, alpha=alpha)
-        # ppr_pert_update_topk = calc_ppr_update_topk_dense(ppr=ppr_topk,
-        #                                                   A=A_dense,
-        #                                                   p=p,
-        #                                                   i=i,
-        #                                                   alpha=alpha,
-        #                                                   topk=topk)
 
         ppr_pert_update_topk = calc_ppr_update_dense(ppr=ppr_topk,
                                                      A=A_dense,
@@ -285,7 +277,7 @@ class TestPPRUpdate():
             ppr_pert_update.sum().backward()
             assert p_dense.grad is not None
 
-    def test_random_topk_sparse_result(self):
+    def test_cora_topk_sparse_result(self):
         alpha = 0.085
         i = 0
 
@@ -304,8 +296,6 @@ class TestPPRUpdate():
 
         A_dense = adj.to_dense()
         num_nodes = A_dense.shape[0]
-        A_dense -= torch.eye(num_nodes)
-        adj = SparseTensor.from_dense(A_dense)
 
         p_dense = torch.rand((1, num_nodes),
                              requires_grad=True)
@@ -313,19 +303,26 @@ class TestPPRUpdate():
 
         p = SparseTensor.from_dense(p_dense)
 
-        ppr_idx = np.arange(num_nodes)
+        ppr_idx = np.concatenate([np.arange(0, i), np.arange(i + 1, num_nodes)])
 
         A_sp = adj.to_scipy(layout="csr")
 
-        ppr_topk = matrix_to_torch(topk_ppr_matrix(A_sp, alpha, eps, ppr_idx, topk, normalization='row'))
+        ppr_topk_i = matrix_to_torch(topk_ppr_matrix(
+            A_sp, alpha, 1e-6, np.array([i]), num_nodes, normalization='row'))
+        ppr_topk_wo_i = matrix_to_torch(topk_ppr_matrix(
+            A_sp, alpha, eps, ppr_idx, topk, normalization='row'))
 
-        # ppr_pert_update_topk = calc_ppr_update_topk_sparse(ppr=ppr_topk,
-        #                                                    Ai=adj[i],
-        #                                                    p=p,
-        #                                                    i=i,
-        #                                                    alpha=alpha,
-        #                                                    topk=topk
-        #                                                    )
+        r, c, v = ppr_topk_wo_i.coo()
+        r[r >= i] += 1
+        idx = torch.stack([r, c], dim=0)
+        r_i, c_i, v_i = ppr_topk_i.coo()
+        idx_i = torch.stack([r_i, c_i], dim=0)
+
+        ppr_topk_idx = torch.cat((idx, idx_i), dim=-1)
+        ppr_topk_weights = torch.cat((v, v_i))
+        ppr_topk = SparseTensor.from_edge_index(edge_index=ppr_topk_idx,
+                                                edge_attr=ppr_topk_weights,
+                                                sparse_sizes=(num_nodes, num_nodes))
 
         ppr_pert_update_topk = calc_ppr_update_sparse_result(ppr=ppr_topk,
                                                              Ai=adj[i],
