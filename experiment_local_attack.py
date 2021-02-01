@@ -114,6 +114,8 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
 
                 logits = adversary.attack(node, n_perturbations)
 
+                logging.info(f'Pert. edges for node {node} and budget {n_perturbations}: {adversary.perturbed_edges}')
+
                 results.append({
                     'label': hyperparams['label'],
                     'epsilon': eps,
