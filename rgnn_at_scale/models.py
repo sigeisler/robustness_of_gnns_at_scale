@@ -13,6 +13,8 @@ import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
 import torch_geometric
 from torch_geometric.nn import GCNConv
+from torch_geometric.utils import add_remaining_self_loops
+from torch_geometric.utils.num_nodes import maybe_num_nodes
 from torch_geometric.data import Data
 from torch_scatter import scatter_add
 from torch_sparse import coalesce, SparseTensor
@@ -80,6 +82,13 @@ class ChainableGCNConv(GCNConv):
             return chunked_message_and_aggregate(adj_t, x, n_chunks=self.n_chunks)
 
 
+ACTIVATIONS = {
+    "ReLU": nn.ReLU(),
+    "Tanh": nn.Tanh(),
+    "Identiy": nn.Identity()
+}
+
+
 class GCN(nn.Module):
     """Two layer GCN implemntation to be extended by the RGNN which supports the adjacency preprocessings:
     - SVD: Negin Entezari, Saba A. Al-Sayouri, Amirali Darvishzadeh, and Evangelos E. Papalexakis. All you need is Low
@@ -97,7 +106,9 @@ class GCN(nn.Module):
     activation : nn.Module, optional
         Arbitrary activation function for the hidden layer, by default nn.ReLU()
     n_filters : int, optional
-        number of dimensions for the hidden units, by default 80
+        number of dimensions for the hidden units, by default 64
+    bias (bool, optional): If set to :obj:`False`, the gcn layers will not learn
+            an additive bias. (default: :obj:`True`)
     dropout : int, optional
         Dropout rate, by default 0.5
     do_omit_softmax : bool, optional
@@ -115,8 +126,9 @@ class GCN(nn.Module):
     def __init__(self,
                  n_features: int,
                  n_classes: int,
-                 activation: nn.Module = nn.ReLU(),
+                 activation: Union[str, nn.Module] = nn.ReLU(),
                  n_filters: Union[int, Sequence[int]] = 64,
+                 bias: bool = True,
                  dropout: int = 0.5,
                  do_omit_softmax: bool = False,
                  with_batch_norm: bool = False,
@@ -125,6 +137,7 @@ class GCN(nn.Module):
                  jaccard_params: Optional[Dict[str, float]] = None,
                  do_cache_adj_prep: bool = True,
                  do_normalize_adj_once: bool = True,
+                 add_self_loops: bool = True,
                  do_use_sparse_tensor: bool = True,
                  do_checkpoint: bool = False,  # TODO: Doc string
                  n_chunks: int = 8,
@@ -134,9 +147,17 @@ class GCN(nn.Module):
             self.n_filters = [n_filters]
         else:
             self.n_filters = list(n_filters)
+        if isinstance(activation, str):
+            if activation in ACTIVATIONS.keys():
+                self.activation = ACTIVATIONS[activation]
+            else:
+                raise AttributeError(f"Activation {activation} is not defined.")
+        else:
+            self.activation = activation
+
         self.n_features = n_features
+        self.bias = bias
         self.n_classes = n_classes
-        self.activation = activation
         self.dropout = dropout
         self.do_omit_softmax = do_omit_softmax
         self.with_batch_norm = with_batch_norm
@@ -145,6 +166,7 @@ class GCN(nn.Module):
         self.jaccard_params = jaccard_params
         self.do_cache_adj_prep = do_cache_adj_prep
         self.do_normalize_adj_once = do_normalize_adj_once
+        self.add_self_loops = add_self_loops
         self.do_use_sparse_tensor = do_use_sparse_tensor
         self.do_checkpoint = do_checkpoint
         self.n_chunks = n_chunks
@@ -153,7 +175,7 @@ class GCN(nn.Module):
 
     def _build_conv_layer(self, in_channels: int, out_channels: int):
         return ChainableGCNConv(in_channels=in_channels, out_channels=out_channels,
-                                do_chunk=self.do_checkpoint, n_chunks=self.n_chunks)
+                                do_chunk=self.do_checkpoint, n_chunks=self.n_chunks, bias=self.bias)
 
     def _build_layers(self):
         modules = nn.ModuleList([
@@ -321,6 +343,17 @@ class GCN(nn.Module):
                                ) -> Tuple[Union[torch.Tensor, SparseTensor], Optional[torch.Tensor]]:
         if self.do_normalize_adj_once:
             self._deactivate_normalization()
+
+            num_nodes = x.shape[0]
+            if edge_weight is None:
+                edge_weight = torch.ones((edge_idx.size(1), ), dtype=torch.float32,
+                                         device=edge_idx.device)
+
+            if self.add_self_loops:
+                edge_idx, tmp_edge_weight = add_remaining_self_loops(
+                    edge_idx, edge_weight, 1., num_nodes)
+                assert tmp_edge_weight is not None
+                edge_weight = tmp_edge_weight
 
             row, col = edge_idx
             deg = scatter_add(edge_weight, col, dim=0, dim_size=x.shape[0])
