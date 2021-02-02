@@ -1,12 +1,17 @@
-from typing import Union
 
+from typing import Dict,  Union
+
+from torch_sparse import SparseTensor
 import numpy as np
 from numba import jit
 import scipy.sparse as sp
 import torch
+from torch.nn import functional as F
 
+from rgnn_at_scale.models import BATCHED_PPR_MODELS
 from rgnn_at_scale.utils import sparse_tensor
-from rgnn_at_scale.models import DenseGCN
+from rgnn_at_scale.models import GCN
+from rgnn_at_scale.io import Storage
 
 """
 Implementation of the method proposed in the paper:
@@ -18,6 +23,98 @@ Copyright (C) 2018
 Daniel Zügner
 Technical University of Munich
 """
+
+
+class Nettack:
+    """Wrapper around the implementation of the method proposed in the paper:
+    'Adversarial Attacks on Neural Networks for Graph Data'
+    by Daniel Zügner, Amir Akbarnejad and Stephan Günnemann,
+    published at SIGKDD'18, August 2018, London, UK
+
+    Parameters
+    ----------
+    adj : torch_sparse.SparseTensor
+        [n, n] sparse adjacency matrix.
+    X : torch.Tensor
+        [n, d] feature matrix.
+    labels : torch.Tensor
+        Labels vector of shape [n].
+    idx_attack : np.ndarray
+        Indices of the nodes which are to be attacked [?].
+    model : GCN
+        Model to be attacked.
+    """
+
+    def __init__(self,
+                 adj: SparseTensor,
+                 X: torch.Tensor,
+                 labels: torch.Tensor,
+                 idx_attack: np.ndarray,
+                 model: GCN,
+                 device: Union[str, int, torch.device],
+                 artifact_dir: str,
+                 model_storage_type: str,
+                 surrogate_model_params: dict,
+                 epsilon: float = 1e-5,
+                 **kwargs):
+        assert adj.device() == X.device, 'The device of the features and adjacency matrix must match'
+        self.adj = adj
+        self.X = X
+        self.adj_matrix = adj.to_scipy(layout="csr")
+        self.attr_matrix = SparseTensor.from_dense(X).to_scipy(layout="csr")
+        self.labels = labels.detach().numpy()
+        self.model = model
+        self.epsilon = epsilon
+        self.device = device
+
+        storage = Storage(artifact_dir)
+        surrogate_models = storage.find_models(model_storage_type, surrogate_model_params)
+        self.surrogate_model, self.surrogate_model_params = surrogate_models[0]
+
+        self.attr_adversary = self.X  # Only the adjacency matrix will be perturbed
+        self.adj_adversary = None
+
+    def attack(self, node_idx: int, n_perturbations: int):
+        nettack = OriginalNettack(self.adj_matrix,
+                                  self.attr_matrix,
+                                  self.labels,
+                                  self.surrogate_model.layers[0][0].weight.detach().numpy(),
+                                  self.surrogate_model.layers[1][0].weight.detach().numpy(),
+                                  node_idx,
+                                  verbose=True)
+        nettack.reset()
+        nettack.attack_surrogate(n_perturbations,
+                                 perturb_structure=True,
+                                 perturb_features=False,
+                                 direct=True)
+        self.perturbed_edges = torch.tensor(nettack.structure_perturbations)
+
+        logits = self.get_logits(node_idx, nettack.adj_adversary)
+
+        return logits
+
+    def get_logits(self, node_idx: int, updated_vector_or_graph: SparseTensor) -> torch.Tensor:
+        if type(self.model) in BATCHED_PPR_MODELS.__args__:
+            return F.log_softmax(self.model.forward(self.X, None, ppr_scores=updated_vector_or_graph), dim=-1)
+        else:
+            return self.model(data=self.X.to(self.device), adj=updated_vector_or_graph)[node_idx:node_idx + 1]
+
+    @ staticmethod
+    def classification_statistics(logits, label) -> Dict[str, float]:
+        logits = logits[0]
+        logit_target = logits[label].item()
+        sorted = logits.argsort()
+        logit_best_non_target = logits[sorted[sorted != label][-1]].item()
+        confidence_target = np.exp(logit_target)
+        confidence_non_target = np.exp(logit_best_non_target)
+        margin = confidence_target - confidence_non_target
+        return {
+            'logit_target': logit_target,
+            'logit_best_non_target': logit_best_non_target,
+            'confidence_target': confidence_target,
+            'confidence_non_target': confidence_non_target,
+            'margin': margin
+        }
 
 
 class OriginalNettack:
@@ -778,74 +875,3 @@ def preprocess_graph(adj):
     degree_mat_inv_sqrt = sp.diags(np.power(rowsum, -0.5))
     adj_normalized = adj_.dot(degree_mat_inv_sqrt).T.dot(degree_mat_inv_sqrt).tocsr()
     return adj_normalized.astype(np.float32)
-
-
-####### Wrapper #######
-
-class Nettack(OriginalNettack):
-    """Wrapper around the implementation of the method proposed in the paper:
-    'Adversarial Attacks on Neural Networks for Graph Data'
-    by Daniel Zügner, Amir Akbarnejad and Stephan Günnemann,
-    published at SIGKDD'18, August 2018, London, UK
-
-    Parameters
-    ----------
-    X : torch.Tensor
-        [n, d] feature matrix.
-    adj : torch.sparse.FloatTensor
-        [n, n] sparse adjacency matrix.
-    labels : torch.Tensor
-        Labels vector of shape [n].
-    idx_attack : np.ndarray
-        Indices of the nodes which are to be attacked [?].
-    model : DenseGCN
-        Model to be attacked.
-    epochs : int, optional
-        Number of epochs to attack the adjacency matrix, by default 200.
-    loss_type : str, optional
-        'CW' for Carlini and Wagner or 'CE' for cross entropy, by default 'CE'.
-    """
-
-    def __init__(self,
-                 X: torch.Tensor,
-                 adj: torch.sparse.FloatTensor,
-                 labels: torch.Tensor,
-                 idx_attack: np.ndarray,
-                 model: DenseGCN,
-                 device: Union[str, int, torch.device],
-                 surrogate_params={
-                     'n_filters': 64,
-                     'dropout': 0.5,
-                     'train_params': {
-                         'lr': 1e-2,
-                         'weight_decay': 1e-3,  # TODO: 5e-4,
-                         'patience': 100,
-                         'max_epochs': 3000
-                     }
-                 },
-                 epochs: int = 200,
-                 epsilon: float = 1e-5,
-                 loss_type: str = 'CE',
-                 **kwargs):
-        assert adj.device == X.device, 'The device of the features and adjacency matrix must match'
-        self.device = device
-        self.X = X.to(device)
-        self.adj = adj.to(device)
-        if self.adj.is_sparse:
-            self.adj = self.adj.to_dense()
-        self.labels = labels.to(device)
-        self.idx_attack = idx_attack
-        self.model = model
-        self.epochs = epochs
-        self.epsilon = epsilon
-        self.loss_type = loss_type
-
-        self.n = self.X.shape[0]
-        self.device = X.device
-
-        self.attr_adversary = self.X  # Only the adjacency matrix will be perturbed
-        self.adj_adversary = None
-
-    def attack():
-        pass
-        # TODO:

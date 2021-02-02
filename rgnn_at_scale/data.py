@@ -657,11 +657,11 @@ def prep_graph(name: str,
         # Also we need numpy arrays because Numba cant determine type of torch.Tensor
         split = {k: v.numpy() for k, v in split.items()}
 
-        edge_index, edge_weight = add_remaining_self_loops(
-            data.edge_index.to(device),
-            torch.ones(data.edge_index.size(1), device=device).float(),
-            num_nodes=num_nodes
-        )
+        edge_index = data.edge_index.to(device)
+        if data.edge_attr is None:
+            edge_weight = torch.ones(edge_index.size(1))
+        else:
+            edge_weight = data.edge_attr
 
         if make_undirected:
             edge_index, edge_weight = utils.to_symmetric(edge_index, edge_weight, num_nodes)
@@ -683,6 +683,7 @@ def prep_graph(name: str,
         attr = data.x.to(device)
 
         labels = data.y.squeeze().to(device)
+        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
     if binary_attr:
         # NOTE: do not use this for really large datasets.
