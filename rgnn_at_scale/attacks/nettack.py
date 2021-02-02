@@ -89,9 +89,10 @@ class Nettack:
                                  direct=True)
         self.perturbed_edges = torch.tensor(nettack.structure_perturbations)
 
+        initial_logits = self.get_logits(node_idx, self.adj)
         logits = self.get_logits(node_idx, nettack.adj_adversary)
 
-        return logits
+        return logits, initial_logits
 
     def get_logits(self, node_idx: int, updated_vector_or_graph: SparseTensor) -> torch.Tensor:
         if type(self.model) in BATCHED_PPR_MODELS.__args__:
