@@ -17,7 +17,7 @@ from pprgo import ppr
 from rgnn_at_scale.attacks.prbcd import PRBCD
 
 
-class LocalPRBCD(PRBCD):
+class LocalPRBCD():
 
     def __init__(self,
                  adj: SparseTensor,
@@ -26,6 +26,7 @@ class LocalPRBCD(PRBCD):
                  idx_attack: np.ndarray,
                  model: MODEL_TYPE,
                  device: Union[str, int, torch.device],
+                 attack_labeled_nodes_only: bool = False,
                  ppr_matrix: Optional[SparseTensor] = None,
                  ppr_recalc_at_end: bool = False,
                  loss_type: str = 'Margin',  # 'CW', 'LeakyCW'  # 'CE', 'MCE', 'Margin'
@@ -41,40 +42,48 @@ class LocalPRBCD(PRBCD):
                  K: int = 20,
                  **kwargs):
 
-        super().__init__(adj, X, labels, idx_attack, model, device)
         self.device = device
         self.X = X
-        self.model = deepcopy(model).to(self.device)
+        self.model = model.to(self.device)
         self.model.eval()
         for p in self.model.parameters():
             p.requires_grad = False
 
-        # TODO: Replace adj or remove
-        edge_index_rows, edge_index_cols, edge_weight = adj.coo()
-        #diagonal_mask = edge_index_rows == edge_index_cols
-        #edge_index_rows = edge_index_rows[diagonal_mask]
-        #edge_index_cols = edge_index_cols[diagonal_mask]
-        #edge_weight = edge_weight[diagonal_mask]
-        self.adj = SparseTensor(row=edge_index_rows, col=edge_index_cols, value=edge_weight, sparse_sizes=adj.sizes())
-
-        self.edge_index = torch.stack([edge_index_rows, edge_index_cols], dim=0).cpu()
-        self.edge_weight = edge_weight.cpu()
-        self.n = adj.size(0)
+        self.n, self.d = X.shape
         self.n_possible_edges = self.n * (self.n - 1) // 2
-        self.d = X.shape[1]
         self.labels = labels.to(self.device)
         self.idx_attack = idx_attack
         self.ppr_recalc_at_end = False
+        self.attack_labeled_nodes_only = attack_labeled_nodes_only
+
         if type(model) in BATCHED_PPR_MODELS.__args__:
+            if isinstance(adj, SparseTensor):
+                adj = adj.to_scipy(layout="csr")
             self.ppr_alpha = model.alpha
+            if self.attack_labeled_nodes_only:
+                ppr_nodes = idx_attack
+            else:
+                ppr_nodes = np.arange(self.n)
             if ppr_matrix is None:
-                self.ppr_matrix = SparseTensor.from_scipy(
-                    ppr.topk_ppr_matrix(adj.to_scipy(layout="csr"), model.alpha, model.eps,
-                                        np.arange(self.n), model.topk,  normalization=model.ppr_normalization)
-                ).to(device)
+                if self.n == 111059956:
+                    self.ppr_matrix = SparseTensor(sparse_sizes=(self.n, self.n), **torch.load('/nfs/homedirs/geisler/code/robust_gnns_at_scale_dev_tobias/datasets/ogbn_papers100M_pprtopk64/sparse_tensor.pt'))
+                else:
+                    self.ppr_matrix = SparseTensor.from_scipy(
+                        ppr.topk_ppr_matrix(adj, model.alpha, model.eps, ppr_nodes,
+                                            model.topk, normalization=model.ppr_normalization)
+                    )
+                    if self.attack_labeled_nodes_only:
+                        relabeled_row = torch.from_numpy(ppr_nodes)[self.ppr_matrix.storage.row()]
+                        self.ppr_matrix = SparseTensor(row=relabeled_row, col=self.ppr_matrix.storage.col(),
+                                                       value=self.ppr_matrix.storage.value(), sparse_sizes=(self.n, self.n))
             else:
                 self.ppr_matrix = ppr_matrix
             self.ppr_recalc_at_end = ppr_recalc_at_end
+
+        if isinstance(adj, SparseTensor):
+            self.adj = adj
+        else:
+            self.adj = SparseTensor.from_scipy(adj)
 
         self.loss_type = loss_type
         self.lr_n_perturbations_factor = lr_n_perturbations_factor
@@ -115,6 +124,7 @@ class LocalPRBCD(PRBCD):
 
             classification_statistics = LocalPRBCD.classification_statistics(logits, self.labels[node_idx])
             if epoch == 0:
+                initial_logits = logits.detach().cpu().clone()
                 print(f'Initial: Loss: {loss.item()} Statstics: {classification_statistics}\n')
                 with torch.no_grad():
                     if type(self.model) in BATCHED_PPR_MODELS.__args__:
@@ -163,7 +173,7 @@ class LocalPRBCD(PRBCD):
             adj = self.get_updated_vector_or_graph(node_idx, only_update_adj=True)
             logits = F.log_softmax(self.model.forward(self.X, adj, ppr_idx=np.array([node_idx])), dim=-1)
 
-        return logits
+        return logits, initial_logits
 
     def get_logits(self, node_idx: int, updated_vector_or_graph: SparseTensor) -> torch.Tensor:
         if type(self.model) in BATCHED_PPR_MODELS.__args__:
@@ -179,10 +189,16 @@ class LocalPRBCD(PRBCD):
         return torch.stack((source, target), dim=0)
 
     def get_updated_vector_or_graph(self, node_idx: int, only_update_adj: bool = False) -> SparseTensor:
+
+        if self.attack_labeled_nodes_only:
+            current_search_space = torch.tensor(self.idx_attack, device=self.device)[self.current_search_space]
+        else:
+            current_search_space = self.current_search_space
         modified_edge_weight_diff = SparseTensor(row=torch.zeros_like(self.current_search_space),
-                                                 col=self.current_search_space,
+                                                 col=current_search_space,
                                                  value=self.modified_edge_weight_diff,
                                                  sparse_sizes=(1, self.n))
+
         if type(self.model) in BATCHED_PPR_MODELS.__args__ and not only_update_adj:
             A_row = self.adj[node_idx].to(self.device)
             updated_vector_or_graph = calc_ppr_update_sparse_result(self.ppr_matrix, A_row,
@@ -273,16 +289,26 @@ class LocalPRBCD(PRBCD):
             self.attack_statistics[key].append(value)
 
     def sample_search_space(self, node_idx: int, n_perturbations: int):
+        if self.attack_labeled_nodes_only:
+            n = len(self.idx_attack)
+        else:
+            n = self.n
+
         while True:
-            self.current_search_space = torch.randint(self.n, (self.search_space_size,), device=self.device)
+            self.current_search_space = torch.randint(n, (self.search_space_size,), device=self.device)
             self.current_search_space = torch.unique(self.current_search_space, sorted=True)
-            self.current_search_space = self.current_search_space[node_idx != self.current_search_space]
+            #self.current_search_space = self.current_search_space[node_idx != self.current_search_space]
             self.modified_edge_weight_diff = torch.full_like(self.current_search_space, self.eps,
                                                              dtype=torch.float32, requires_grad=True)
             if self.current_search_space.size(0) >= n_perturbations:
                 break
 
     def resample_search_space(self, node_idx: int, n_perturbations: int, gradient: torch.Tensor):
+        if self.attack_labeled_nodes_only:
+            n = len(self.idx_attack)
+        else:
+            n = self.n
+
         sorted_idx = torch.argsort(self.modified_edge_weight_diff)
         idx_keep_not = (self.modified_edge_weight_diff <= self.eps).sum().long()
         if idx_keep_not < sorted_idx.size(0) // 2:
@@ -294,11 +320,11 @@ class LocalPRBCD(PRBCD):
 
         # Sample until enough edges were drawn
         while True:
-            new_index = torch.randint(self.n,
+            new_index = torch.randint(n,
                                       (self.search_space_size - self.current_search_space.size(0),),
                                       device=self.device)
             self.current_search_space = torch.cat((self.current_search_space, new_index))
-            self.current_search_space = self.current_search_space[node_idx != self.current_search_space]
+            #self.current_search_space = self.current_search_space[node_idx != self.current_search_space]
             self.current_search_space, unique_idx = torch.unique(
                 self.current_search_space,
                 sorted=True,
@@ -318,6 +344,7 @@ class LocalPRBCD(PRBCD):
         best_margin = float('Inf')
         with torch.no_grad():
             current_search_space = self.current_search_space.clone()
+
             s = self.modified_edge_weight_diff.abs().detach()
             s[s == self.eps] = 0
             # TODO: Why numpy?
@@ -334,8 +361,12 @@ class LocalPRBCD(PRBCD):
                         continue
 
                     self.modified_edge_weight_diff = sampled
-                    self.current_search_space = current_search_space[self.modified_edge_weight_diff == 1]
-                    self.modified_edge_weight_diff = self.modified_edge_weight_diff[self.modified_edge_weight_diff == 1]
+                    self.current_search_space = current_search_space[
+                        self.modified_edge_weight_diff == 1
+                    ].to(self.device)
+                    self.modified_edge_weight_diff = self.modified_edge_weight_diff[
+                        self.modified_edge_weight_diff == 1
+                    ].to(self.device)
 
                     updated_vector_or_graph = self.get_updated_vector_or_graph(node_idx)
                     logits = self.get_logits(node_idx, updated_vector_or_graph)
@@ -349,3 +380,57 @@ class LocalPRBCD(PRBCD):
 
             updated_vector_or_graph = self.get_updated_vector_or_graph(node_idx)
         return updated_vector_or_graph
+
+    # TODO: ...
+    def calculate_loss(self, logits, labels):
+        if self.loss_type == 'CW':
+            sorted = logits.argsort(-1)
+            best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
+            margin = (
+                logits[np.arange(logits.size(0)), labels]
+                - logits[np.arange(logits.size(0)), best_non_target_class]
+            )
+            loss = -torch.clamp(margin, min=0).mean()
+        elif self.loss_type == 'LCW':
+            sorted = logits.argsort(-1)
+            best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
+            margin = (
+                logits[np.arange(logits.size(0)), labels]
+                - logits[np.arange(logits.size(0)), best_non_target_class]
+            )
+            loss = -F.leaky_relu(margin, negative_slope=0.1).mean()
+        elif self.loss_type == 'tanhCW':
+            sorted = logits.argsort(-1)
+            best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
+            margin = (
+                logits[np.arange(logits.size(0)), labels]
+                - logits[np.arange(logits.size(0)), best_non_target_class]
+            )
+            loss = torch.tanh(-margin).mean()
+        elif self.loss_type == 'MCE':
+            not_flipped = logits.argmax(-1) == labels
+            loss = F.nll_loss(logits[not_flipped], labels[not_flipped])
+        elif self.loss_type == 'WCE':
+            not_flipped = logits.argmax(-1) == labels
+            weighting_not_flipped = not_flipped.sum().item() / not_flipped.shape[0]
+            weighting_flipped = (not_flipped.shape[0] - not_flipped.sum().item()) / not_flipped.shape[0]
+            loss_not_flipped = F.nll_loss(logits[not_flipped], labels[not_flipped])
+            loss_flipped = F.nll_loss(logits[~not_flipped], labels[~not_flipped])
+            loss = (
+                weighting_not_flipped * loss_not_flipped
+                + 0.25 * weighting_flipped * loss_flipped
+            )
+        elif self.loss_type == 'Margin':
+            sorted = logits.argsort(-1)
+            best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
+            margin = (
+                logits[np.arange(logits.size(0)), labels]
+                - logits[np.arange(logits.size(0)), best_non_target_class]
+            )
+            loss = -margin.mean()
+        # TODO: Is it worth trying? CW should be quite similar
+        # elif self.loss_type == 'Margin':
+        #    loss = F.multi_margin_loss(torch.exp(logits), labels)
+        else:
+            loss = F.nll_loss(logits, labels)
+        return loss
