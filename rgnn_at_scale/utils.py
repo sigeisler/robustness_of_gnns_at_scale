@@ -184,7 +184,9 @@ def calc_ppr_update(ppr: SparseTensor,
 
 
 def mul(a: SparseTensor, v: float) -> SparseTensor:
-    return SparseTensor()
+    a = a.copy()
+    a.storage._value = a.storage.value() * v
+    return a
 
 
 def calc_ppr_update_sparse_result(ppr: SparseTensor,
@@ -250,31 +252,30 @@ def calc_ppr_update_sparse_result(ppr: SparseTensor,
                                        edge_attr=row_weights,
                                        sparse_sizes=(1, num_nodes))
 
-    # P_inv must be sparse, because we need the full matrix
-    P_inv_t = ppr.t().clone()
-    P_inv_t.storage._value /= alpha
-
-    # (P_inv @ u)^T = u^T @ P_inv^T
-    P_inv_at_u_t = P_inv_t[i]
-
     # (1 + row_diff_norm @ P_inv @ u)
-    P_uv_inv_norm_const = 1 + P_inv_at_u_t[:, row.storage.col()].to(row.device()) @ row.storage.value()[:, None]
+    P_uv_inv_norm_const = (  # Shape [1, 1]
+        1
+        + (
+            mul(ppr[row.storage.col(), i].to(row.device()), 1 / alpha).t()  # Shape [|p|, 1]
+            @ row.storage.value()[:, None]  # Shape [|p|, 1]
+        )
+    )
 
     # (P_inv @ u @ row_diff_norm @ P_inv)
     # unfortunately for this operation we need the fill P_inv matrix...
     P_uv_inv_diff = (
-        P_inv_at_u_t[0, i].to(row.device())  # Shape [1,1]
+        mul(ppr[i, i].to(row.device()), 1 / alpha)  # Shape [1,1]
         @ (
-            P_inv_t[:, row.storage.col()].to(row.device())  # Shape [n, |p|]
+            mul(ppr[row.storage.col()].to(row.device()).t(), 1 / alpha)  # Shape [n, |p|]
             @ row.storage.value()[:, None]  # Shape [|p|, 1]
         ).T
-    )
+    )  # Shape [1, n]
 
     P_uv_inv_diff /= P_uv_inv_norm_const
 
     # sparse subtraction: P_uv_inv = P_inv[:,i] - P_uv_inv_diff
 
-    P_uv_inv = P_inv_t[:, i].to(row.device()).to_dense().T - P_uv_inv_diff
+    P_uv_inv = mul(ppr[i], 1 / alpha).to(row.device()).to_dense() - P_uv_inv_diff
 
     ppr_pert_update = alpha * P_uv_inv
 
