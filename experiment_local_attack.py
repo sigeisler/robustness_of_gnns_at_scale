@@ -32,17 +32,26 @@ def config():
 
     # default params
     dataset = 'cora_ml'  # Options are 'cora_ml' and 'citeseer' (or with a big GPU 'pubmed')
-    attack = 'LocalPRBCD'
-    attack_params = {}
+    attack = 'Nettack'
+    attack_params = {
+        "artifact_dir": 'cache_debug',
+        "model_storage_type": 'nettack',
+        "surrogate_model_params": {
+            "label": 'Linear GCN',
+            "dataset": 'cora_ml',
+            "binary_attr": False,
+            "seed": 0
+        }
+    }
     nodes = [1523, 27, 25]
     epsilons = [1]
     binary_attr = False
     seed = 0
     artifact_dir = 'cache_debug'
-    model_storage_type = 'pretrained'
-    device = 0
+    model_storage_type = 'nettack'
+    device = "cpu"
     display_steps = 10
-    model_label = 'Vanilla PPRGo'
+    model_label = 'Vanilla GCN'
     make_undirected = True
     make_unweighted = True
     data_dir = './datasets'
