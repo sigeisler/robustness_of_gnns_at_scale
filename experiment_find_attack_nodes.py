@@ -39,7 +39,7 @@ def config():
     model_storage_type = 'pretrained'
     binary_attr = False
     device = "cpu"
-    model_label = 'Vanilla PPRGo'
+    model_label = 'Linear GCN'
     make_undirected = True
     make_unweighted = True
     data_dir = './datasets'
@@ -89,15 +89,16 @@ def run(data_dir: str, dataset: str, binary_attr: bool, make_undirected: bool, m
             if model.do_omit_softmax:
                 log_prob = F.log_softmax(log_prob)
 
-        _, max_confidence_nodes_idx = torch.topk(log_prob.max(-1).values, k=topk)
-        _, min_confidence_nodes_idx = torch.topk(-log_prob.max(-1).values, k=topk)
-        rand_nodes_idx = torch.randint(idx_test.shape[0], (1, topk * 2))
+        correctly_classifed = log_prob.max(-1).indices == labels[idx_test]
+        _, max_confidence_nodes_idx = torch.topk(log_prob[correctly_classifed].max(-1).values, k=topk)
+        _, min_confidence_nodes_idx = torch.topk(-log_prob[correctly_classifed].max(-1).values, k=topk)
+        rand_nodes_idx = torch.randint(correctly_classifed.sum(), (1, topk * 2))
         results.append({
             'hyperparams': hyperparams,
             'log_prob': log_prob.cpu(),
-            'max_confidence_nodes_idx': idx_test[max_confidence_nodes_idx],
-            'min_confidence_nodes_idx': idx_test[min_confidence_nodes_idx],
-            'rand_confidence_nodes_idx': idx_test[rand_nodes_idx],
+            'max_confidence_nodes_idx': idx_test[correctly_classifed][max_confidence_nodes_idx],
+            'min_confidence_nodes_idx': idx_test[correctly_classifed][min_confidence_nodes_idx],
+            'rand_confidence_nodes_idx': idx_test[correctly_classifed][rand_nodes_idx].flatten()
         })
 
     return {
