@@ -1,6 +1,7 @@
+from typing import List
 import numpy as np
 import torch
-from torch_sparse import SparseTensor
+from torch_sparse import SparseTensor, coalesce
 from tqdm.auto import tqdm
 
 
@@ -339,3 +340,125 @@ class TestPPRUpdate():
         ppr_pert_exact = calc_ppr_exact_row(A_pert, alpha=alpha)
 
         assert torch.allclose(ppr_pert_update_topk, ppr_pert_exact[i], atol=1e-02)
+
+    def test_cora_topk_sparse(self):
+        alpha = 0.085
+        i = 0
+
+        eps = 1e-4
+        topk = 64
+
+        graph = prep_graph("cora_ml", device,  # dataset_root=data_dir,
+                           make_undirected=True,
+                           make_unweighted=True,
+                           normalize=False,
+                           binary_attr=False,
+                           return_original_split=False)
+
+        _, adj, labels = graph[:3]
+        idx_train, idx_val, idx_test = split(labels.cpu().numpy())
+
+        A_dense = adj.to_dense()
+        num_nodes = A_dense.shape[0]
+
+        p_dense = torch.rand((1, num_nodes),
+                             requires_grad=True)
+        p_dense[0, i] = 0
+
+        p = SparseTensor.from_dense(p_dense)
+
+        A_sp = adj.to_scipy(layout="csr")
+
+        ppr_topk_i = matrix_to_torch(topk_ppr_matrix(
+            A_sp, alpha, 1e-6, np.array([i]), num_nodes, normalization='row'))
+
+        ppr_topk_i_rows, ppr_topk_i_cols, ppr_topk_i_vals = ppr_topk_i.coo()
+        # ppr_topk_i_idx, topk
+        _, most_relevant_ppr_i_neighbors = torch.topk(ppr_topk_i_vals, k=256)
+        _, relevant_ppr_i_neighbors = torch.topk(ppr_topk_i_vals, k=256 + 1024)
+
+        least_relevant_ppr_i_neighbors = difference(torch.arange(num_nodes), relevant_ppr_i_neighbors)
+        relevant_ppr_i_neighbors = difference(relevant_ppr_i_neighbors, most_relevant_ppr_i_neighbors)
+
+        # make sure we don't recompute ppr_topk for attacked node i
+        most_relevant_ppr_i_neighbors = difference(torch.tensor([i]), most_relevant_ppr_i_neighbors)
+        # relevant_ppr_i_neighbors = difference(torch.tensor([i]), relevant_ppr_i_neighbors)
+        # least_relevant_ppr_i_neighbors = difference(torch.tensor([i]), least_relevant_ppr_i_neighbors)
+
+        assert most_relevant_ppr_i_neighbors.shape[0] + relevant_ppr_i_neighbors.shape[0] + \
+            least_relevant_ppr_i_neighbors.shape[0] == num_nodes - 1
+
+        ppr_topk_most_relevant = matrix_to_torch(topk_ppr_matrix(
+            A_sp, alpha, eps, most_relevant_ppr_i_neighbors.numpy(), 128, normalization='row'))
+
+        ppr_topk_relevant = matrix_to_torch(topk_ppr_matrix(
+            A_sp, alpha, eps, relevant_ppr_i_neighbors.numpy(), 128, normalization='row'))
+
+        ppr_topk_least_relevant = matrix_to_torch(topk_ppr_matrix(
+            A_sp, alpha, eps, least_relevant_ppr_i_neighbors.numpy(), 32, normalization='row'))
+
+        ppr_topk = sparse_concat_row([ppr_topk_i,
+                                      ppr_topk_most_relevant,
+                                      ppr_topk_relevant,
+                                      ppr_topk_least_relevant],
+                                     [torch.tensor([i]),
+                                      most_relevant_ppr_i_neighbors,
+                                      relevant_ppr_i_neighbors,
+                                      least_relevant_ppr_i_neighbors
+                                      ], num_nodes)
+
+        ppr_pert_update_topk = calc_ppr_update_sparse_result(ppr=ppr_topk,
+                                                             Ai=adj[i],
+                                                             p=p,
+                                                             i=i,
+                                                             alpha=alpha
+                                                             )
+
+        u = torch.zeros((num_nodes, 1),
+                        dtype=torch.float32)
+        u[i] = 1
+        v = torch.where(A_dense[i] > 0, -p_dense, p_dense)
+        A_pert = A_dense + u @ v
+        ppr_pert_exact = calc_ppr_exact_row(A_pert, alpha=alpha)
+
+        assert torch.allclose(ppr_pert_update_topk, ppr_pert_exact[i], atol=1e-02)
+
+
+def sparse_concat_row(sp_tensors: List[SparseTensor], row_tensors: List[torch.Tensor], num_nodes: int):
+    new_idx = list()
+    new_vals = list()
+
+    for sp_tensor, row in zip(sp_tensors, row_tensors):
+        r, c, v = sp_tensor.coo()
+        # map to correct row indices
+
+        def map_new_row(i):
+            return row[i]
+
+        r.apply_(map_new_row)
+
+        new_idx.append(torch.stack([r, c], dim=0))
+        new_vals.append(v)
+
+    concatenated_idx = torch.cat(new_idx, dim=-1)
+    concatenated_val = torch.cat(new_vals)
+    concatenated_idx, concatenated_val = coalesce(
+        concatenated_idx,
+        concatenated_val,
+        num_nodes, num_nodes
+    )
+    return SparseTensor.from_edge_index(edge_index=concatenated_idx,
+                                        edge_attr=concatenated_val,
+                                        sparse_sizes=(num_nodes, num_nodes))
+
+
+def difference(t1: torch.Tensor, t2: torch.Tensor):
+    """
+    Returns the difference of two sets.
+    Only works if t1 and t2 don't contain duplicate values
+    """
+    combined = torch.cat((t1, t2))
+    uniques, counts = combined.unique(return_counts=True)
+    difference = uniques[counts == 1]
+    # intersection = uniques[counts > 1]
+    return difference
