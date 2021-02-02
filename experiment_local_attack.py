@@ -86,8 +86,6 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
         idx_train, idx_val, idx_test = split(labels.cpu().numpy())
     else:
         idx_train, idx_val, idx_test = graph[3]['train'], graph[3]['valid'], graph[3]['test']
-    n_features = attr.shape[1]
-    n_classes = int(labels.max() + 1)
 
     storage = Storage(artifact_dir, experiment=ex)
 
@@ -121,7 +119,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                 torch.manual_seed(seed)
                 np.random.seed(seed)
 
-                logits = adversary.attack(node, n_perturbations)
+                logits, initial_logits = adversary.attack(node, n_perturbations)
 
                 logging.info(f'Pert. edges for node {node} and budget {n_perturbations}: {adversary.perturbed_edges}')
 
@@ -131,10 +129,16 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                     'n_perturbations': n_perturbations,
                     'degree': int(degree.item()),
                     'logits': logits.cpu(),
+                    'initial_logits': initial_logits.cpu(),
                     'larget': labels[node].item(),
                     'node_id': node,
                 })
                 results[-1].update(adversary.classification_statistics(logits.cpu(), labels[node].cpu()))
+                results[-1].update({
+                    f'initial_{key}': value
+                    for key, value 
+                    in adversary.classification_statistics(initial_logits.cpu(), labels[node].cpu()).items()
+                })
 
     return {
         'results': results

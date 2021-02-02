@@ -183,6 +183,10 @@ def calc_ppr_update(ppr: SparseTensor,
                                         sparse_sizes=(num_nodes, num_nodes))
 
 
+def mul(a: SparseTensor, v: float) -> SparseTensor:
+    return SparseTensor()
+
+
 def calc_ppr_update_sparse_result(ppr: SparseTensor,
                                   Ai: SparseTensor,
                                   p: SparseTensor,
@@ -196,11 +200,12 @@ def calc_ppr_update_sparse_result(ppr: SparseTensor,
     #assert Ai[0, i].nnz() == 0, "The adjacency's must not have self loops"
     assert (torch.logical_or(Ai.storage.value() == 1, Ai.storage.value() == 0)
             ).all().item(), "The adjacency must be unweighted"
-    assert p[0, i].sum() == 0, "Self loops must not be perturbed"
     assert torch.all(p.storage.value() > 0), "For technical reasons all values in p must be greater than 0"
     assert torch.all(p.storage.value() <= 1), "All values in p must be less than 1"
 
     v_rows, v_cols, v_vals = p.coo()
+    # Avoid perturbing self-loops
+    v_vals = torch.where(v_cols == i, torch.tensor(0., device=v_vals.device), v_vals)
     v_idx = torch.stack([v_rows, v_cols], dim=0)
 
     Ai_rows, Ai_cols, Ai_vals = Ai.coo()
@@ -253,17 +258,23 @@ def calc_ppr_update_sparse_result(ppr: SparseTensor,
     P_inv_at_u_t = P_inv_t[i]
 
     # (1 + row_diff_norm @ P_inv @ u)
-    P_uv_inv_norm_const = 1 + P_inv_at_u_t[:, row.storage.col()] @ row.storage.value()[:, None]
+    P_uv_inv_norm_const = 1 + P_inv_at_u_t[:, row.storage.col()].to(row.device()) @ row.storage.value()[:, None]
 
     # (P_inv @ u @ row_diff_norm @ P_inv)
     # unfortunately for this operation we need the fill P_inv matrix...
-    P_uv_inv_diff = P_inv_at_u_t[0, i] @ (P_inv_t[:, row.storage.col()] @ row.storage.value()[:, None]).T
+    P_uv_inv_diff = (
+        P_inv_at_u_t[0, i].to(row.device())  # Shape [1,1]
+        @ (
+            P_inv_t[:, row.storage.col()].to(row.device())  # Shape [n, |p|]
+            @ row.storage.value()[:, None]  # Shape [|p|, 1]
+        ).T
+    )
 
     P_uv_inv_diff /= P_uv_inv_norm_const
 
     # sparse subtraction: P_uv_inv = P_inv[:,i] - P_uv_inv_diff
 
-    P_uv_inv = P_inv_t[:, i].to_dense().T - P_uv_inv_diff
+    P_uv_inv = P_inv_t[:, i].to(row.device()).to_dense().T - P_uv_inv_diff
 
     ppr_pert_update = alpha * P_uv_inv
 
