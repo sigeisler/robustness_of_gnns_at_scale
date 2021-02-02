@@ -13,6 +13,8 @@ import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
 import torch_geometric
 from torch_geometric.nn import GCNConv
+from torch_geometric.utils import add_remaining_self_loops
+from torch_geometric.utils.num_nodes import maybe_num_nodes
 from torch_geometric.data import Data
 from torch_scatter import scatter_add
 from torch_sparse import coalesce, SparseTensor
@@ -135,6 +137,7 @@ class GCN(nn.Module):
                  jaccard_params: Optional[Dict[str, float]] = None,
                  do_cache_adj_prep: bool = True,
                  do_normalize_adj_once: bool = True,
+                 add_self_loops: bool = True,
                  do_use_sparse_tensor: bool = True,
                  do_checkpoint: bool = False,  # TODO: Doc string
                  n_chunks: int = 8,
@@ -163,6 +166,7 @@ class GCN(nn.Module):
         self.jaccard_params = jaccard_params
         self.do_cache_adj_prep = do_cache_adj_prep
         self.do_normalize_adj_once = do_normalize_adj_once
+        self.add_self_loops = add_self_loops
         self.do_use_sparse_tensor = do_use_sparse_tensor
         self.do_checkpoint = do_checkpoint
         self.n_chunks = n_chunks
@@ -339,9 +343,18 @@ class GCN(nn.Module):
                                ) -> Tuple[Union[torch.Tensor, SparseTensor], Optional[torch.Tensor]]:
         if self.do_normalize_adj_once:
             self._deactivate_normalization()
-            # TODO: add self loops
-            # currently if adjacency doesn't already have self loops this code will result in a different adjcency
-            # than the corresponding normalization of the torch geoemtric GCN layer implementation
+
+            num_nodes = x.shape[0]
+            if edge_weight is None:
+                edge_weight = torch.ones((edge_idx.size(1), ), dtype=torch.float32,
+                                         device=edge_idx.device)
+
+            if self.add_self_loops:
+                edge_idx, tmp_edge_weight = add_remaining_self_loops(
+                    edge_idx, edge_weight, 1., num_nodes)
+                assert tmp_edge_weight is not None
+                edge_weight = tmp_edge_weight
+
             row, col = edge_idx
             deg = scatter_add(edge_weight, col, dim=0, dim_size=x.shape[0])
             deg_inv_sqrt = deg.pow_(-0.5)
