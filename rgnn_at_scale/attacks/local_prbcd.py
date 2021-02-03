@@ -4,12 +4,13 @@ import math
 from typing import Dict, Optional, Union
 import warnings
 
-from tqdm import tqdm
-from torch.nn import functional as F
 import numpy as np
+import scipy.sparse as sp
+from torch.nn import functional as F
 import torch
 import torch_sparse
 from torch_sparse import SparseTensor
+from tqdm import tqdm
 
 from rgnn_at_scale.models import MODEL_TYPE, BATCHED_PPR_MODELS
 from rgnn_at_scale.utils import calc_ppr_exact_row, calc_ppr_update_sparse_result, grad_with_checkpoint
@@ -65,17 +66,16 @@ class LocalPRBCD():
             else:
                 ppr_nodes = np.arange(self.n)
             if ppr_matrix is None:
-                if self.n == 111059956:
-                    self.ppr_matrix = SparseTensor(sparse_sizes=(self.n, self.n), **torch.load('/nfs/homedirs/geisler/code/robust_gnns_at_scale_dev_tobias/datasets/ogbn_papers100M_pprtopk64/sparse_tensor.pt'))
-                else:
-                    self.ppr_matrix = SparseTensor.from_scipy(
-                        ppr.topk_ppr_matrix(adj, model.alpha, model.eps, ppr_nodes,
-                                            model.topk, normalization=model.ppr_normalization)
-                    )
-                    if self.attack_labeled_nodes_only:
-                        relabeled_row = torch.from_numpy(ppr_nodes)[self.ppr_matrix.storage.row()]
-                        self.ppr_matrix = SparseTensor(row=relabeled_row, col=self.ppr_matrix.storage.col(),
-                                                       value=self.ppr_matrix.storage.value(), sparse_sizes=(self.n, self.n))
+                # if self.n == 111059956:
+                #     self.ppr_matrix = sp.load_npz('/nfs/staff-hdd/geisler/ogb/ppr_papers100/csr.npz')
+                # else:
+                self.ppr_matrix = ppr.topk_ppr_matrix(adj, model.alpha, model.eps, ppr_nodes,
+                                                      model.topk, normalization=model.ppr_normalization)
+                # sp.save_npz('/nfs/homedirs/geisler/code/robust_gnns_at_scale_dev_tobias/datasets/ppr_papers100/csr_eps1em3_alpha01.npz', self.ppr_matrix)
+                if self.attack_labeled_nodes_only:
+                    relabeled_row = torch.from_numpy(ppr_nodes)[self.ppr_matrix.storage.row()]
+                    self.ppr_matrix = SparseTensor(row=relabeled_row, col=self.ppr_matrix.storage.col(),
+                                                   value=self.ppr_matrix.storage.value(), sparse_sizes=(self.n, self.n))
             else:
                 self.ppr_matrix = ppr_matrix
             self.ppr_recalc_at_end = ppr_recalc_at_end
@@ -128,9 +128,11 @@ class LocalPRBCD():
                 print(f'Initial: Loss: {loss.item()} Statstics: {classification_statistics}\n')
                 with torch.no_grad():
                     if type(self.model) in BATCHED_PPR_MODELS.__args__:
-                        updated_vector_or_graph_orig = self.ppr_matrix[node_idx]
+                        updated_vector_or_graph_orig = SparseTensor.from_scipy(self.ppr_matrix[node_idx])
                     else:
                         updated_vector_or_graph_orig = self.adj.to(self.device)
+                        if not isinstance(updated_vector_or_graph_orig, SparseTensor):
+                            updated_vector_or_graph_orig = SparseTensor.from_scipy(updated_vector_or_graph_orig)
                     logits_orig = self.get_logits(node_idx, updated_vector_or_graph_orig)
                     loss_orig = self.calculate_loss(logits_orig, self.labels[node_idx][None])
                     statistics_orig = LocalPRBCD.classification_statistics(logits_orig,
@@ -201,6 +203,8 @@ class LocalPRBCD():
 
         if type(self.model) in BATCHED_PPR_MODELS.__args__ and not only_update_adj:
             A_row = self.adj[node_idx].to(self.device)
+            if not isinstance(A_row, SparseTensor):
+                A_row = SparseTensor.from_scipy(A_row)
             updated_vector_or_graph = calc_ppr_update_sparse_result(self.ppr_matrix, A_row,
                                                                     modified_edge_weight_diff, node_idx, self.ppr_alpha)
             # updated_vector_or_graph /= updated_vector_or_graph.sum()
@@ -236,7 +240,7 @@ class LocalPRBCD():
             #                   f'diff_approx_updated={diff_approx_updated:.3f} '
             #                   f'diff_exact_updated={diff_exact_updated:.3f}')
 
-            return SparseTensor.from_dense(updated_vector_or_graph)
+            return updated_vector_or_graph
         else:
             v_rows, v_cols, v_vals = modified_edge_weight_diff.coo()
             v_rows += node_idx

@@ -186,10 +186,17 @@ def calc_ppr_update(ppr: SparseTensor,
 def mul(a: SparseTensor, v: float) -> SparseTensor:
     a = a.copy()
     a.storage._value = a.storage.value() * v
+    if a.nnz() == 0:
+        return SparseTensor(
+            row=torch.tensor([0], dtype=torch.long, device=a.device()),
+            col=torch.tensor([0], dtype=torch.long, device=a.device()),
+            value=torch.tensor([0.], device=a.device()),
+            sparse_sizes=a.sizes()
+        )
     return a
 
 
-def calc_ppr_update_sparse_result(ppr: SparseTensor,
+def calc_ppr_update_sparse_result(ppr: sp.csr_matrix,
                                   Ai: SparseTensor,
                                   p: SparseTensor,
                                   i: int,
@@ -197,9 +204,9 @@ def calc_ppr_update_sparse_result(ppr: SparseTensor,
     """
         Returns only the i-th row of the updated ppr
     """
-    num_nodes = ppr.size(0)
-    assert ppr.size(1) == Ai.size(1), "shapes of ppr and adjacency must be the same"
-    #assert Ai[0, i].nnz() == 0, "The adjacency's must not have self loops"
+    num_nodes = ppr.shape[0]
+    assert ppr.shape[1] == Ai.size(1), "shapes of ppr and adjacency must be the same"
+    # assert Ai[0, i].nnz() == 0, "The adjacency's must not have self loops"
     assert (torch.logical_or(Ai.storage.value() == 1, Ai.storage.value() == 0)
             ).all().item(), "The adjacency must be unweighted"
     assert torch.all(p.storage.value() > 0), "For technical reasons all values in p must be greater than 0"
@@ -253,33 +260,41 @@ def calc_ppr_update_sparse_result(ppr: SparseTensor,
                                        sparse_sizes=(1, num_nodes))
 
     # (1 + row_diff_norm @ P_inv @ u)
-    P_uv_inv_norm_const = (  # Shape [1, 1]
-        1
-        + (
-            mul(ppr[row.storage.col(), i].to(row.device()), 1 / alpha).t()  # Shape [|p|, 1]
-            @ row.storage.value()[:, None]  # Shape [|p|, 1]
+    with torch.no_grad():
+        P_uv_inv_norm_const = (  # Shape [1, 1]
+            1
+            + (
+                # Shape [1, |p|]
+                mul(SparseTensor.from_scipy(ppr[row.storage.col().cpu(), i]).to(row.device()), 1 / alpha).t()
+                @ row.storage.value()[:, None]  # Shape [|p|, 1]
+            )
         )
-    )
 
     # (P_inv @ u @ row_diff_norm @ P_inv)
-    # unfortunately for this operation we need the fill P_inv matrix...
-    P_uv_inv_diff = (
-        mul(ppr[i, i].to(row.device()), 1 / alpha)  # Shape [1,1]
-        @ (
-            mul(ppr[row.storage.col()].to(row.device()).t(), 1 / alpha)  # Shape [n, |p|]
+    ppr_slice = ppr[row.storage.col().cpu()]  # Shape [n, |p|]
+    col_mask = ppr_slice.getnnz(0) > 0
+    ppr_slice = ppr_slice[:, col_mask]  # Shape [l, |p|] - l depends on p (in expectation)
+
+    P_uv_inv_diff = (  # Shape [l, 1]
+        ppr[i, i] / alpha * (
+            mul(SparseTensor.from_scipy(ppr_slice).to(row.device()).t(), 1 / alpha)  # Shape [l, |p|]
             @ row.storage.value()[:, None]  # Shape [|p|, 1]
         ).T
-    )  # Shape [1, n]
+    )
 
     P_uv_inv_diff /= P_uv_inv_norm_const
 
     # sparse subtraction: P_uv_inv = P_inv[:,i] - P_uv_inv_diff
 
-    P_uv_inv = mul(ppr[i], 1 / alpha).to(row.device()).to_dense() - P_uv_inv_diff
+    P_uv_inv = mul(SparseTensor.from_scipy(ppr[i, col_mask]).to(row.device()), 1 / alpha).to_dense() - P_uv_inv_diff
 
     ppr_pert_update = alpha * P_uv_inv
 
-    return ppr_pert_update
+    return SparseTensor(
+        row=torch.zeros(col_mask.sum(), device=row.device(), dtype=torch.long),
+        col=torch.arange(num_nodes, device=row.device())[col_mask],
+        value=ppr_pert_update.squeeze()
+    )
 
 
 def calc_ppr_update_topk_sparse(ppr: SparseTensor,
@@ -410,7 +425,7 @@ def get_ppr_matrix(adjacency_matrix: torch.Tensor,
     ).coalesce()
 
 
-@numba.njit(cache=True, locals={'_val': numba.float32, 'res': numba.float32, 'res_vnode': numba.float32})
+@ numba.njit(cache=True, locals={'_val': numba.float32, 'res': numba.float32, 'res_vnode': numba.float32})
 def _calc_ppr_node(inode, indptr, indices, deg, alpha, epsilon):
     alpha_eps = alpha * epsilon
     f32_0 = numba.float32(0)
@@ -439,7 +454,7 @@ def _calc_ppr_node(inode, indptr, indices, deg, alpha, epsilon):
     return list(p.keys()), list(p.values())
 
 
-@numba.njit(cache=True, parallel=True)
+@ numba.njit(cache=True, parallel=True)
 def _calc_ppr_topk_parallel(indptr, indices, deg, alpha, epsilon, nodes, topk):
     js = [np.zeros(0, dtype=np.int64)] * len(nodes)
     vals = [np.zeros(0, dtype=np.float32)] * len(nodes)

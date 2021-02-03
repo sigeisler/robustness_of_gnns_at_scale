@@ -218,11 +218,11 @@ class TestPPRUpdate():
             p_dense.requires_grad = True
             p = SparseTensor.from_dense(p_dense)
 
-            ppr_pert_update = calc_ppr_update_sparse_result(ppr=ppr_exact_sparse,
+            ppr_pert_update = calc_ppr_update_sparse_result(ppr=ppr_exact_sparse.to_scipy(layout="csr"),
                                                             Ai=A_sparse[i],
                                                             p=p,
                                                             i=i,
-                                                            alpha=alpha)
+                                                            alpha=alpha).to_dense()
             u = torch.zeros((num_nodes, 1),
                             dtype=torch.float32)
             u[i] = 1
@@ -260,11 +260,11 @@ class TestPPRUpdate():
 
             p = SparseTensor.from_dense(p_dense)
 
-            ppr_pert_update = calc_ppr_update_sparse_result(ppr=ppr_exact_sparse,
+            ppr_pert_update = calc_ppr_update_sparse_result(ppr=ppr_exact_sparse.to_scipy(layout="csr"),
                                                             Ai=A_sparse[i],
                                                             p=p,
                                                             i=i,
-                                                            alpha=alpha)
+                                                            alpha=alpha).to_dense()
             u = torch.zeros((num_nodes, 1),
                             dtype=torch.float32)
             u[i] = 1

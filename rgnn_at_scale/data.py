@@ -669,8 +669,7 @@ def prep_graph(name: str,
         if make_unweighted:
             edge_weight = torch.ones_like(edge_weight)
 
-        adj = sp.csr_matrix(sp.coo_matrix((edge_weight, edge_index),
-                                          (num_nodes, num_nodes)))
+        adj = sp.csr_matrix((edge_weight, edge_index), (num_nodes, num_nodes))
 
         if normalize:
             adj = utils.calc_A_hat(adj)
