@@ -157,6 +157,8 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                     for key, value
                     in adversary.classification_statistics(initial_logits.cpu(), labels[node].cpu()).items()
                 })
+                if hasattr(adversary, 'attack_statistics'):
+                    results[-1]['attack_statistics'] = adversary.attack_statistics
 
     return {
         'results': results

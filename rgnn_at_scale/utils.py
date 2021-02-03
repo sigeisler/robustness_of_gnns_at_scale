@@ -286,7 +286,10 @@ def calc_ppr_update_sparse_result(ppr: sp.csr_matrix,
 
     # sparse subtraction: P_uv_inv = P_inv[:,i] - P_uv_inv_diff
 
-    P_uv_inv = mul(SparseTensor.from_scipy(ppr[i, col_mask]).to(row.device()), 1 / alpha).to_dense() - P_uv_inv_diff
+    P_uv_inv = torch.clamp(
+        mul(SparseTensor.from_scipy(ppr[i, col_mask]).to(row.device()), 1 / alpha).to_dense() - P_uv_inv_diff,
+        0
+    )
 
     ppr_pert_update = alpha * P_uv_inv
 

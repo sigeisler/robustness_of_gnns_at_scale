@@ -16,6 +16,7 @@ from rgnn_at_scale.models import MODEL_TYPE, BATCHED_PPR_MODELS
 from rgnn_at_scale.utils import calc_ppr_exact_row, calc_ppr_update_sparse_result, grad_with_checkpoint
 from pprgo import ppr
 from rgnn_at_scale.attacks.prbcd import PRBCD
+from rgnn_at_scale.load_ppr import load_ppr
 
 
 class LocalPRBCD():
@@ -70,12 +71,14 @@ class LocalPRBCD():
             else:
                 ppr_nodes = np.arange(self.n)
             if ppr_matrix is None:
-                # if self.n == 111059956:
-                #     self.ppr_matrix = sp.load_npz('/nfs/staff-hdd/geisler/ogb/ppr_papers100/csr.npz')
-                # else:
-                self.ppr_matrix = ppr.topk_ppr_matrix(adj, model.alpha, model.eps, ppr_nodes,
-                                                      self.ppr_topk, normalization=model.ppr_normalization)
-                # sp.save_npz('/nfs/homedirs/geisler/code/robust_gnns_at_scale_dev_tobias/datasets/ppr_papers100/csr_eps1em3_alpha01.npz', self.ppr_matrix)
+                if self.n == 111059956:
+                    self.ppr_matrix = load_ppr(alpha=0.1,  # model.alpha,
+                                               eps=model.eps, 
+                                               topk=self.ppr_topk,
+                                               ppr_normalization=model.ppr_normalization)
+                else:
+                    self.ppr_matrix = ppr.topk_ppr_matrix(adj, model.alpha, model.eps, ppr_nodes,
+                                                          self.ppr_topk, normalization=model.ppr_normalization)
                 if self.attack_labeled_nodes_only:
                     relabeled_row = torch.from_numpy(ppr_nodes)[self.ppr_matrix.storage.row()]
                     self.ppr_matrix = SparseTensor(row=relabeled_row, col=self.ppr_matrix.storage.col(),
@@ -245,7 +248,7 @@ class LocalPRBCD():
             return SparseTensor.from_edge_index(A_idx, A_weights, (self.n, self.n))
 
     def update_edge_weights(self, n_perturbations: int, epoch: int, gradient: torch.Tensor):
-        lr_factor = max(1., n_perturbations / self.n / 2 / self.lr_n_perturbations_factor) * self.lr_factor
+        lr_factor = n_perturbations * self.lr_factor
         lr = lr_factor / np.sqrt(max(0, epoch - self.epochs) + 1)
         self.modified_edge_weight_diff.data.add_(lr * gradient)
 
@@ -268,6 +271,9 @@ class LocalPRBCD():
 
     def _append_attack_statistics(self, loss, statistics):
         self.attack_statistics['loss'].append(loss)
+        self.attack_statistics['perturbation_mass'].append(
+            torch.clamp(self.modified_edge_weight_diff, 0, 1).sum().item()
+        )
         for key, value in statistics.items():
             self.attack_statistics[key].append(value)
 
