@@ -34,8 +34,7 @@ class LocalPRBCD():
                  lr_factor: float = 1.0,
                  lr_n_perturbations_factor: float = 0.1,
                  display_step: int = 20,
-                 epochs: int = 400,
-                 fine_tune_epochs: int = 100,
+                 epochs: int = 500,
                  search_space_size: int = 10_000,
                  with_early_stropping: bool = True,
                  do_synchronize: bool = False,
@@ -57,7 +56,7 @@ class LocalPRBCD():
 
         self.n, self.d = X.shape
         self.n_possible_edges = self.n * (self.n - 1) // 2
-        self.labels = labels.to(self.device)
+        self.labels = labels.long().to(self.device)
         self.idx_attack = idx_attack
         self.ppr_recalc_at_end = False
         self.attack_labeled_nodes_only = attack_labeled_nodes_only
@@ -94,7 +93,6 @@ class LocalPRBCD():
         self.lr_n_perturbations_factor = lr_n_perturbations_factor
         self.display_step = display_step
         self.epochs = epochs
-        self.fine_tune_epochs = fine_tune_epochs
         self.search_space_size = search_space_size
         self.with_early_stropping = with_early_stropping
         self.eps = eps
@@ -116,7 +114,7 @@ class LocalPRBCD():
         self.sample_search_space(node_idx, n_perturbations)
         self.attack_statistics = defaultdict(list)
 
-        for epoch in tqdm(range(self.epochs + self.fine_tune_epochs)):
+        for epoch in tqdm(range(self.epochs)):
             self.modified_edge_weight_diff.requires_grad = True
             updated_vector_or_graph = self.get_updated_vector_or_graph(node_idx)
 
@@ -178,7 +176,16 @@ class LocalPRBCD():
 
         if self.ppr_recalc_at_end:
             adj = self.get_updated_vector_or_graph(node_idx, only_update_adj=True)
-            logits = F.log_softmax(self.model.forward(self.X, adj, ppr_idx=np.array([node_idx])), dim=-1)
+            if type(self.model) in BATCHED_PPR_MODELS.__args__:
+                self.model.topk = self.model.topk + n_perturbations
+                logits = F.log_softmax(self.model.forward(self.X, adj, ppr_idx=np.array([node_idx])), dim=-1)
+                self.model.topk = self.model.topk - n_perturbations
+            else:
+                return self.model(data=self.X.to(self.device), adj=updated_vector_or_graph)[node_idx:node_idx + 1]
+            # from pprgo.predict import predict_power_iter
+            # predict_power_iter(self.model, adj.to_scipy(layout="csr"),
+            #                    SparseTensor.from_dense(self.X).to_scipy(layout="csr"), alpha=0.109536, nprop=5,
+            #                    ppr_normalization='row')[0][node_idx]
 
         return logits, initial_logits
 
@@ -212,46 +219,13 @@ class LocalPRBCD():
                 A_row = SparseTensor.from_scipy(A_row)
             updated_vector_or_graph = calc_ppr_update_sparse_result(self.ppr_matrix, A_row,
                                                                     modified_edge_weight_diff, node_idx, self.ppr_alpha)
-            # updated_vector_or_graph /= updated_vector_or_graph.sum()
-
-            # # modified_adj = SparseTensor(
-            # #     row=torch.full_like(self.current_search_space, node_idx),
-            # #     col=self.current_search_space,
-            # #     value=self.modified_edge_weight_diff,
-            # #     sparse_sizes=(self.n, self.n)
-            # # ).to_scipy(layout="csr") + self.adj.to_scipy(layout="csr")
-
-            # u = torch.zeros((self.n, 1), dtype=torch.float32, device=self.device)
-            # u[node_idx] = 1
-            # p_dense = modified_edge_weight_diff.to_dense()
-            # A_dense = self.adj.to(self.device).to_dense()
-            # v = torch.where(A_dense[node_idx, :] > 0, -p_dense, p_dense)
-            # A_pert = A_dense + u @ v
-            # exact_ppr_vector = calc_ppr_exact_row(A_pert, alpha=self.ppr_alpha)[node_idx]
-
-            # approx_ppr_vector = SparseTensor.from_scipy(
-            #     ppr.topk_ppr_matrix(SparseTensor.from_dense(A_pert).to_scipy(layout="csr"), self.model.alpha,
-            #                         self.ppr_topk, np.arange(self.n), self.model.topk,
-            #                         normalization=self.model.ppr_normalization)
-            # ).to(self.device)[node_idx]
-            # # approx_ppr_vector.storage._value /= approx_ppr_vector.sum()
-
-            # diff_approx_exact = torch.norm(approx_ppr_vector.to_dense() - exact_ppr_vector)
-            # diff_approx_updated = torch.norm(approx_ppr_vector.to_dense() - updated_vector_or_graph)
-            # diff_exact_updated = torch.norm(exact_ppr_vector - updated_vector_or_graph)
-
-            # if diff_exact_updated > diff_approx_exact or diff_exact_updated > diff_approx_updated:
-            #     warnings.warn(f'Error os large diff_approx_exact={diff_approx_exact:.3f} '
-            #                   f'diff_approx_updated={diff_approx_updated:.3f} '
-            #                   f'diff_exact_updated={diff_exact_updated:.3f}')
-
             return updated_vector_or_graph
         else:
             v_rows, v_cols, v_vals = modified_edge_weight_diff.coo()
             v_rows += node_idx
             v_idx = torch.stack([v_rows, v_cols], dim=0)
 
-            A_rows, A_cols, A_vals = self.adj.to(self.device).coo()
+            A_rows, A_cols, A_vals = self.adj.to(v_vals.device).coo()
             A_idx = torch.stack([A_rows, A_cols], dim=0)
 
             # sparse addition: row = A[i] + v
@@ -433,8 +407,8 @@ class LocalPRBCD():
             sorted = logits.argsort(-1)
             best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
             margin = (
-                logits[np.arange(logits.size(0)), labels]
-                - logits[np.arange(logits.size(0)), best_non_target_class]
+                logits[np.arange(logits.size(0)), labels.long()]
+                - logits[np.arange(logits.size(0)), best_non_target_class.long()]
             )
             loss = -margin.mean()
         # TODO: Is it worth trying? CW should be quite similar

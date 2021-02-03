@@ -36,7 +36,7 @@ def config():
     attack_params = {
         "lr_factor": 0.05,
         "search_space_size": 10000,
-        "ppr_recalc_at_end": True,
+        "ppr_recalc_at_end": False,
         "artifact_dir": 'cache_debug',
         "model_storage_type": 'nettack',
         "surrogate_model_params": {
@@ -149,6 +149,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                     'initial_logits': initial_logits.cpu(),
                     'larget': labels[node].item(),
                     'node_id': node,
+                    'perturbed_edges': adversary.perturbed_edges.cpu().numpy()
                 })
                 results[-1].update(adversary.classification_statistics(logits.cpu(), labels[node].cpu()))
                 results[-1].update({
