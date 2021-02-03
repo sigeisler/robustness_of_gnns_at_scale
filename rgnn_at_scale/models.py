@@ -643,7 +643,12 @@ class PPRGoWrapperBase():
 
         device = next(self.parameters()).device
         if ppr_scores is not None:
-            return self.model_forward(attr.to(device), ppr_scores.to(device))
+
+            source_idx, neighbor_idx, ppr_vals = ppr_scores.coo()
+            ppr_matrix = ppr_scores[:, neighbor_idx.unique()]
+            attr_matrix = attr[neighbor_idx.unique()]
+
+            return self.model_forward(attr_matrix.to(device), ppr_matrix.to(device))
         else:
             # we need to precompute the ppr_score first
 
