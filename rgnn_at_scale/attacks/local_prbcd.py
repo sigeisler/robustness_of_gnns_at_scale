@@ -40,6 +40,7 @@ class LocalPRBCD():
                  with_early_stropping: bool = True,
                  do_synchronize: bool = False,
                  eps: float = 1e-14,
+                 ppr_topk: int = None,
                  K: int = 20,
                  **kwargs):
 
@@ -49,6 +50,10 @@ class LocalPRBCD():
         self.model.eval()
         for p in self.model.parameters():
             p.requires_grad = False
+
+        self.ppr_topk = ppr_topk
+        if self.ppr_topk is None:
+            self.ppr_topk = self.model.topk
 
         self.n, self.d = X.shape
         self.n_possible_edges = self.n * (self.n - 1) // 2
@@ -70,7 +75,7 @@ class LocalPRBCD():
                 #     self.ppr_matrix = sp.load_npz('/nfs/staff-hdd/geisler/ogb/ppr_papers100/csr.npz')
                 # else:
                 self.ppr_matrix = ppr.topk_ppr_matrix(adj, model.alpha, model.eps, ppr_nodes,
-                                                      model.topk, normalization=model.ppr_normalization)
+                                                      self.ppr_topk, normalization=model.ppr_normalization)
                 # sp.save_npz('/nfs/homedirs/geisler/code/robust_gnns_at_scale_dev_tobias/datasets/ppr_papers100/csr_eps1em3_alpha01.npz', self.ppr_matrix)
                 if self.attack_labeled_nodes_only:
                     relabeled_row = torch.from_numpy(ppr_nodes)[self.ppr_matrix.storage.row()]
@@ -226,7 +231,7 @@ class LocalPRBCD():
 
             # approx_ppr_vector = SparseTensor.from_scipy(
             #     ppr.topk_ppr_matrix(SparseTensor.from_dense(A_pert).to_scipy(layout="csr"), self.model.alpha,
-            #                         self.model.eps, np.arange(self.n), self.model.topk,
+            #                         self.ppr_topk, np.arange(self.n), self.model.topk,
             #                         normalization=self.model.ppr_normalization)
             # ).to(self.device)[node_idx]
             # # approx_ppr_vector.storage._value /= approx_ppr_vector.sum()
