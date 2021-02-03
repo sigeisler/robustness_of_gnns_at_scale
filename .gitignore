@@ -457,6 +457,4 @@ kernels/kernels.egg-info
 seml/*/output 
 datasets/*
 train.sh
-pre_calc_ppr.py
-ppr_calc.sh
 
