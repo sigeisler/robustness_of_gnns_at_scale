@@ -293,7 +293,8 @@ def calc_ppr_update_sparse_result(ppr: sp.csr_matrix,
     return SparseTensor(
         row=torch.zeros(col_mask.sum(), device=row.device(), dtype=torch.long),
         col=torch.arange(num_nodes, device=row.device())[col_mask],
-        value=ppr_pert_update.squeeze()
+        value=ppr_pert_update.squeeze(),
+        sparse_sizes=(1, num_nodes)
     )
 
 
