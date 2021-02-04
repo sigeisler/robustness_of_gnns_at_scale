@@ -273,6 +273,7 @@ def calc_ppr_update_sparse_result(ppr: sp.csr_matrix,
     # (P_inv @ u @ row_diff_norm @ P_inv)
     ppr_slice = ppr[row.storage.col().cpu()]  # Shape [n, |p|]
     col_mask = ppr_slice.getnnz(0) > 0
+    col_mask[ppr[i].indices] = True
     ppr_slice = ppr_slice[:, col_mask]  # Shape [l, |p|] - l depends on p (in expectation)
 
     P_uv_inv_diff = (  # Shape [l, 1]

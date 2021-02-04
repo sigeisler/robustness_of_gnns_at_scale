@@ -123,7 +123,6 @@ class LocalPRBCD():
         self.attack_statistics = defaultdict(list)
 
         with torch.no_grad():
-            updated_vector_or_graph = self.get_updated_vector_or_graph(node_idx)
             if type(self.model) in BATCHED_PPR_MODELS.__args__:
                 updated_vector_or_graph_orig = SparseTensor.from_scipy(self.ppr_matrix[node_idx])
             else:
