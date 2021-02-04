@@ -1,6 +1,7 @@
 from collections import defaultdict
 from copy import deepcopy
 import math
+import logging
 from typing import Dict, Optional, Union
 import warnings
 
@@ -16,7 +17,9 @@ from rgnn_at_scale.models import MODEL_TYPE, BATCHED_PPR_MODELS
 from rgnn_at_scale.utils import calc_ppr_exact_row, calc_ppr_update_sparse_result, grad_with_checkpoint
 from pprgo import ppr
 from rgnn_at_scale.attacks.prbcd import PRBCD
-from rgnn_at_scale.load_ppr import load_ppr
+from rgnn_at_scale.load_ppr import load_ppr, load_ppr_csr
+
+from pprgo import utils as ppr_utils
 
 
 class LocalPRBCD():
@@ -40,9 +43,10 @@ class LocalPRBCD():
                  with_early_stropping: bool = True,
                  do_synchronize: bool = False,
                  eps: float = 1e-14,
-                 ppr_topk: int = None,
                  K: int = 20,
                  **kwargs):
+
+        logging.info(f'Memory before loading ppr: {ppr_utils.get_max_memory_bytes() / (1024 ** 3)}')
 
         self.device = device
         self.X = X
@@ -50,10 +54,6 @@ class LocalPRBCD():
         self.model.eval()
         for p in self.model.parameters():
             p.requires_grad = False
-
-        self.ppr_topk = ppr_topk
-        if self.ppr_topk is None:
-            self.ppr_topk = self.model.topk
 
         self.n, self.d = X.shape
         self.n_possible_edges = self.n * (self.n - 1) // 2
@@ -72,13 +72,15 @@ class LocalPRBCD():
                 ppr_nodes = np.arange(self.n)
             if ppr_matrix is None:
                 if self.n == 111059956:
-                    self.ppr_matrix = load_ppr(alpha=0.1,  # model.alpha,
-                                               eps=model.eps, 
-                                               topk=self.ppr_topk,
-                                               ppr_normalization=model.ppr_normalization)
+                    logging.info(f'model.alpha={model.alpha}, eps={model.eps}, topk={model.topk}, '
+                                 f'ppr_normalization={model.ppr_normalization}')
+                    self.ppr_matrix = load_ppr_csr(alpha=0.1,  # model.alpha,
+                                                   eps=1e-3,  # model.eps,
+                                                   topk=64,  # model.topk,
+                                                   ppr_normalization=model.ppr_normalization)
                 else:
                     self.ppr_matrix = ppr.topk_ppr_matrix(adj, model.alpha, model.eps, ppr_nodes,
-                                                          self.ppr_topk, normalization=model.ppr_normalization)
+                                                          model.topk, normalization=model.ppr_normalization)
                 if self.attack_labeled_nodes_only:
                     relabeled_row = torch.from_numpy(ppr_nodes)[self.ppr_matrix.storage.row()]
                     self.ppr_matrix = SparseTensor(row=relabeled_row, col=self.ppr_matrix.storage.col(),
@@ -113,9 +115,26 @@ class LocalPRBCD():
         self.lr_factor = lr_factor
         self.lr_factor *= max(math.sqrt(self.n / self.search_space_size), 1.)
 
+        logging.info(f'self.ppr_matrix is of shape {self.ppr_matrix.shape}')
+        logging.info(f'Memory after loading ppr: {ppr_utils.get_max_memory_bytes() / (1024 ** 3)}')
+
     def attack(self, node_idx: int, n_perturbations: int):
         self.sample_search_space(node_idx, n_perturbations)
         self.attack_statistics = defaultdict(list)
+
+        with torch.no_grad():
+            updated_vector_or_graph = self.get_updated_vector_or_graph(node_idx)
+            if type(self.model) in BATCHED_PPR_MODELS.__args__:
+                updated_vector_or_graph_orig = SparseTensor.from_scipy(self.ppr_matrix[node_idx])
+            else:
+                updated_vector_or_graph_orig = self.adj.to(self.device)
+                if not isinstance(updated_vector_or_graph_orig, SparseTensor):
+                    updated_vector_or_graph_orig = SparseTensor.from_scipy(updated_vector_or_graph_orig)
+            logits_orig = self.get_logits(node_idx, updated_vector_or_graph_orig)
+            loss_orig = self.calculate_loss(logits_orig, self.labels[node_idx][None])
+            statistics_orig = LocalPRBCD.classification_statistics(logits_orig,
+                                                                   self.labels[node_idx])
+            logging.info(f'Original: Loss: {loss_orig.item()} Statstics: {statistics_orig}\n')
 
         for epoch in tqdm(range(self.epochs)):
             self.modified_edge_weight_diff.requires_grad = True
@@ -131,19 +150,7 @@ class LocalPRBCD():
             classification_statistics = LocalPRBCD.classification_statistics(logits, self.labels[node_idx])
             if epoch == 0:
                 initial_logits = logits.detach().cpu().clone()
-                print(f'Initial: Loss: {loss.item()} Statstics: {classification_statistics}\n')
-                with torch.no_grad():
-                    if type(self.model) in BATCHED_PPR_MODELS.__args__:
-                        updated_vector_or_graph_orig = SparseTensor.from_scipy(self.ppr_matrix[node_idx])
-                    else:
-                        updated_vector_or_graph_orig = self.adj.to(self.device)
-                        if not isinstance(updated_vector_or_graph_orig, SparseTensor):
-                            updated_vector_or_graph_orig = SparseTensor.from_scipy(updated_vector_or_graph_orig)
-                    logits_orig = self.get_logits(node_idx, updated_vector_or_graph_orig)
-                    loss_orig = self.calculate_loss(logits_orig, self.labels[node_idx][None])
-                    statistics_orig = LocalPRBCD.classification_statistics(logits_orig,
-                                                                           self.labels[node_idx])
-                    print(f'Original: Loss: {loss_orig.item()} Statstics: {statistics_orig}\n')
+                logging.info(f'Initial: Loss: {loss.item()} Statstics: {classification_statistics}\n')
 
             gradient = grad_with_checkpoint(loss, self.modified_edge_weight_diff)[0]
 
@@ -163,7 +170,7 @@ class LocalPRBCD():
                 logits = self.get_logits(node_idx, updated_vector_or_graph)
                 classification_statistics = LocalPRBCD.classification_statistics(logits, self.labels[node_idx])
                 if epoch % self.display_step == 0:
-                    print(f'\nEpoch: {epoch} Loss: {loss.item()} Statstics: {classification_statistics}\n')
+                    logging.info(f'\nEpoch: {epoch} Loss: {loss.item()} Statstics: {classification_statistics}\n')
 
                 self._append_attack_statistics(loss.item(), classification_statistics)
 

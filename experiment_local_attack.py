@@ -12,6 +12,7 @@ from rgnn_at_scale.io import Storage
 from rgnn_at_scale.models import DenseGCN, GCN
 from rgnn_at_scale.train import train
 from rgnn_at_scale.utils import accuracy
+from pprgo import utils as ppr_utils
 
 
 ex = Experiment()
@@ -103,6 +104,8 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
     else:
         idx_train, idx_val, idx_test = graph[3]['train'], graph[3]['valid'], graph[3]['test']
 
+    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+
     storage = Storage(artifact_dir, experiment=ex)
 
     model_params = dict(dataset=dataset,
@@ -118,6 +121,8 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
     models_and_hyperparams = storage.find_models(model_storage_type, model_params)
 
     for model, hyperparams in models_and_hyperparams:
+        logging.info(model)
+        logging.info(hyperparams)
         model = model.to(device)
         model.eval()
         model.topk = 16
@@ -136,29 +141,36 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                 torch.manual_seed(seed)
                 np.random.seed(seed)
 
-                logits, initial_logits = adversary.attack(node, n_perturbations)
+                try:
+                    logits, initial_logits = adversary.attack(node, n_perturbations)
 
-                logging.info(f'Pert. edges for node {node} and budget {n_perturbations}: {adversary.perturbed_edges}')
+                    logging.info(
+                        f'Pert. edges for node {node} and budget {n_perturbations}: {adversary.perturbed_edges}')
 
-                results.append({
-                    'label': hyperparams['label'],
-                    'epsilon': eps,
-                    'n_perturbations': n_perturbations,
-                    'degree': int(degree.item()),
-                    'logits': logits.cpu(),
-                    'initial_logits': initial_logits.cpu(),
-                    'larget': labels[node].item(),
-                    'node_id': node,
-                    'perturbed_edges': adversary.perturbed_edges.cpu().numpy()
-                })
-                results[-1].update(adversary.classification_statistics(logits.cpu(), labels[node].cpu()))
-                results[-1].update({
-                    f'initial_{key}': value
-                    for key, value
-                    in adversary.classification_statistics(initial_logits.cpu(), labels[node].cpu()).items()
-                })
-                if hasattr(adversary, 'attack_statistics'):
-                    results[-1]['attack_statistics'] = adversary.attack_statistics
+                    results.append({
+                        'label': hyperparams['label'],
+                        'epsilon': eps,
+                        'n_perturbations': n_perturbations,
+                        'degree': int(degree.item()),
+                        'logits': logits.cpu(),
+                        'initial_logits': initial_logits.cpu(),
+                        'larget': labels[node].item(),
+                        'node_id': node,
+                        'perturbed_edges': adversary.perturbed_edges.cpu().numpy()
+                    })
+                    results[-1].update(adversary.classification_statistics(logits.cpu(), labels[node].long().cpu()))
+                    results[-1].update({
+                        f'initial_{key}': value
+                        for key, value
+                        in adversary.classification_statistics(initial_logits.cpu(), labels[node].long().cpu()).items()
+                    })
+                    # if hasattr(adversary, 'attack_statistics'):
+                    #     results[-1]['attack_statistics'] = adversary.attack_statistics
+
+                except Exception as e:
+                    logging.exception(e)
+
+    assert len(results) > 0
 
     return {
         'results': results
