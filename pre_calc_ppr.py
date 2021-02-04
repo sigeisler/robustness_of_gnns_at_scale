@@ -20,27 +20,27 @@ setup_logging()
 
 logging.info("start")
 
-logging.info("start")
-dataset = "ogbn-arxiv"  # "ogbn-papers100M"  # "ogbn-arxiv"
-device = "cpu"
-dataset_root = "/nfs/students/schmidtt/datasets/"
-output_dir = dataset_root + "ppr/"
-binary_attr = False
-topk_batch_size = 10240
-dir_name = '_'.join(dataset.split('-'))
-
-# dataset = "ogbn-papers100M"  # "ogbn-arxiv"  # "ogbn-papers100M"  # "ogbn-arxiv"
-# device = 0
+# logging.info("start")
+# dataset = "ogbn-arxiv"  # "ogbn-papers100M"  # "ogbn-arxiv"
+# device = "cpu"
 # dataset_root = "/nfs/students/schmidtt/datasets/"
-# output_dir = dataset_root + "ppr/papers/"
+# output_dir = dataset_root + "ppr/arxiv/"
 # binary_attr = False
-# topk_batch_size = int(1e6)
+# topk_batch_size = 10240  # int(1e5)
 # dir_name = '_'.join(dataset.split('-'))
+
+dataset = "ogbn-papers100M"  # "ogbn-arxiv"  # "ogbn-papers100M"  # "ogbn-arxiv"
+device = 0
+dataset_root = "/nfs/students/schmidtt/datasets/"
+output_dir = dataset_root + "ppr/papers/"
+binary_attr = False
+topk_batch_size = int(1e7)
+dir_name = '_'.join(dataset.split('-'))
 
 
 # ppr params
 alpha = 0.1
-eps = 1e-4
+eps = 1e-3
 topk = 64
 ppr_normalization = "row"
 alpha_suffix = int(alpha * 100)
@@ -70,6 +70,7 @@ def save_ppr_topk(topk_batch_size,
     ppr_idx = np.arange(num_nodes)
     num_batches = math.ceil(num_nodes / topk_batch_size)
     Path(output_dir).mkdir(parents=True, exist_ok=True)
+    nnz = 0
     for i in range(num_batches):
         logging.info(f"topk for batch {i+1} of {num_batches}")
 
@@ -78,11 +79,12 @@ def save_ppr_topk(topk_batch_size,
         logging.info(f"batch has {idx_size} elements.")
         topk_ppr = ppr.topk_ppr_matrix(adj_sp, alpha, eps, batch_idx,
                                        topk,  normalization=ppr_normalization)
-        logging.info("Load topk_ppr")
+        logging.info("calculated topk_ppr")
         logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
         file_name = f"topk_ppr_{dump_suffix}_{i:08d}.npz"
-
+        nnz += topk_ppr.nnz
         sp.save_npz(output_dir + file_name, topk_ppr)
+    print(nnz)
 
 
 save_ppr_topk(topk_batch_size, output_dir, adj, num_nodes, alpha, eps, topk, ppr_normalization)
