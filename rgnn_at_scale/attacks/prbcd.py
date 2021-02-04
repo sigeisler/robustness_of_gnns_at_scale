@@ -35,6 +35,7 @@ class PRBCD(object):
                  keep_heuristic: str = 'WeightOnly',  # 'InvWeightGradient' 'Gradient', 'WeightOnly'
                  keep_weight: float = .1,
                  lr_n_perturbations_factor: float = 0.1,
+                 lr_factor: float = 1,
                  display_step: int = 20,
                  epochs: int = 400,
                  fine_tune_epochs: int = 100,
@@ -83,9 +84,9 @@ class PRBCD(object):
         self.modified_edge_weight_diff: torch.Tensor = None
 
         if self.loss_type == 'CW':
-            self.lr_factor = .5
+            self.lr_factor = .5 * lr_factor
         else:
-            self.lr_factor = 10
+            self.lr_factor = 10 * lr_factor
         self.lr_factor *= max(math.log2(self.n_possible_edges / self.search_space_size), 1.)
 
     def attack(self, n_perturbations, **kwargs):
@@ -113,7 +114,7 @@ class PRBCD(object):
                 torch.cuda.synchronize()
 
             logits = self.model(data=self.X.to(self.device), adj=(edge_index, edge_weight))
-            loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
+            loss = PRBCD.calculate_loss(self.loss_type, logits[self.idx_attack], self.labels[self.idx_attack])
 
             gradient = utils.grad_with_checkpoint(loss, self.modified_edge_weight_diff)[0]
 
@@ -203,15 +204,16 @@ class PRBCD(object):
             edge_weight = edge_weight[is_edge_set]
         return edge_index, edge_weight
 
-    def calculate_loss(self, logits, labels):
-        if self.loss_type == 'CW':
+    @staticmethod
+    def calculate_loss(loss_type, logits, labels):
+        if loss_type == 'CW':
             second_best_class = logits.argsort(-1)[:, -2]
             margin = (
                 logits[np.arange(logits.size(0)), labels]
                 - logits[np.arange(logits.size(0)), second_best_class]
             )
             loss = -torch.clamp(margin, min=0).mean()
-        elif self.loss_type == 'LCW':
+        elif loss_type == 'LCW':
             sorted = logits.argsort(-1)
             best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
             margin = (
@@ -219,7 +221,7 @@ class PRBCD(object):
                 - logits[np.arange(logits.size(0)), best_non_target_class]
             )
             loss = -F.leaky_relu(margin, negative_slope=0.1).mean()
-        elif self.loss_type == 'tanhCW':
+        elif loss_type == 'tanhCW':
             sorted = logits.argsort(-1)
             best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
             margin = (
@@ -227,10 +229,10 @@ class PRBCD(object):
                 - logits[np.arange(logits.size(0)), best_non_target_class]
             )
             loss = torch.tanh(-margin).mean()
-        elif self.loss_type == 'MCE':
+        elif loss_type == 'MCE':
             not_flipped = logits.argmax(-1) == labels
             loss = F.nll_loss(logits[not_flipped], labels[not_flipped])
-        elif self.loss_type == 'WCE':
+        elif loss_type == 'WCE':
             not_flipped = logits.argmax(-1) == labels
             weighting_not_flipped = not_flipped.sum().item() / not_flipped.shape[0]
             weighting_flipped = (not_flipped.shape[0] - not_flipped.sum().item()) / not_flipped.shape[0]
@@ -240,8 +242,12 @@ class PRBCD(object):
                 weighting_not_flipped * loss_not_flipped
                 + 0.25 * weighting_flipped * loss_flipped
             )
+        elif loss_type == 'SCE':
+            sorted = logits.argsort(-1)
+            best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
+            loss = -F.nll_loss(logits, best_non_target_class)
         # TODO: Is it worth trying? CW should be quite similar
-        # elif self.loss_type == 'Margin':
+        # elif loss_type == 'Margin':
         #    loss = F.multi_margin_loss(torch.exp(logits), labels)
         else:
             loss = F.nll_loss(logits, labels)

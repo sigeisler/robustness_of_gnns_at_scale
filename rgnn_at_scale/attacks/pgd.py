@@ -14,6 +14,7 @@ import torch
 from torch.nn import functional as F
 
 from rgnn_at_scale.models import DenseGCN
+from rgnn_at_scale.attacks.prbcd import PRBCD
 
 
 class PGD(object):
@@ -85,16 +86,18 @@ class PGD(object):
         self.model.eval()
         for t in range(self.epochs):
             modified_adj = self.get_modified_adj()
-            output = self.model(self.X, modified_adj)
-            loss = self._loss(output)
+            logits = self.model(self.X, modified_adj)
+            loss = PRBCD.calculate_loss(self.loss_type, logits[self.idx_attack], self.labels[self.idx_attack])
             adj_grad = torch.autograd.grad(loss, self.adj_changes)[0]
 
-            if self.loss_type == 'CE' or self.loss_type == 'tanhCW':
-                lr = 200 / np.sqrt(t + 1)
-                self.adj_changes.data.add_(lr * adj_grad)
-
             if self.loss_type == 'CW':
-                lr = 0.1 / np.sqrt(t + 1)
+                lr = 1 / np.sqrt(t + 1)
+                self.adj_changes.data.add_(lr * adj_grad)
+            elif self.loss_type == 'MCE':
+                lr = 60 / np.sqrt(t + 1)
+                self.adj_changes.data.add_(lr * adj_grad)
+            else:
+                lr = 200 / np.sqrt(t + 1)
                 self.adj_changes.data.add_(lr * adj_grad)
 
             self.projection(n_perturbations)
@@ -115,33 +118,12 @@ class PGD(object):
                         continue
                     self.adj_changes.data.copy_(torch.tensor(sampled))
                     modified_adj = self.get_modified_adj()
-                    output = self.model(self.X, modified_adj)
-                    loss = self._loss(output)
+                    logits = self.model(self.X, modified_adj)
+                    loss = PRBCD.calculate_loss(self.loss_type, logits[self.idx_attack], self.labels[self.idx_attack])
                     if best_loss < loss:
                         best_loss = loss
                         best_s = sampled
             self.adj_changes.data.copy_(torch.tensor(best_s))
-
-    def _loss(self, output):
-        output = output[self.idx_attack]
-        labels = self.labels[self.idx_attack]
-        if self.loss_type == "CE":
-            loss = F.nll_loss(output, labels)
-        elif self.loss_type == "CW":
-            eye = torch.eye(labels.max() + 1, device=self.device)
-            onehot = eye[labels]
-            best_second_class = (output - 1000 * onehot).argmax(1)
-            margin = output[np.arange(len(output)), labels] - output[np.arange(len(output)), best_second_class]
-            loss = -torch.clamp(margin, min=0).mean()
-        elif self.loss_type == 'tanhCW':
-            sorted = output.argsort(-1)
-            best_non_target_class = sorted[sorted != labels[:, None]].reshape(output.size(0), -1)[:, -1]
-            margin = (
-                output[np.arange(output.size(0)), labels]
-                - output[np.arange(output.size(0)), best_non_target_class]
-            )
-            loss = torch.tanh(-margin).mean()
-        return loss
 
     def projection(self, n_perturbations: int):
         if torch.clamp(self.adj_changes, 0, 1).sum() > n_perturbations:

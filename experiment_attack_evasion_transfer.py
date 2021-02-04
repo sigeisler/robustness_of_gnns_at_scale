@@ -147,9 +147,13 @@ def run(dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequ
             storage.save_artifact(pert_adj_storage_type, {**params, **{'epsilon': epsilon}}, adj_per_eps[-1])
             storage.save_artifact(pert_attr_storage_type, {**params, **{'epsilon': epsilon}}, attr_per_eps[-1])
 
+        del adversary
+
+    adj = adj.to('cpu')
+    attr = attr.to('cpu')
     if epsilons[0] == 0:
-        adj_per_eps.insert(0, adj.to('cpu'))
-        attr_per_eps.insert(0, attr.to('cpu'))
+        adj_per_eps.insert(0, adj)
+        attr_per_eps.insert(0, attr)
 
     model_params = dict(dataset=dataset, binary_attr=binary_attr, seed=seed)
     if model_label is not None and model_label:
@@ -161,6 +165,9 @@ def run(dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequ
         for model, hyperparams in models_and_hyperparams:
             model = model.to(device)
             model.eval()
+
+            if hasattr(model, 'release_cache'):
+                model.release_cache()
 
             for eps, adj_perturbed, attr_perturbed in zip(epsilons, adj_per_eps, attr_per_eps):
                 # In case the model is non-deterministic to get the results either after attacking or after loading

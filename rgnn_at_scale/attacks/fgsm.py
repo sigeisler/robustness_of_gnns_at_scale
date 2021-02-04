@@ -2,13 +2,14 @@
 towards increasing the loss.
 """
 from copy import deepcopy
-from typing import Union
+from typing import Optional, Union
 
 import numpy as np
 import torch
 import torch.nn.functional as F
 
 from rgnn_at_scale.models import DenseGCN
+from rgnn_at_scale.attacks.prbcd import PRBCD
 
 
 class FGSM():
@@ -36,6 +37,7 @@ class FGSM():
                  model: DenseGCN,
                  device: Union[str, int, torch.device],
                  stop_optimizing_if_label_flipped: bool = False,
+                 loss_type: Optional[str] = None,
                  **kwargs):
         super().__init__()
         assert adj.device == X.device, 'The device of the features and adjacency matrix must match'
@@ -47,6 +49,7 @@ class FGSM():
         self.idx_attack = idx_attack
         self.model = deepcopy(model).to(self.device)
         self.stop_optimizing_if_label_flipped = stop_optimizing_if_label_flipped
+        self.loss_type = loss_type
 
         self.attr_adversary = None
         self.adj_adversary = None
@@ -70,12 +73,15 @@ class FGSM():
         for i in range(n_perturbations):
             logits = self.model.to(self.device)(self.X, self.adj)
 
-            not_yet_flipped_mask = logits[self.idx_attack].argmax(-1) == self.labels[self.idx_attack]
-            if self.stop_optimizing_if_label_flipped and not_yet_flipped_mask.sum() > 0:
-                loss = F.cross_entropy(logits[self.idx_attack][not_yet_flipped_mask],
-                                       self.labels[self.idx_attack][not_yet_flipped_mask])
+            if self.loss_type is not None:
+                loss = PRBCD.calculate_loss(self.loss_type, logits[self.idx_attack], self.labels[self.idx_attack])
             else:
-                loss = F.cross_entropy(logits[self.idx_attack], self.labels[self.idx_attack])
+                not_yet_flipped_mask = logits[self.idx_attack].argmax(-1) == self.labels[self.idx_attack]
+                if self.stop_optimizing_if_label_flipped and not_yet_flipped_mask.sum() > 0:
+                    loss = F.cross_entropy(logits[self.idx_attack][not_yet_flipped_mask],
+                                           self.labels[self.idx_attack][not_yet_flipped_mask])
+                else:
+                    loss = F.cross_entropy(logits[self.idx_attack], self.labels[self.idx_attack])
 
             gradient = torch.autograd.grad(loss, self.adj)[0]
             gradient[self.original_adj != self.adj] = 0
