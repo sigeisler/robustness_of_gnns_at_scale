@@ -62,7 +62,7 @@ class Nettack:
         self.X = X
         self.adj_matrix = adj.to_scipy(layout="csr")
         self.attr_matrix = SparseTensor.from_dense(X).to_scipy(layout="csr")
-        self.labels = labels.detach().numpy()
+        self.labels = labels.detach().cpu().numpy()
         self.model = model
         self.epsilon = epsilon
         self.device = device
@@ -90,7 +90,10 @@ class Nettack:
         self.perturbed_edges = torch.tensor(nettack.structure_perturbations)
 
         initial_logits = self.get_logits(node_idx, self.adj)
+
+        self.model.topk = self.model.topk + n_perturbations
         logits = self.get_logits(node_idx, nettack.adj_adversary)
+        self.model.topk = self.model.topk - n_perturbations
 
         return logits, initial_logits
 
