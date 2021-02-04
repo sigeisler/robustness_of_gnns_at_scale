@@ -455,6 +455,7 @@ kernels/build
 kernels/dist
 kernels/kernels.egg-info
 seml/*/output 
+seml/*
 datasets/*
 train.sh
 

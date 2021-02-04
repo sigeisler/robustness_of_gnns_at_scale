@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH -N 1 # number of nodes
-#SBATCH -t 0-02:00 # time after which the process will be killed (D-HH:MM)
+#SBATCH -t 0-12:00 # time after which the process will be killed (D-HH:MM)
 #SBATCH -o "/nfs/homedirs/%u/git/robust-gnns-at-scale/seml/train/output/slurm-%j.out"
-#SBATCH --mem=160G 
+#SBATCH --mem=256G 
 #SBATCH --cpus-per-task=20
 #SBATCH --qos=interactive
 
