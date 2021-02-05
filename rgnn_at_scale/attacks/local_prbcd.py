@@ -193,7 +193,7 @@ class LocalPRBCD():
             del gradient
 
         # For the case that the attack was not successfull
-        if statistics_orig['margin'] > best_margin:
+        if best_margin > statistics_orig['margin']:
             self.perturbed_edges = torch.tensor([])
             return logits_orig, logits_orig
 
