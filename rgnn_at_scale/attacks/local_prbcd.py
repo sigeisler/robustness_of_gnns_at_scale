@@ -89,6 +89,9 @@ class LocalPRBCD():
                 self.ppr_matrix = ppr_matrix
             self.ppr_recalc_at_end = ppr_recalc_at_end
 
+            logging.info(f'self.ppr_matrix is of shape {self.ppr_matrix.shape}')
+            logging.info(f'Memory after loading ppr: {ppr_utils.get_max_memory_bytes() / (1024 ** 3)}')
+
         if isinstance(adj, SparseTensor):
             self.adj = adj
         else:
@@ -114,9 +117,6 @@ class LocalPRBCD():
 
         self.lr_factor = lr_factor
         self.lr_factor *= max(math.sqrt(self.n / self.search_space_size), 1.)
-
-        logging.info(f'self.ppr_matrix is of shape {self.ppr_matrix.shape}')
-        logging.info(f'Memory after loading ppr: {ppr_utils.get_max_memory_bytes() / (1024 ** 3)}')
 
     def attack(self, node_idx: int, n_perturbations: int):
         self.sample_search_space(node_idx, n_perturbations)
@@ -148,7 +148,6 @@ class LocalPRBCD():
 
             classification_statistics = LocalPRBCD.classification_statistics(logits, self.labels[node_idx])
             if epoch == 0:
-                initial_logits = logits.detach().cpu().clone()
                 logging.info(f'Initial: Loss: {loss.item()} Statstics: {classification_statistics}\n')
 
             gradient = grad_with_checkpoint(loss, self.modified_edge_weight_diff)[0]
@@ -196,7 +195,7 @@ class LocalPRBCD():
             #                    SparseTensor.from_dense(self.X).to_scipy(layout="csr"), alpha=0.109536, nprop=5,
             #                    ppr_normalization='row')[0][node_idx]
 
-        return logits, initial_logits
+        return logits, loss_orig
 
     def get_logits(self, node_idx: int, updated_vector_or_graph: SparseTensor) -> torch.Tensor:
         if type(self.model) in BATCHED_PPR_MODELS.__args__:
@@ -251,7 +250,9 @@ class LocalPRBCD():
             # Works since the attack will always assign at least a small constant the elements in p
             A_weights[A_weights > 1] = -A_weights[A_weights > 1] + 2
 
-            return SparseTensor.from_edge_index(A_idx, A_weights, (self.n, self.n))
+            updated_adj = SparseTensor.from_edge_index(A_idx, A_weights, (self.n, self.n))
+
+            return updated_adj.to_symmetric('min')
 
     def update_edge_weights(self, n_perturbations: int, epoch: int, gradient: torch.Tensor):
         lr_factor = n_perturbations * self.lr_factor
