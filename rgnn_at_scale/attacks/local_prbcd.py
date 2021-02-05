@@ -195,7 +195,7 @@ class LocalPRBCD():
             #                    SparseTensor.from_dense(self.X).to_scipy(layout="csr"), alpha=0.109536, nprop=5,
             #                    ppr_normalization='row')[0][node_idx]
 
-        return logits, loss_orig
+        return logits, logits_orig
 
     def get_logits(self, node_idx: int, updated_vector_or_graph: SparseTensor) -> torch.Tensor:
         if type(self.model) in BATCHED_PPR_MODELS.__args__:
