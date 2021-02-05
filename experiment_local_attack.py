@@ -61,7 +61,7 @@ def config():
 
     nodes = [1854, 513, 2383]
 
-    epsilons = [1]
+    epsilons = [0.5, 0.75, 1]
     binary_attr = False
     seed = 0
     artifact_dir = 'cache_debug'
@@ -125,7 +125,6 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
         logging.info(hyperparams)
         model = model.to(device)
         model.eval()
-        model.topk = 16
 
         adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels,
                                   model=model, idx_attack=idx_test, device=device, **attack_params)

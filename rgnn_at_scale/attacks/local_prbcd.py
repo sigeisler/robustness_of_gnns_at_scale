@@ -38,7 +38,8 @@ class LocalPRBCD():
                  lr_factor: float = 1.0,
                  lr_n_perturbations_factor: float = 0.1,
                  display_step: int = 20,
-                 epochs: int = 500,
+                 epochs: int = 400,
+                 fine_tune_epochs: int = 100,
                  search_space_size: int = 10_000,
                  with_early_stropping: bool = True,
                  do_synchronize: bool = False,
@@ -101,6 +102,7 @@ class LocalPRBCD():
         self.lr_n_perturbations_factor = lr_n_perturbations_factor
         self.display_step = display_step
         self.epochs = epochs
+        self.fine_tune_epochs = fine_tune_epochs
         self.search_space_size = search_space_size
         self.with_early_stropping = with_early_stropping
         self.eps = eps
@@ -112,7 +114,6 @@ class LocalPRBCD():
         self.attr_adversary = None
 
         self.current_search_space: torch.Tensor = None
-        self.modified_edge_index: torch.Tensor = None
         self.modified_edge_weight_diff: torch.Tensor = None
 
         self.lr_factor = lr_factor
@@ -120,6 +121,8 @@ class LocalPRBCD():
 
     def attack(self, node_idx: int, n_perturbations: int):
         self.sample_search_space(node_idx, n_perturbations)
+        best_margin = float('Inf')
+        best_epoch = float('-Inf')
         self.attack_statistics = defaultdict(list)
 
         with torch.no_grad():
@@ -135,7 +138,7 @@ class LocalPRBCD():
                                                                    self.labels[node_idx])
             logging.info(f'Original: Loss: {loss_orig.item()} Statstics: {statistics_orig}\n')
 
-        for epoch in tqdm(range(self.epochs)):
+        for epoch in tqdm(range(self.epochs + self.fine_tune_epochs)):
             self.modified_edge_weight_diff.requires_grad = True
             updated_vector_or_graph = self.get_updated_vector_or_graph(node_idx)
 
@@ -170,13 +173,33 @@ class LocalPRBCD():
                 if epoch % self.display_step == 0:
                     logging.info(f'\nEpoch: {epoch} Loss: {loss.item()} Statstics: {classification_statistics}\n')
 
+                if self.with_early_stropping and best_margin > classification_statistics['margin']:
+                    best_margin = classification_statistics['margin']
+                    best_epoch = epoch
+                    best_search_space = self.current_search_space.clone().cpu()
+                    best_edge_weight_diff = self.modified_edge_weight_diff.detach().clone().cpu()
+
                 self._append_attack_statistics(loss.item(), classification_statistics)
 
-                self.resample_search_space(node_idx, n_perturbations, gradient)
+                if epoch < self.epochs - 1:
+                    self.resample_search_space(node_idx, n_perturbations, gradient)
+                elif self.with_early_stropping and epoch == self.epochs - 1:
+                    print(f'Loading search space of epoch {best_epoch} (margin={best_margin}) for fine tuning\n')
+                    self.current_search_space = best_search_space.clone().to(self.device)
+                    self.modified_edge_weight_diff = best_edge_weight_diff.clone().to(self.device)
 
             del logits
             del loss
             del gradient
+
+        # For the case that the attack was not successfull
+        if statistics_orig['margin'] > best_margin:
+            self.perturbed_edges = torch.tensor([])
+            return logits_orig, logits_orig
+
+        if self.with_early_stropping:
+            self.current_search_space = best_search_space.to(self.device)
+            self.modified_edge_weight_diff = best_edge_weight_diff.to(self.device)
 
         updated_vector_or_graph = self.sample_edges(node_idx, n_perturbations)
         logits = self.get_logits(node_idx, updated_vector_or_graph)
@@ -184,9 +207,18 @@ class LocalPRBCD():
 
         if self.ppr_recalc_at_end:
             adj = self.get_updated_vector_or_graph(node_idx, only_update_adj=True)
+            # Handle disconnected nodes
+            disconnected_nodes = (adj.sum(0) == 0).nonzero().flatten()
+            if disconnected_nodes.nelement():
+                adj = SparseTensor(row=torch.cat((adj.storage.row(), disconnected_nodes)),
+                                   col=torch.cat((adj.storage.col(), disconnected_nodes)),
+                                   value=torch.cat((adj.storage.col(), torch.full_like(disconnected_nodes, 1e-9))))
             if type(self.model) in BATCHED_PPR_MODELS.__args__:
                 self.model.topk = self.model.topk + n_perturbations
-                logits = F.log_softmax(self.model.forward(self.X, adj, ppr_idx=np.array([node_idx])), dim=-1)
+                try:
+                    logits = F.log_softmax(self.model.forward(self.X, adj, ppr_idx=np.array([node_idx])), dim=-1)
+                except:
+                    print('sdf')
                 self.model.topk = self.model.topk - n_perturbations
             else:
                 return self.model(data=self.X.to(self.device), adj=updated_vector_or_graph)[node_idx:node_idx + 1]
@@ -252,7 +284,7 @@ class LocalPRBCD():
 
             updated_adj = SparseTensor.from_edge_index(A_idx, A_weights, (self.n, self.n))
 
-            return updated_adj.to_symmetric('min')
+            return updated_adj.to_symmetric('max')
 
     def update_edge_weights(self, n_perturbations: int, epoch: int, gradient: torch.Tensor):
         lr_factor = n_perturbations * self.lr_factor
