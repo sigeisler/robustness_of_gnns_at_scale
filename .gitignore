@@ -458,4 +458,5 @@ seml/*/output
 seml/*
 datasets/*
 train.sh
+runs/
 

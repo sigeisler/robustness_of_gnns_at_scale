@@ -301,7 +301,6 @@ class TestPPRUpdate():
         p_dense = torch.rand((1, num_nodes),
                              requires_grad=True)
         p_dense[0, i] = 0
-
         p = SparseTensor.from_dense(p_dense)
 
         ppr_idx = np.concatenate([np.arange(0, i), np.arange(i + 1, num_nodes)])
@@ -309,7 +308,7 @@ class TestPPRUpdate():
         A_sp = adj.to_scipy(layout="csr")
 
         ppr_topk_i = matrix_to_torch(topk_ppr_matrix(
-            A_sp, alpha, 1e-6, np.array([i]), num_nodes, normalization='row'))
+            A_sp, alpha, eps, np.array([i]), topk, normalization='row'))
         ppr_topk_wo_i = matrix_to_torch(topk_ppr_matrix(
             A_sp, alpha, eps, ppr_idx, topk, normalization='row'))
 
@@ -325,12 +324,12 @@ class TestPPRUpdate():
                                                 edge_attr=ppr_topk_weights,
                                                 sparse_sizes=(num_nodes, num_nodes))
 
-        ppr_pert_update_topk = calc_ppr_update_sparse_result(ppr=ppr_topk,
+        ppr_pert_update_topk = calc_ppr_update_sparse_result(ppr=ppr_topk.to_scipy(layout="csr"),
                                                              Ai=adj[i],
                                                              p=p,
                                                              i=i,
                                                              alpha=alpha
-                                                             )
+                                                             ).to_dense()
 
         u = torch.zeros((num_nodes, 1),
                         dtype=torch.float32)

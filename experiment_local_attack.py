@@ -84,7 +84,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
         'dataset': dataset, 'attack': attack, 'attack_params': attack_params, 'nodes': nodes, 'epsilons': epsilons,
         'binary_attr': binary_attr, 'seed': seed,
         'artifact_dir': artifact_dir, 'model_label': model_label, 'model_storage_type': model_storage_type,
-        'device': device, 'display_steps': display_steps
+        'device': device, "data_device": data_device, 'display_steps': display_steps
     })
 
     assert sorted(epsilons) == epsilons, 'argument `epsilons` must be a sorted list'

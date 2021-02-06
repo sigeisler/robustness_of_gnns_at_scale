@@ -33,13 +33,13 @@ def config():
         ex.observers.append(seml.create_mongodb_observer(db_collection, overwrite=overwrite))
 
     # default params
-    dataset = 'cora_ml'  # Options are 'cora_ml' and 'citeseer' (or with a big GPU 'pubmed')
+    dataset = 'citeseer'  # Options are 'cora_ml' and 'citeseer' (or with a big GPU 'pubmed')
     seed = 0
-    artifact_dir = 'cache_debug'
-    model_storage_type = 'pretrained'
+    artifact_dir = 'cache'
+    model_storage_type = 'nettack_citeseer'
     binary_attr = False
     device = "cpu"
-    model_label = 'Linear GCN'
+    model_label = 'Vanilla PPRGo'
     make_undirected = True
     make_unweighted = True
     data_dir = './datasets'
@@ -82,17 +82,19 @@ def run(data_dir: str, dataset: str, binary_attr: bool, make_undirected: bool, m
         model = model.to(device)
         model.eval()
 
-        if type(model) in BATCHED_PPR_MODELS.__args__:
-            log_prob = F.log_softmax(model.forward(attr.to(device), adj.to(device), ppr_idx=idx_test), dim=-1)
-        else:
-            log_prob = model(data=attr.to(device), adj=adj.to(device))[idx_test]
-            if model.do_omit_softmax:
-                log_prob = F.log_softmax(log_prob)
+        with torch.no_grad():
+            if type(model) in BATCHED_PPR_MODELS.__args__:
+                log_prob = F.log_softmax(model.forward(attr, adj, ppr_idx=idx_test), dim=-1).detach().cpu()
+            else:
+                log_prob = model(data=attr.to(device), adj=adj.to(device))[idx_test].detach().cpu()
+                if model.do_omit_softmax:
+                    log_prob = F.log_softmax(log_prob)
 
+        labels = labels.cpu()
         correctly_classifed = log_prob.max(-1).indices == labels[idx_test]
         _, max_confidence_nodes_idx = torch.topk(log_prob[correctly_classifed].max(-1).values, k=topk)
         _, min_confidence_nodes_idx = torch.topk(-log_prob[correctly_classifed].max(-1).values, k=topk)
-        rand_nodes_idx = torch.randint(correctly_classifed.sum(), (1, topk * 2))
+        rand_nodes_idx = torch.randint(correctly_classifed.sum(), (1, topk * 3))
         results.append({
             'hyperparams': hyperparams,
             'log_prob': log_prob.cpu(),
