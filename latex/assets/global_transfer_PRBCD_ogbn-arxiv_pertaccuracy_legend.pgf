@@ -29,7 +29,7 @@
 \begingroup%
 \makeatletter%
 \begin{pgfpicture}%
-\pgfpathrectangle{\pgfpointorigin}{\pgfqpoint{4.476571in}{0.543199in}}%
+\pgfpathrectangle{\pgfpointorigin}{\pgfqpoint{4.207732in}{0.543199in}}%
 \pgfusepath{use as bounding box, clip}%
 \begin{pgfscope}%
 \pgfsetbuttcap%
@@ -42,8 +42,8 @@
 \pgfsetstrokeopacity{0.000000}%
 \pgfsetdash{}{0pt}%
 \pgfpathmoveto{\pgfqpoint{0.000000in}{0.000000in}}%
-\pgfpathlineto{\pgfqpoint{4.476571in}{0.000000in}}%
-\pgfpathlineto{\pgfqpoint{4.476571in}{0.543199in}}%
+\pgfpathlineto{\pgfqpoint{4.207732in}{0.000000in}}%
+\pgfpathlineto{\pgfqpoint{4.207732in}{0.543199in}}%
 \pgfpathlineto{\pgfqpoint{0.000000in}{0.543199in}}%
 \pgfpathclose%
 \pgfusepath{fill}%
@@ -60,10 +60,10 @@
 \pgfsetstrokeopacity{0.800000}%
 \pgfsetdash{}{0pt}%
 \pgfpathmoveto{\pgfqpoint{0.122222in}{0.100000in}}%
-\pgfpathlineto{\pgfqpoint{4.354349in}{0.100000in}}%
-\pgfpathquadraticcurveto{\pgfqpoint{4.376571in}{0.100000in}}{\pgfqpoint{4.376571in}{0.122222in}}%
-\pgfpathlineto{\pgfqpoint{4.376571in}{0.420977in}}%
-\pgfpathquadraticcurveto{\pgfqpoint{4.376571in}{0.443199in}}{\pgfqpoint{4.354349in}{0.443199in}}%
+\pgfpathlineto{\pgfqpoint{4.085510in}{0.100000in}}%
+\pgfpathquadraticcurveto{\pgfqpoint{4.107732in}{0.100000in}}{\pgfqpoint{4.107732in}{0.122222in}}%
+\pgfpathlineto{\pgfqpoint{4.107732in}{0.420977in}}%
+\pgfpathquadraticcurveto{\pgfqpoint{4.107732in}{0.443199in}}{\pgfqpoint{4.085510in}{0.443199in}}%
 \pgfpathlineto{\pgfqpoint{0.122222in}{0.443199in}}%
 \pgfpathquadraticcurveto{\pgfqpoint{0.100000in}{0.443199in}}{\pgfqpoint{0.100000in}{0.420977in}}%
 \pgfpathlineto{\pgfqpoint{0.100000in}{0.122222in}}%
@@ -125,7 +125,7 @@
 \definecolor{textcolor}{rgb}{0.150000,0.150000,0.150000}%
 \pgfsetstrokecolor{textcolor}%
 \pgfsetfillcolor{textcolor}%
-\pgftext[x=0.455556in,y=0.166044in,left,base]{\color{textcolor}\rmfamily\fontsize{8.000000}{9.600000}\selectfont Soft Medoid GDC}%
+\pgftext[x=0.455556in,y=0.166044in,left,base]{\color{textcolor}\rmfamily\fontsize{8.000000}{9.600000}\selectfont Vanilla GDC}%
 \end{pgfscope}%
 \begin{pgfscope}%
 \pgfsetbuttcap%
@@ -134,8 +134,8 @@
 \definecolor{currentstroke}{rgb}{0.333333,0.658824,0.407843}%
 \pgfsetstrokecolor{currentstroke}%
 \pgfsetdash{}{0pt}%
-\pgfpathmoveto{\pgfqpoint{1.725524in}{0.304311in}}%
-\pgfpathlineto{\pgfqpoint{1.725524in}{0.415422in}}%
+\pgfpathmoveto{\pgfqpoint{1.456685in}{0.304311in}}%
+\pgfpathlineto{\pgfqpoint{1.456685in}{0.415422in}}%
 \pgfusepath{stroke}%
 \end{pgfscope}%
 \begin{pgfscope}%
@@ -145,15 +145,15 @@
 \definecolor{currentstroke}{rgb}{0.333333,0.658824,0.407843}%
 \pgfsetstrokecolor{currentstroke}%
 \pgfsetdash{}{0pt}%
-\pgfpathmoveto{\pgfqpoint{1.614412in}{0.359866in}}%
-\pgfpathlineto{\pgfqpoint{1.836635in}{0.359866in}}%
+\pgfpathmoveto{\pgfqpoint{1.345574in}{0.359866in}}%
+\pgfpathlineto{\pgfqpoint{1.567796in}{0.359866in}}%
 \pgfusepath{stroke}%
 \end{pgfscope}%
 \begin{pgfscope}%
 \definecolor{textcolor}{rgb}{0.150000,0.150000,0.150000}%
 \pgfsetstrokecolor{textcolor}%
 \pgfsetfillcolor{textcolor}%
-\pgftext[x=1.925524in,y=0.320977in,left,base]{\color{textcolor}\rmfamily\fontsize{8.000000}{9.600000}\selectfont Soft Median GDC}%
+\pgftext[x=1.656685in,y=0.320977in,left,base]{\color{textcolor}\rmfamily\fontsize{8.000000}{9.600000}\selectfont Soft Medoid GDC}%
 \end{pgfscope}%
 \begin{pgfscope}%
 \pgfsetbuttcap%
@@ -162,8 +162,8 @@
 \definecolor{currentstroke}{rgb}{0.768627,0.305882,0.321569}%
 \pgfsetstrokecolor{currentstroke}%
 \pgfsetdash{}{0pt}%
-\pgfpathmoveto{\pgfqpoint{3.195492in}{0.304311in}}%
-\pgfpathlineto{\pgfqpoint{3.195492in}{0.415422in}}%
+\pgfpathmoveto{\pgfqpoint{2.926653in}{0.304311in}}%
+\pgfpathlineto{\pgfqpoint{2.926653in}{0.415422in}}%
 \pgfusepath{stroke}%
 \end{pgfscope}%
 \begin{pgfscope}%
@@ -173,15 +173,15 @@
 \definecolor{currentstroke}{rgb}{0.768627,0.305882,0.321569}%
 \pgfsetstrokecolor{currentstroke}%
 \pgfsetdash{}{0pt}%
-\pgfpathmoveto{\pgfqpoint{3.084381in}{0.359866in}}%
-\pgfpathlineto{\pgfqpoint{3.306603in}{0.359866in}}%
+\pgfpathmoveto{\pgfqpoint{2.815542in}{0.359866in}}%
+\pgfpathlineto{\pgfqpoint{3.037764in}{0.359866in}}%
 \pgfusepath{stroke}%
 \end{pgfscope}%
 \begin{pgfscope}%
 \definecolor{textcolor}{rgb}{0.150000,0.150000,0.150000}%
 \pgfsetstrokecolor{textcolor}%
 \pgfsetfillcolor{textcolor}%
-\pgftext[x=3.395492in,y=0.320977in,left,base]{\color{textcolor}\rmfamily\fontsize{8.000000}{9.600000}\selectfont Soft Median GDC}%
+\pgftext[x=3.126653in,y=0.320977in,left,base]{\color{textcolor}\rmfamily\fontsize{8.000000}{9.600000}\selectfont Soft Median GDC}%
 \end{pgfscope}%
 \end{pgfpicture}%
 \makeatother%

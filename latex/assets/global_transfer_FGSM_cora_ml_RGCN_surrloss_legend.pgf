@@ -125,7 +125,7 @@
 \definecolor{textcolor}{rgb}{0.150000,0.150000,0.150000}%
 \pgfsetstrokecolor{textcolor}%
 \pgfsetfillcolor{textcolor}%
-\pgftext[x=1.154396in,y=0.166044in,left,base]{\color{textcolor}\rmfamily\fontsize{8.000000}{9.600000}\selectfont MCE}%
+\pgftext[x=1.154396in,y=0.166044in,left,base]{\color{textcolor}\rmfamily\fontsize{8.000000}{9.600000}\selectfont CW}%
 \end{pgfscope}%
 \begin{pgfscope}%
 \pgfsetbuttcap%
@@ -134,8 +134,8 @@
 \definecolor{currentstroke}{rgb}{0.333333,0.658824,0.407843}%
 \pgfsetstrokecolor{currentstroke}%
 \pgfsetdash{}{0pt}%
-\pgfpathmoveto{\pgfqpoint{1.761312in}{0.149378in}}%
-\pgfpathlineto{\pgfqpoint{1.761312in}{0.260489in}}%
+\pgfpathmoveto{\pgfqpoint{1.694161in}{0.149378in}}%
+\pgfpathlineto{\pgfqpoint{1.694161in}{0.260489in}}%
 \pgfusepath{stroke}%
 \end{pgfscope}%
 \begin{pgfscope}%
@@ -145,15 +145,15 @@
 \definecolor{currentstroke}{rgb}{0.333333,0.658824,0.407843}%
 \pgfsetstrokecolor{currentstroke}%
 \pgfsetdash{}{0pt}%
-\pgfpathmoveto{\pgfqpoint{1.650201in}{0.204933in}}%
-\pgfpathlineto{\pgfqpoint{1.872424in}{0.204933in}}%
+\pgfpathmoveto{\pgfqpoint{1.583050in}{0.204933in}}%
+\pgfpathlineto{\pgfqpoint{1.805272in}{0.204933in}}%
 \pgfusepath{stroke}%
 \end{pgfscope}%
 \begin{pgfscope}%
 \definecolor{textcolor}{rgb}{0.150000,0.150000,0.150000}%
 \pgfsetstrokecolor{textcolor}%
 \pgfsetfillcolor{textcolor}%
-\pgftext[x=1.961312in,y=0.166044in,left,base]{\color{textcolor}\rmfamily\fontsize{8.000000}{9.600000}\selectfont tanh Margin}%
+\pgftext[x=1.894161in,y=0.166044in,left,base]{\color{textcolor}\rmfamily\fontsize{8.000000}{9.600000}\selectfont SCE}%
 \end{pgfscope}%
 \begin{pgfscope}%
 \pgfsetbuttcap%
@@ -162,8 +162,8 @@
 \definecolor{currentstroke}{rgb}{0.768627,0.305882,0.321569}%
 \pgfsetstrokecolor{currentstroke}%
 \pgfsetdash{}{0pt}%
-\pgfpathmoveto{\pgfqpoint{2.940495in}{0.149378in}}%
-\pgfpathlineto{\pgfqpoint{2.940495in}{0.260489in}}%
+\pgfpathmoveto{\pgfqpoint{2.458572in}{0.149378in}}%
+\pgfpathlineto{\pgfqpoint{2.458572in}{0.260489in}}%
 \pgfusepath{stroke}%
 \end{pgfscope}%
 \begin{pgfscope}%
@@ -173,15 +173,15 @@
 \definecolor{currentstroke}{rgb}{0.768627,0.305882,0.321569}%
 \pgfsetstrokecolor{currentstroke}%
 \pgfsetdash{}{0pt}%
-\pgfpathmoveto{\pgfqpoint{2.829384in}{0.204933in}}%
-\pgfpathlineto{\pgfqpoint{3.051606in}{0.204933in}}%
+\pgfpathmoveto{\pgfqpoint{2.347461in}{0.204933in}}%
+\pgfpathlineto{\pgfqpoint{2.569683in}{0.204933in}}%
 \pgfusepath{stroke}%
 \end{pgfscope}%
 \begin{pgfscope}%
 \definecolor{textcolor}{rgb}{0.150000,0.150000,0.150000}%
 \pgfsetstrokecolor{textcolor}%
 \pgfsetfillcolor{textcolor}%
-\pgftext[x=3.140495in,y=0.166044in,left,base]{\color{textcolor}\rmfamily\fontsize{8.000000}{9.600000}\selectfont SCE}%
+\pgftext[x=2.658572in,y=0.166044in,left,base]{\color{textcolor}\rmfamily\fontsize{8.000000}{9.600000}\selectfont MCE}%
 \end{pgfscope}%
 \begin{pgfscope}%
 \pgfsetbuttcap%
@@ -190,8 +190,8 @@
 \definecolor{currentstroke}{rgb}{0.505882,0.447059,0.701961}%
 \pgfsetstrokecolor{currentstroke}%
 \pgfsetdash{}{0pt}%
-\pgfpathmoveto{\pgfqpoint{3.704906in}{0.149378in}}%
-\pgfpathlineto{\pgfqpoint{3.704906in}{0.260489in}}%
+\pgfpathmoveto{\pgfqpoint{3.265488in}{0.149378in}}%
+\pgfpathlineto{\pgfqpoint{3.265488in}{0.260489in}}%
 \pgfusepath{stroke}%
 \end{pgfscope}%
 \begin{pgfscope}%
@@ -201,15 +201,15 @@
 \definecolor{currentstroke}{rgb}{0.505882,0.447059,0.701961}%
 \pgfsetstrokecolor{currentstroke}%
 \pgfsetdash{}{0pt}%
-\pgfpathmoveto{\pgfqpoint{3.593795in}{0.204933in}}%
-\pgfpathlineto{\pgfqpoint{3.816017in}{0.204933in}}%
+\pgfpathmoveto{\pgfqpoint{3.154377in}{0.204933in}}%
+\pgfpathlineto{\pgfqpoint{3.376599in}{0.204933in}}%
 \pgfusepath{stroke}%
 \end{pgfscope}%
 \begin{pgfscope}%
 \definecolor{textcolor}{rgb}{0.150000,0.150000,0.150000}%
 \pgfsetstrokecolor{textcolor}%
 \pgfsetfillcolor{textcolor}%
-\pgftext[x=3.904906in,y=0.166044in,left,base]{\color{textcolor}\rmfamily\fontsize{8.000000}{9.600000}\selectfont CW}%
+\pgftext[x=3.465488in,y=0.166044in,left,base]{\color{textcolor}\rmfamily\fontsize{8.000000}{9.600000}\selectfont tanh Margin}%
 \end{pgfscope}%
 \end{pgfpicture}%
 \makeatother%
