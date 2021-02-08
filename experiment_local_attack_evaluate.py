@@ -55,11 +55,36 @@ def config():
     binary_attr = False
 
 
-def flip_edges(adj, pert_edge_rows, pert_edge_cols):
+def flip_edges(adj: sp.csr_matrix, pert_edge_rows, pert_edge_cols):
     # not really efficient, but simple
     # and there are only a small numbers of pertubations anyway
-    for r, c in zip(pert_edge_rows, pert_edge_cols):
-        adj[r, c] = 0 if adj[r, c] == 1 else 1
+    pert_adj = adj
+    for i, j in zip(pert_edge_rows, pert_edge_cols):
+        original_shape = pert_adj.shape
+
+        adj_i = pert_adj[i].todok()
+        adj_i[0, j] = 0 if adj_i[0, j] == 1 else 1
+        adj_i = adj_i.tocsr()
+
+        adj_to_i = pert_adj[:i]
+        adj_from_i = pert_adj[(i + 1):]
+
+        adj_to_i_indices, adj_to_i_indptr, adj_to_i_data = adj_to_i.indices, adj_to_i.indptr, adj_to_i.data
+        adj_from_i_indices, adj_from_i_indptr, adj_from_i_data = adj_from_i.indices, adj_from_i.indptr, adj_from_i.data
+        adj_i_indices, adj_i_indptr, adj_i_data = adj_i.indices, adj_i.indptr, adj_i.data
+
+        adj_indices = np.concatenate([adj_to_i_indices, adj_i_indices, adj_from_i_indices])
+        adj_data = np.concatenate([adj_to_i_data, adj_i_data, adj_from_i_data])
+
+        ptr_i = adj_to_i_indptr[i]
+        offset_from_i = ptr_i + adj_i_data.shape[0]
+        adj_indptr = np.concatenate([adj_to_i_indptr[:i], np.array([ptr_i]), adj_from_i_indptr + offset_from_i])
+
+        pert_adj = sp.csr_matrix((adj_data, adj_indices, adj_indptr),
+                                 shape=original_shape)
+        test_adj = sp.csr_matrix((adj_data, adj_indices, adj_indptr),
+                                 shape=original_shape)
+    return pert_adj
 
 
 @ex.automain
@@ -145,7 +170,7 @@ def run(data_dir: str, dataset: str, db_collection_attacks: str, binary_attr: bo
 
                         # TODO: we could remove this again because we have the initial logits in df_model_atk_result
                         # but it's also a nice sanity check to make sure everything works and is specified correctly
-                        ppr_topk_atk_node = ppr.topk_ppr_matrix(adj.tocsr(), model.alpha, model.eps, np.array(
+                        ppr_topk_atk_node = ppr.topk_ppr_matrix(adj, model.alpha, model.eps, np.array(
                             [atk_node_ix]), model.topk, normalization=model.ppr_normalization)
                         ppr_topk_atk_node = SparseTensor.from_scipy(ppr_topk_atk_node)
                         initial_logits = F.log_softmax(model.forward(
@@ -154,10 +179,9 @@ def run(data_dir: str, dataset: str, db_collection_attacks: str, binary_attr: bo
                                                                                             labels[atk_node_ix].cpu())
 
                         # perturbe adjacency
-                        adj = adj.todok()
-                        flip_edges(adj, pert_rows, pert_cols)
+                        pert_adj = flip_edges(adj, pert_rows, pert_cols)
 
-                        ppr_topk_atk_node_pert = ppr.topk_ppr_matrix(adj.tocsr(), model.alpha, model.eps, np.array(
+                        ppr_topk_atk_node_pert = ppr.topk_ppr_matrix(pert_adj, model.alpha, model.eps, np.array(
                             [atk_node_ix]), model.topk, normalization=model.ppr_normalization)
 
                         ppr_topk_atk_node_pert = SparseTensor.from_scipy(ppr_topk_atk_node_pert)
@@ -190,7 +214,7 @@ def run(data_dir: str, dataset: str, db_collection_attacks: str, binary_attr: bo
                         })
 
                         # undo pertubation so we have a clean adjacency for the next iteration
-                        flip_edges(adj, pert_rows, pert_cols)
+                        #adj = flip_edges(adj, pert_rows, pert_cols)
 
     assert len(results) > 0
 
