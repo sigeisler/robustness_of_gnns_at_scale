@@ -392,12 +392,12 @@ class PRBCD(object):
         return values
 
     @staticmethod
-    def bisection(pos_modified_edge_weight_diff, a, b, n_perturbations, epsilon=1e-5):
+    def bisection(pos_modified_edge_weight_diff, a, b, n_perturbations, epsilon=1e-5, iter_max=1e5):
         def func(x):
             return torch.clamp(pos_modified_edge_weight_diff - x, 0, 1).sum() - n_perturbations
 
         miu = a
-        while ((b - a) >= epsilon):
+        for i in range(iter_max):
             miu = (a + b) / 2
             # Check if middle point is root
             if (func(miu) == 0.0):
@@ -407,6 +407,8 @@ class PRBCD(object):
                 b = miu
             else:
                 a = miu
+            if ((b - a) >= epsilon):
+                break
         return miu
 
     def sample_search_space(self, n_perturbations: int = 0):
