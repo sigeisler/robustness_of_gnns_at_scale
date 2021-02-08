@@ -89,11 +89,14 @@ class Nettack:
                                  direct=True)
         self.perturbed_edges = torch.tensor(nettack.structure_perturbations)
 
-        initial_logits = self.get_logits(node_idx, self.adj)
+        with torch.no_grad():
+            initial_logits = self.get_logits(node_idx, self.adj)
 
-        self.model.topk = self.model.topk + n_perturbations
-        logits = self.get_logits(node_idx, nettack.adj_adversary)
-        self.model.topk = self.model.topk - n_perturbations
+            if hasattr(self.model, 'topk'):
+                self.model.topk = self.model.topk + n_perturbations
+            logits = self.get_logits(node_idx, nettack.adj_adversary.to(self.device))
+            if hasattr(self.model, 'topk'):
+                self.model.topk = self.model.topk - n_perturbations
 
         return logits, initial_logits
 

@@ -75,9 +75,9 @@ class LocalPRBCD():
                 if self.n == 111059956:
                     logging.info(f'model.alpha={model.alpha}, eps={model.eps}, topk={model.topk}, '
                                  f'ppr_normalization={model.ppr_normalization}')
-                    self.ppr_matrix = load_ppr_csr(alpha=0.1,  # model.alpha,
-                                                   eps=1e-3,  # model.eps,
-                                                   topk=64,  # model.topk,
+                    self.ppr_matrix = load_ppr_csr(alpha=model.alpha,
+                                                   eps=model.eps,
+                                                   topk=model.topk,
                                                    ppr_normalization=model.ppr_normalization)
                 else:
                     self.ppr_matrix = ppr.topk_ppr_matrix(adj, model.alpha, model.eps, ppr_nodes,
@@ -227,7 +227,7 @@ class LocalPRBCD():
             #                    SparseTensor.from_dense(self.X).to_scipy(layout="csr"), alpha=0.109536, nprop=5,
             #                    ppr_normalization='row')[0][node_idx]
 
-        return logits, logits_orig
+        return logits.detach(), logits_orig.detach()
 
     def get_logits(self, node_idx: int, updated_vector_or_graph: SparseTensor) -> torch.Tensor:
         if type(self.model) in BATCHED_PPR_MODELS.__args__:
@@ -293,10 +293,11 @@ class LocalPRBCD():
 
     @ staticmethod
     def classification_statistics(logits, label) -> Dict[str, float]:
+        logits, label = logits.cpu(), label.cpu()
         logits = logits[0]
         logit_target = logits[label].item()
         sorted = logits.argsort()
-        logit_best_non_target = logits[sorted[sorted != label][-1]].item()
+        logit_best_non_target = (logits[sorted[sorted != label][-1]]).item()
         confidence_target = np.exp(logit_target)
         confidence_non_target = np.exp(logit_best_non_target)
         margin = confidence_target - confidence_non_target

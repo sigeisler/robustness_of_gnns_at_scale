@@ -1023,7 +1023,7 @@ class RobustPPRGoDiffEmbWrapper(RobustPPRGoEmmbeddingDiffusions, PPRGoWrapperBas
 
 
 MODEL_TYPE = Union[GCN, RGNN, RGCN, RobustPPRGoWrapper, PPRGoWrapper]
-BATCHED_PPR_MODELS = Union[RobustPPRGoWrapper, PPRGoWrapper]
+BATCHED_PPR_MODELS = Union[RobustPPRGoWrapper, PPRGoWrapper, PPRGoDiffEmbWrapper, RobustPPRGoDiffEmbWrapper]
 
 
 def create_model(hyperparams: Dict[str, Any]) -> MODEL_TYPE:
