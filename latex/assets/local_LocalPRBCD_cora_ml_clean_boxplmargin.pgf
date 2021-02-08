@@ -188,7 +188,7 @@
 \definecolor{textcolor}{rgb}{0.150000,0.150000,0.150000}%
 \pgfsetstrokecolor{textcolor}%
 \pgfsetfillcolor{textcolor}%
-\pgftext[x=0.223457in,y=1.089488in,,bottom,rotate=90.000000]{\color{textcolor}\rmfamily\fontsize{10.000000}{12.000000}\selectfont MArgin \(\displaystyle \psi\)}%
+\pgftext[x=0.223457in,y=1.089488in,,bottom,rotate=90.000000]{\color{textcolor}\rmfamily\fontsize{10.000000}{12.000000}\selectfont Margin \(\displaystyle \psi\)}%
 \end{pgfscope}%
 \begin{pgfscope}%
 \pgfpathrectangle{\pgfqpoint{0.579170in}{0.466613in}}{\pgfqpoint{1.278750in}{1.245750in}}%
