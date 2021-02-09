@@ -397,7 +397,7 @@ class PRBCD(object):
             return torch.clamp(pos_modified_edge_weight_diff - x, 0, 1).sum() - n_perturbations
 
         miu = a
-        for i in range(iter_max):
+        for i in range(int(iter_max)):
             miu = (a + b) / 2
             # Check if middle point is root
             if (func(miu) == 0.0):

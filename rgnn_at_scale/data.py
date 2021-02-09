@@ -662,6 +662,7 @@ def prep_graph(name: str,
             edge_weight = torch.ones(edge_index.size(1))
         else:
             edge_weight = data.edge_attr
+        edge_weight = edge_weight.to(device)
 
         if make_undirected:
             edge_index, edge_weight = utils.to_symmetric(edge_index, edge_weight, num_nodes)
