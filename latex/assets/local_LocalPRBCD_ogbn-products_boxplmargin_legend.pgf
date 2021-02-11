@@ -29,7 +29,7 @@
 \begingroup%
 \makeatletter%
 \begin{pgfpicture}%
-\pgfpathrectangle{\pgfpointorigin}{\pgfqpoint{1.395543in}{0.388266in}}%
+\pgfpathrectangle{\pgfpointorigin}{\pgfqpoint{2.993257in}{0.388266in}}%
 \pgfusepath{use as bounding box, clip}%
 \begin{pgfscope}%
 \pgfsetbuttcap%
@@ -42,8 +42,8 @@
 \pgfsetstrokeopacity{0.000000}%
 \pgfsetdash{}{0pt}%
 \pgfpathmoveto{\pgfqpoint{0.000000in}{0.000000in}}%
-\pgfpathlineto{\pgfqpoint{1.395543in}{0.000000in}}%
-\pgfpathlineto{\pgfqpoint{1.395543in}{0.388266in}}%
+\pgfpathlineto{\pgfqpoint{2.993257in}{0.000000in}}%
+\pgfpathlineto{\pgfqpoint{2.993257in}{0.388266in}}%
 \pgfpathlineto{\pgfqpoint{0.000000in}{0.388266in}}%
 \pgfpathclose%
 \pgfusepath{fill}%
@@ -60,10 +60,10 @@
 \pgfsetstrokeopacity{0.800000}%
 \pgfsetdash{}{0pt}%
 \pgfpathmoveto{\pgfqpoint{0.122222in}{0.100000in}}%
-\pgfpathlineto{\pgfqpoint{1.273320in}{0.100000in}}%
-\pgfpathquadraticcurveto{\pgfqpoint{1.295543in}{0.100000in}}{\pgfqpoint{1.295543in}{0.122222in}}%
-\pgfpathlineto{\pgfqpoint{1.295543in}{0.266044in}}%
-\pgfpathquadraticcurveto{\pgfqpoint{1.295543in}{0.288266in}}{\pgfqpoint{1.273320in}{0.288266in}}%
+\pgfpathlineto{\pgfqpoint{2.871035in}{0.100000in}}%
+\pgfpathquadraticcurveto{\pgfqpoint{2.893257in}{0.100000in}}{\pgfqpoint{2.893257in}{0.122222in}}%
+\pgfpathlineto{\pgfqpoint{2.893257in}{0.266044in}}%
+\pgfpathquadraticcurveto{\pgfqpoint{2.893257in}{0.288266in}}{\pgfqpoint{2.871035in}{0.288266in}}%
 \pgfpathlineto{\pgfqpoint{0.122222in}{0.288266in}}%
 \pgfpathquadraticcurveto{\pgfqpoint{0.100000in}{0.288266in}}{\pgfqpoint{0.100000in}{0.266044in}}%
 \pgfpathlineto{\pgfqpoint{0.100000in}{0.122222in}}%
@@ -91,7 +91,29 @@
 \definecolor{textcolor}{rgb}{0.150000,0.150000,0.150000}%
 \pgfsetstrokecolor{textcolor}%
 \pgfsetfillcolor{textcolor}%
-\pgftext[x=0.455556in,y=0.166044in,left,base]{\color{textcolor}\rmfamily\fontsize{8.000000}{9.600000}\selectfont Vanilla PPRGo}%
+\pgftext[x=0.455556in,y=0.166044in,left,base]{\color{textcolor}\rmfamily\fontsize{8.000000}{9.600000}\selectfont Soft Median PPRGo}%
+\end{pgfscope}%
+\begin{pgfscope}%
+\pgfsetbuttcap%
+\pgfsetmiterjoin%
+\definecolor{currentfill}{rgb}{0.798529,0.536765,0.389706}%
+\pgfsetfillcolor{currentfill}%
+\pgfsetlinewidth{0.501875pt}%
+\definecolor{currentstroke}{rgb}{0.298039,0.298039,0.298039}%
+\pgfsetstrokecolor{currentstroke}%
+\pgfsetdash{}{0pt}%
+\pgfpathmoveto{\pgfqpoint{1.742159in}{0.166044in}}%
+\pgfpathlineto{\pgfqpoint{1.964381in}{0.166044in}}%
+\pgfpathlineto{\pgfqpoint{1.964381in}{0.243822in}}%
+\pgfpathlineto{\pgfqpoint{1.742159in}{0.243822in}}%
+\pgfpathclose%
+\pgfusepath{stroke,fill}%
+\end{pgfscope}%
+\begin{pgfscope}%
+\definecolor{textcolor}{rgb}{0.150000,0.150000,0.150000}%
+\pgfsetstrokecolor{textcolor}%
+\pgfsetfillcolor{textcolor}%
+\pgftext[x=2.053270in,y=0.166044in,left,base]{\color{textcolor}\rmfamily\fontsize{8.000000}{9.600000}\selectfont Vanilla PPRGo}%
 \end{pgfscope}%
 \end{pgfpicture}%
 \makeatother%

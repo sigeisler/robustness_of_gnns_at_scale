@@ -174,13 +174,23 @@ def run(dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequ
                 torch.manual_seed(seed)
                 np.random.seed(seed)
 
-                pred_logits_target = model(attr_perturbed.to(device), adj_perturbed.to(device))
-                acc_test_target = accuracy(pred_logits_target, labels.to(device), idx_test)
-                results.append({
-                    'label': hyperparams['label'],
-                    'epsilon': eps,
-                    'accuracy': acc_test_target
-                })
+                try:
+
+                    pred_logits_target = model(attr_perturbed.to(device), adj_perturbed.to(device))
+                    acc_test_target = accuracy(pred_logits_target, labels.to(device), idx_test)
+                    results.append({
+                        'label': hyperparams['label'],
+                        'epsilon': eps,
+                        'accuracy': acc_test_target
+                    })
+
+                except Exception as e:
+                    logging.error(f'Failed for {hyperparams["label"]} and epsilon {eps}')
+                    logging.exception(e)
+
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    torch.cuda.synchronize()
 
     return {
         'results': results
