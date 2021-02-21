@@ -22,7 +22,8 @@
 %% in the same archive or directory.)
 %%
 %% The first command in your LaTeX source must be the \documentclass command.
-\documentclass[sigconf,authordraft]{acmart}
+
+\documentclass[sigconf, review]{acmart}
 
 \usepackage{algorithm}                  % algorithms
 \usepackage{algorithmic}                % algorithms
@@ -35,6 +36,8 @@
 \usepackage{nicefrac}                   % compact symbols for 1/2, etc.
 \usepackage{pgfplots}
 \usepackage{subfig}
+%\usepackage{floatrow}                   % Figure next to table
+
 
 
 \newcommand{\adj}{\mA}
@@ -63,6 +66,8 @@
 \newcommand{\dz}[1]{\textcolor{violet}{(DZ: #1)}}
 \newcommand{\sg}[1]{\textcolor{blue}{(SG: #1)}}
 \newcommand{\todo}[1]{\textcolor{red}{(Todo: #1)}}
+
+\bibliographystyle{customabbrvnat}
 
 \input{math_commands.tex}
 
@@ -124,12 +129,13 @@
 %% Of note is the shared affiliation of the first two authors, and the
 %% "authornote" and "authornotemark" commands
 %% used to denote shared contribution to the research.
-\author{Simon Geisler, Hakan \c{S}irin, Daniel Zuegner, Tobias Schmidt, Aleksandar Bojchevski, Stephan Guennemann}
-\email{{geisler, sirin, zuegnerd, schmidtt, a.bojchevski, guennemann}@in.tum.de}
-\affiliation{%
-  \institution{Technical University of Munich}
-  \country{Germany}
-}
+%\author{Simon Geisler, Hakan \c{S}irin, Daniel Zuegner, Tobias Schmidt, Aleksandar Bojchevski, Stephan Guennemann}
+%\author{Simon Geisler, Hakan \c{S}irin, Daniel Zuegner, Tobias Schmidt, Aleksandar Bojchevski, Stephan Guennemann}
+%\email{{geisler, sirin, zuegnerd, schmidtt, a.bojchevski, guennemann}@in.tum.de}
+%\affiliation{%
+%  \institution{Technical University of Munich}
+%  \country{Germany}
+%}
 
 %%
 %% By default, the full list of authors will be used in the page
@@ -143,11 +149,10 @@
 %% The abstract is a short summary of the work to be presented in the
 %% article.
 \begin{abstract}
-  Adversarial robustness of Graph Neural Networks (GNNs) has become exceedingly important due to the popularity and diverse applications of GNNs. Specifically, structure perturbations are very effective, but designing attacks that add or remove edges is difficult because of the discrete optimization domain. Existing adversarial attacks for structure perturbations that rely on first-order optimization require a dense adjacency matrix and, therefore, can only be applied to small graphs (space complexity \(\Theta(n^2)\) in the number of nodes \(n\)).
-  In this work, we address the question of how to scale adversarial attacks for evaluating the robustness for such applications.
-  First, we show that the widely used surrogate losses are not well-suited for global attacks on GNNs at scale and propose two-alternatives that overcome these limitations.
-  Second, we propose three attacks based on first-order optimization that do not require a dense adjacency matrix. Hence, we use our methods for global attacks on graphs more than 100 times larger than previously evaluated and scale local attacks to a graph 500 times larger than before. Moreover, one of the proposed attacks considers the very practical case of node injection.
-  Last, we leverage recent advances in differentiable sorting for robust aggregation in message passing that scales linearly with the neighborhood size. We, therefore, improve one of the most effective defense strategies relying on a robust message-passing aggregation. Consequently, we also show how to improve the robustness of a graph neural network at scale.
+  Adversarial robustness of Graph Neural Networks (GNNs) has become exceedingly important due to the popularity and the diverse applications of GNNs. Even though it is challenging to design attacks because of the discrete optimization domain, structure perturbations can affect a GNN severely. All existing adversarial attacks for structure perturbations that rely on first-order optimization require a dense adjacency matrix and, therefore, can only be applied to small graphs (space complexity \(\Theta(n^2)\) in the number of nodes \(n\)). In this work, we scale adversarial attacks to evaluate GNNs in settings closer to practice, i.e.\ on massive graphs.
+  First, we show that the widely used surrogate losses are not well-suited for global attacks on GNNs which becomes particularly apparent on large graphs. We provide two alternatives that overcome these limitations. 
+  Second, we propose two attacks based on first-order optimization that do not require a dense adjacency matrix and come with linear space complexity. We use our methods for global attacks on graphs more than 100 times larger than previously evaluated. Moreover, we adapt our attack to a scalable GNN, namely PPRGo, which allows us to scale to even larger graphs.
+  We propose a differentiable robust aggregation function, Soft Median, which we use to improve one of the most effective defense strategies for GNNs. Also PPRGo can be equipped with our aggregation and allows us to scale almost indefinitely.
 \end{abstract}
 
 %%
@@ -187,7 +192,7 @@
 %%
 %% Keywords. The author(s) should pick words that accurately describe
 %% the work being presented. Separate the keywords with commas.
-\keywords{Adversarial robustness, graph neural networks, scalability, semi-supervised learning}
+% \keywords{Adversarial robustness, graph neural networks, scalability, semi-supervised learning}
 
 %% A "teaser" image appears between the author and affiliation
 %% information and the body of the document, and typically spans the
@@ -207,165 +212,123 @@
 
 \section{Introduction} % Open
 
-The adversarial robustness from the perspective of attack and defenses had been widely studied in recent research~\todo{cite}. However, most of these works analyzed graphs with less then 20,000 nodes. In particular from the perspective of real-world citation networks or internet-scale applications those graphs are tiny. In this work, we set the foundation for the study of adversarial robustness of GNNs on real-world citation/social networks. Importantly, it is unknown how the adversarial robustness/vulnerability relates to the graph size. Our first, experiments show that the adversarial robustness of a GNN depends on the graph size.
+The adversarial robustness of GNNs has been widely studied in recent research beginning with~\citep{Zugner2018, Dai2018}. However, most previous work largely focused on graphs with less than 20,000 nodes. In particular, from the perspective of real-world internet-scale applications, those graphs are tiny. To attack a small dataset such as PubMed (19,717 nodes)~\citep{Sen2008}, typically around 20~GB is required if using a dense adjacency matrix. We argue that such memory requirements are impractical, hinder practitioners to assess adversarial robustness, and limit advancements of the field. In this work, we set the foundation for the holistic study of adversarial robustness of GNNs on real-world social/citation networks. 
+We study graphs with up to 111 million nodes and therefore assess the adversarial robustness of GNNs on graphs 500 times larger than before. In Fig.~\ref{fig:memorycomparison}, we compare the memory requirements of a previous attack with ours for attacking a GNN globally (i.e.\ aiming for a reduced accuracy). Analogously to our attacks, we can scale our defense also to graphs with 111 million nodes and beyond.
 
-We show that contemporary surrogate losses are problematic for global attacks on large graphs. Especially in combination with realistic budgets, previous surrogate losses lead to weak attacks. We propose two new surrogate losses to overcome these limitations. On the traditional graphs, the new losses easily improve the strength of the attack by 33\% and for larger datasets we observe gains of more than 100\%. Hence, GNNs are even more fragile than previously believed.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-Attacks based on combinatorial approaches easily become computationally infeasible because of the vast amount of potential adjacency matrices (\(2^{n^2}\)). With first-order optimization we can approximate the discrete optimization problem. First-order optimization attacks typically require the gradient towards the entries in the adjacency matrix and, hence, reduce the complexity to \(\Theta(n^2)\). To attack a small dataset such as PubMed (19,717 nodes), typically more than 20~GB are required if using a dense adjacency matrix. We argue that such memory requirements are still impractical and hinder practitioners to assess adversarial robustness. We identify the necessity to research scalable attacks for GNNs, due to the lack of such attacks for real-world graphs We propose two strategies how one may apply first-order optimization, without the burden of a dense adjacency matrix. In Section~\ref{sec:prbcd}, we describe how one might add/remove edges between existing nodes based on Randomized Block Coordinate Descent (R-BCD). Thereafter in Section~\ref{sec:attackkdd} we propose an attack that adds adversarial nodes and was one of the top 5 attacks of the KDD Cup 2020~\citep{Biendata2020}. In this work, we focus on the important task of node classification. Since we cover the task of global attacks our attacks can easily be generalized to graph classification.
+\begin{figure}[h]
+  \centering
+  \resizebox{0.8\linewidth}{!}{\input{assets/memory_comparison_pgd_prbcd.pgf}}
+  \caption{GPU memory consumption for a global attack with Projected Gradient Descent (PGD)~\citep{Xu2019a}, its quadratic extrapolation, and our Projected Randomized Block Coordinate Descent (PR-BCD) (Sec.~\ref{sec:prbcd}). 
+  Both yield similar perturbed accuracy.
+  Beyond attacks, our defense % relying on the differentiable Soft Median aggregation
+  (Sec.~\ref{sec:defense}) can also be applied on such scales. Using a scalable GNN and a local attack we can scale attacks and defenses to even larger graphs. \label{fig:memorycomparison}}
+\end{figure}
 
-The recent defense of~\citet{Geisler2020}, based on robust aggregations in the message passing step showed supervisor performance over the other compared defenses. We use the very recent advancements in differential sorting~\todo{cite}, to propose a computationally less demanding robust, differentiable aggregations. We call this aggregation Soft Median, observe a similar robustness to~\citep{Geisler2020} and can leverage the lower memory footprint in GNNs when memory is at premium.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-Our contributions are the following:
-\begin{itemize}
-  \item We show that the widely used cross entropy is not a good surrogate loss for attacking the graph structure on graph neural networks.
-  \item We propose two novel losses for global attacks on graph neural networks that overcome the limitations and empirically boosts the attack strength by up to 100\%.
-  \item We propose two scalable adversarial attacks that add/remove edges between the existing nodes. One relies on projected gradient descent and the other uses a greedy FGSM-like optimization scheme (space complexity of \(\Theta(m)\) in the number of edges \(m\)).
-  \item We propose one scalable adversarial attack that adds adversarial nodes (space complexity of \(\Theta(n)\)).
-  \item We propose a differentiable robust aggregation that scales linearity w.r.t.\ the neighborhood size of the message passing aggregation and performs au par to the previous defense. This enables us to defend a GNN when memory is at premium.
-  \item We study the adversarial robustness on graphs substantially larger than PubMed. Empirically, we find that the graph size negatively related to the adversarial robustness.
-\end{itemize}
+\textbf{Scope.} In this work, we focus on adversarial robustness w.r.t.\ structure perturbations of GNNs for node classification. The GNN \(f(\adj, \features)\) is applied to a Graph \(\gG=(\adj, \features)\) with adjacency matrix \(\adj\) and node attributes \(\features\).
+%Nonetheless, our global attacks can be easily generalized to graph classification. 
+We solely consider \emph{evasion} (test time) attacks, but our approach could also serve as a building block in scaling \emph{poisoning} (train time) attacks~\cite{Zugner2019a}. We distinguish between \emph{local} attacks on a single or small group of nodes and \emph{global} attacks that consider all or a large fraction of nodes with a shared global budget \(\Delta\) denoting the maximum number of adversarial perturbations. It is apparent that local attacks are much easier to scale than global attacks since for a local attack we only need to obtain the prediction for a few (or a single) nodes. We study an adversary with perfect knowledge about the graph, GNN, and test labels. Even this white-box scenario has not been studied for large graphs and our primary goal is to empirically assess worst-case adversarial robustness.
 
-\section{Cross Entropy is a Bad Surrogate}\label{sec:ceisbad} % Simon
+\textbf{Challenges.} We identify three major challenges hindering the study of GNNs' adversarial robustness at scale: (1) Previous losses are not well-suited for global attacks on GNNs at scale. (2) Attacks on GNNs typically come with quadratic space complexity. (3) Virtually no adversarial defense exists for large graphs. We tackle all three in this paper.
 
-In the context of images, typically a single sample is attacked. In the context of graph neural networks this corresponds to a local attack. For such a scenario an untargeted attack it is often sufficient to maximize the cross entropy 
+\textbf{Surrogate losses (1).} We study the limitation of state of the art surrogate losses for attacking the accuracy of a GNN over all nodes, following~\citep{Chen2018, Wu2019, Xu2018, Zugner2019a} (Sec.~\ref{sec:ceisbad}). Especially in combination with small/realistic budgets \(\Delta\) and on large graphs, previous surrogate losses lead to weak attacks. In particular, Cross Entropy (\(\text{CE}\)) or the widely used Carlini-Wagner loss~\citep{Carlini2017} are bad surrogates for such global attacks. Our novel losses that overcome these limitations easily improve the strength of the attack by 100\%. For larger datasets, we observe gains of more than 200\%. Are GNNs perhaps even more fragile than previously believed?
+
+\textbf{Attacks (2).} Scaling attacks is non-trivial. Attacks based on combinatorial approaches easily become computationally infeasible because of the vast amount of potential adjacency matrices (\(\mathcal{O}(2^{n^2})\)).
+We can approximate the resulting discrete combinatorial optimization problem using first-order optimization attacks. Such attacks typically require the gradient towards all entries of the adjacency matrix, reducing the complexity to \(\Theta(n^2)\) which is still not feasible for massive graphs. We propose two strategies to apply first-order optimization without the burden of a dense adjacency matrix. In Sec.~\ref{sec:prbcd}, we describe how to add/remove edges between existing nodes based on Randomized Block Coordinate Descent (R-BCD) at an additional memory requirement of \(\mathcal{O}(\Delta)\)\footnote{The method in Sec.~\ref{sec:prbcd} was partially discussed at a non-archival workshop~\citep{Anonymous2021}. For double-blind rules we do not disclose the author list.}. Due to the limited scalability of traditional GNNs, we also consider the case where we attack PPRGo \cite{Bojchevski2020a}, a scalable GNN. We even obtain an algorithm with constant complexity w.r.t.\ the graph size.
+
+\textbf{Defense (3).} We propose \emph{Soft Median} -- a computationally less demanding, robust, differentiable aggregation function inspired by~\citet{Geisler2020}, by taking advantage of recent advancements in differentiable sorting~\cite{Prillo2020}. Using Soft Median we observe similar robustness to~\citep{Geisler2020}, but with a significantly lower memory footprint, which enables us to defend GNNs at scale.
+% we can leverage the lower memory footprint in GNNs when memory is at premium, i.e.\ this aggregation is suitable for defending a GNN at scale.
+
+\section{Surrogate Losses}\label{sec:ceisbad} % Simon
+
+Most GNNs for node classification are soft classifiers and predict a probability or confidence score  \(\vp_i = f(\adj, \features)_i\) for node \(i\) instead of the discrete classes. During training, we ideally wish to optimize a target metric which comes with a discontinuous loss (e.g.\ accuracy and the 0/1 loss \(\mathcal{L}_{0/1}\)). We typically use gradient methods to optimize our models and therefore commonly substitute the actual target loss by a differentiable \emph{surrogate} \(\mathcal{L}' \approx \mathcal{L}\), e.g., cross entropy for the 0/1 loss. The same is true for attacking a model to assess its \emph{adversarial robustness}. In the context of images, typically a single example is attacked in isolation, which corresponds to a \emph{local} attack for GNNs. In such a scenario it is often sufficient for an untargeted attack to \textit{maximize} the cross entropy for the attacked node/image:
 \begin{equation}\label{eq:crossentropy}
 \text{CE}^{(n)}(y, \vp) = \sum_{c \in \sC} \mathbb{I}[y^{(n)} = c] \log(\evp_{c})^{(n)} = \log(\evp_{c^*}^{(n)})\,.
 \end{equation}
-Many \emph{global} attacks~\citep{Chen2018, Wu2019, Xu2018, Zugner2019a} also perform a global attack on a GNN via maximizing the cross entropy \(\max_{\adj} \text{CE}(f_{\theta}(\adj, \features))\). However, in our experiments, especially on large graphs, we have often observed that the CE loss increased while the accuracy did not decline. This can be explained by a bias of CE towards nodes which had a low confidence score (misclassified). Maximizing the CE is equivalent to minimizing the data likelihood and poorly correlates with the accuracy given this limited budget. This is apparent in Figure~\ref{fig:negceprob}.
+which corresponds to a minimization of the likelihood of the target class \(c^*\). Many \emph{global} attacks for GNNs~\citep{Chen2018, Wu2019, Xu2018, Zugner2019a} maximize the cross entropy \(\max_{\adj} \text{CE}(f_{\theta}(\adj, \features))\) on the \emph{whole dataset}, subject to a global budget constraint \(\Delta\). However, especially on large graphs, we often observed that the \(\text{CE}\) loss increases even though the accuracy does not decline. This can be explained by a bias of \(\text{CE}\) towards nodes which have a low confidence score, i.e.\ with \(\text{CE}\) we primarily attack nodes that are already misclassified. In other word those points have already a negative classification margin \(\psi = \min_{c \ne c^*} \evp_{c^*} - \evp_{c}\) as we can see in Fig.~\ref{fig:negceprob}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \begin{figure}[t]
   \centering
-  \makebox[\linewidth][c]{
-    \(\begin{array}{cc}
-      \subfloat[Clean graph]{\resizebox{0.5\linewidth}{!}{\input{assets/global_prbcd_arxiv_0.01_probability_nodes.pgf}}} &
-      \subfloat[Attacked nodes]{\resizebox{0.5\linewidth}{!}{\input{assets/global_prbcd_arxiv_0.01_attacked_nodes.pgf}}}  \\
-    \end{array}\)
-  }
-  \caption{In (a) we show the distribution of confidence scores for the correct class \(p^*\) over all test nodes on the clean graph. We observe a large fraction of very confident nodes. In stark contrast, in (b) we analyze the distribution of the directly attacked test nodes before the evasion attack started (i.e.\ if the attack would randomly attack nodes this distribution should match (a)). Here we small budget of one percent of edges (\(\Delta=\epsilon=0.01\)) on the arXiv dataset (see~Tab.\ref{tab:datasets})\label{fig:negceprob}}
-\end{figure}
+  \resizebox{\linewidth}{!}{\input{assets/global_prbcd_arxiv_relfeq_margin_attacked.pgf}} 
+  \caption{Relative distribution of classification margins \(\psi\) over all test nodes on the clean graph and the distribution of \(\psi\) among the nodes which where attacked when using CE. That is, we plot the confidence \(\psi\) of the nodes adjacent to the added/removed edge before the attack has even started. We use a small budget of one percent of edges (\(\Delta=\epsilon=0.01\)) on the arXiv dataset (see~Tab.\ref{tab:datasets}). As shown, among the attacked nodes, misclassified nodes (i.e., with negative margins) are highly overrepresented.}%  the portion of ones with a negative margin is significantly larger.}
+  \label{fig:negceprob}
+ \end{figure}
 
-In contrast of attacking a single image/node, a global structure attack has to 1) keep house with the budget \(\Delta\) and 2) find edges that degrade the accuracy maximally (i.e.\ potentially target ``fragile'' nodes). Without additional information, intuitively, one would first attack low confidence nodes close to the boundary. Analogously, a first-order optimization algorithm focuses on the nodes where loss surface is steep. In general, attacking a GNN is non-convex and presumably NP hard and hence it is hard to make any statements that hold in general. We propose to study surrogate losses for applying first-order optimization to the collective attack of multiple nodes with a global budget \(\Delta\) based on a greedy scheme. This scheme attacks one node at a time given its confidence scores \(\vp\) or margin \(\psi = \min_{c \ne c^*} \evp_{c^*} - \evp_{c}\). Note that such a greedy algorithm is equivalent to a scheduling algorithm where we have the jobs \(i \in \sV\) of length \(\Delta_i\), with the set of nodes \(\sV\).
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\begin{theorem}\label{theorem:goodsurrogate}
-  Let \(f_{\theta}(\adj, \features)\) be a node classification algorithm applied to a graph with the adjacency matrix \(\adj\), \(\mathcal{L}\) is the negative 0/1 loss, and let \(\Delta_i\) be the budget to move the prediction of any arbitrary node \(i\) (independently for each node) over the decision boundary is given by \(\Delta_i = |\psi_i| + \eta\) (with an arbitrary small constant \(\eta\)). 
-  %with a strictly monotonic increasing function \(g(\eta)\). 
-  We can obtain the global optimum of
+In contrast to attacking a single image/node, a global attack has to (1) keep house with the budget \(\Delta\) and (2) find edges that degrade the overall accuracy maximally (i.e.\ potentially target ``fragile'' nodes). Without additional information, intuitively, one would first attack low-confidence nodes close to the decision boundary. To focus on nodes close to the decision boundary the surrogate loss should have a maximal gradient at \(\psi = 0\). Moreover, if we solely want to attack the accuracy, then we can stop attacking a node once it is misclassified. More generally, we argue a \emph{well-suited} surrogate loss for global attacks should have the subsequent properties:
+\begin{enumerate}
+    \item  A \emph{well-suited} surrogate loss only incentivizes perturbing nodes that are correctly classified: \(\nicefrac{\partial \mathcal{L}'}{\partial p^*} |_{p^* < 0} \le 0\).
+    \item  A \emph{well-suited} surrogate loss favours points close to the decision boundary: \(\nicefrac{\partial \mathcal{L}'(y, \vp)}{\partial \evp_{c^*}} |_{\psi > 0}  > \nicefrac{\partial \mathcal{L}'(y, \vp)}{\partial \evp_{c^*}} |_{\psi \to 0^+}\).
+\end{enumerate}
+
+To overcome these limitations, we propose the Masked Cross Entropy: \(\text{MCE} = \frac{1}{|\sV^+|} \sum_{n \in \sV^+} \log(\evp_{c^*}^{(n)})\) enforces this by masking already wrongly classified nodes.
+Under certain conditions a \emph{well-suited} surrogate loss (fulfills both properties) such the \(\text{MCE}\) even obtains the global optimum. On large graphs with small budgets, \(\nicefrac{\Delta}{n} \to 0\), most nodes become approximately independent since the receptive field becomes insignificant in comparison to the rest of the graph. Or in other words, which node to attack is rather a local instead of a global decision and, therefore, assume perfect independence for the following analysis.
+Likely, the budget required to change the prediction depends on the margin \(\Delta_i = g(\psi_i)\), where here we assume an increasing linear function \(g(\psi_i)\) (i.e. the larger the margin, the harder to attack). 
+%Note, that \(g\) can be easily generalized to a monotonically increasing function. 
+Under these assumptions, with a \emph{well-suited} surrogate loss we will obtain the global optimum by the following greedy scheme:
+
+\begin{proposition}\label{proposition:goodsurrogate}
+  Let \(\mathcal{L}'\) be the surrogate for the 0/1 loss \(\mathcal{L}_{0/1}\) used to attack a node classification algorithm \(f_{\theta}(\adj, \features)\) with a joint budget \(\Delta\). Let \(\Delta_i = g (|\psi_i|)\) be the budget required to move the prediction node \(i\) over the decision boundary and an attack of node \(i\) does not influence other nodes.
+  Suppose we greedily attack nodes in order of \(\mathcal{L}'(-\eta) - \mathcal{L}'(\psi_0) \ge \mathcal{L}'(-\eta) - \mathcal{L}'(\psi_1) \ge \dots \ge \mathcal{L}'(-\eta) - \mathcal{L}'(\psi_l)\) until the budget is exceeded \(\Delta < \sum_{i=0}^{l+1} \Delta_i\) with an arbitrarily small constant \(\eta\).
+  %
+  In this case, we obtain the global optimum of
   \begin{equation}\label{eq:goodsurrogate}
-    \max_{\tilde{\adj}\text{ s.t.\ }\|\tilde{\adj} - \adj\|_0 < \Delta} \mathcal{L}(f_{\theta}(\tilde{\adj}, \features))\,
+    \max_{\tilde{\adj}\text{ s.t.\ }\|\tilde{\adj} - \adj\|_0 < \Delta} \mathcal{L}_{0/1}(f_{\theta}(\tilde{\adj}, \features))\,
   \end{equation}
-  via greedily attacking the nodes in order of \(\mathcal{L}'(-\eta) - \mathcal{L}'(\psi_0) \ge \mathcal{L}'(-\eta) - \mathcal{L}'(\psi_1) \ge \dots \ge \mathcal{L}'(-\eta) - \mathcal{L}'(\psi_l)\) until the budget is exceeded \(\Delta < \sum_{i=0}^{l+1} \Delta_i\). \(\mathcal{L}'\) denotes the monotonically decreasing surrogate loss and its derivative is (a) \(\nicefrac{\partial \mathcal{L}'}{\partial p^*} |_{p^* < 0} \le 0\), has (b) its minimum for \(\psi \to 0^+\), and (c) \(\nicefrac{\partial \mathcal{L}'}{\partial p^*}|_{p^* > 0}\) is monotonically decreasing.
-\end{theorem}
+  if \(\mathcal{L}'\) has the properties (a) \(\nicefrac{\partial \mathcal{L}'}{\partial p^*} |_{p^* < 0} \le 0\) and (b) \(\nicefrac{\partial \mathcal{L}'(y, \vp)}{\partial \evp_{c^*}} |_{\psi > 0}  > \nicefrac{\partial \mathcal{L}'(y, \vp)}{\partial \evp_{c^*}} |_{\psi \to 0^+}\).
+\end{proposition}
 
 \begin{proof}
-  An optimal solution is obtained by the greedy algorithm that executes the tasks in order \(\nicefrac{\mathcal{L}(-\eta) - \mathcal{L}(\psi_0)}{\psi_0} \ge \nicefrac{\mathcal{L}(-\eta) - \mathcal{L}(\psi_1)}{\psi_1} \ge \dots \ge \nicefrac{\mathcal{L}(-\eta) - \mathcal{L}(\psi_l)}{\psi_l}\) until the budget is exceeded: \(\Delta < \sum_{i=0}^{l+1} \Delta_i\). We can easily see that this greedy solution obtains the optimal solution by an exchange argument. Lets suppose we are given the optimal plan \(\sigma^*\) and the greedy solution has the plan \(\sigma\). In case \(\sigma^*\) would contain one or more tasks for that \(w > l\) instead of \(b \le l\). We know that \(\psi_w > \psi_b\) and hence \(\Delta_w > \Delta_b\). Thus, replacing \(\psi_b\) by \(\psi_w\) would either lead to the an equal good solution or would be even better (contradiction!). Hence, the greedy plan \(\sigma\) is at least as good as the optimal plan \(\sigma^*\). Moreover, the maximum is unique except for ties s.t.\ \(\psi_i = \psi_j \ge 0, \forall i, j \in \sV\).
+  We can easily see that this greedy solution obtains the optimal solution by an exchange argument. Lets suppose we are given the optimal plan \(\sigma^*\) and the greedy solution has the plan \(\sigma\). Suppose \(\sigma^*\) would contain one or more tasks for that \(w > l\) instead of \(b \le l\). We know that \(\psi_w \ge \psi_b\) and hence \(\Delta_w \ge \Delta_b\). Thus, replacing \(b\) by \(w\) would either lead to the an equally good or even better solution (contradiction!). Hence, the greedy plan \(\sigma\) is at least as good as the optimal plan \(\sigma^*\). Moreover, the maximum is unique except for ties s.t.\ \(\psi_i = \psi_j \ge 0, \forall i, j \in \sV\).
 
-  Consequently, a surrogate loss \(\mathcal{L}`\) must maintain the order above: \(\mathcal{L}'(-\eta) - \mathcal{L}'(\psi_0) \ge \mathcal{L}'(-\eta) - \mathcal{L}'(\psi_1) \ge \dots \ge \mathcal{L}'(-\eta) - \mathcal{L}'(\psi_l)\) in order to reach the global optimum as well (possibly allowing for equivalently good exchanged tasks). The order is preserved if (a) \(\mathcal{L}'(-a) \le \mathcal{L}'(-\eta)\) for every \(a \in (\eta,1]\), (c) \(\nicefrac{\partial \mathcal{L}'}{\partial p^*}|_{p^* > 0}\) is strictly monotonically decreasing or in other words \(\mathcal{L}'\) is strictly concave for positive inputs. From this it follows that (b) \(\nicefrac{\partial \mathcal{L}'}{\partial p^*}\) is minimal for \(\psi \to 0^+\). \todo{Shorten? Reference?}
+  Consequently, a surrogate loss \(\mathcal{L}`\) that leads to the order above will yield the global optimum as well. The order is preserved if (a) \(\mathcal{L}'(-a) \le \mathcal{L}'(-\eta)\) for every \(a \in (\eta,1]\) and (b) \(\nicefrac{\partial \mathcal{L}'}{\partial p^*}|_{p^* > 0}\) is strictly monotonically decreasing or in other words \(\mathcal{L}'\) is strictly concave for positive inputs. From this it follows that \(\nicefrac{\partial \mathcal{L}'}{\partial p^*}\) is minimal for \(\psi \to 0^+\).
 \end{proof}
 
-\begin{corollary}\label{corollary:ce}
-  The cross entropy surrogate loss \(\mathcal{L} = \text{Accuracy} \approx CE\) (Eq.~\ref{eq:crossentropy}) does not obtain the global optimum since it violates properties (a) and (b).
-\end{corollary}
+Note, that even under those simplifying assumptions, the Cross Entropy (\(\text{CE}\)) violates property (2). \(\text{CE}\) is not guaranteed to obtain the global optimum since we possibly only perturb nodes that are already misclassified (see Fig.~\ref{fig:negceprob}). Obviously, the Carlini Wagner (\(\text{CW}\))~\cite{Carlini2017} loss \(\text{CW} = (\min_{c \ne c^*} \evz_{c^*} - \evz_{c})+\) violates property (1). It is also not guaranteed to obtain the global optimum, since the \(\text{CW}\) loss does not focus on nodes close to the decision boundary. In the worst case, an attack with \(\text{CW}\) possibly spends all its budget on confident nodes---without even flipping one.
 
-\begin{corollary}\label{corollary:margin}
-  The margin loss \(\mathcal{L} = \text{Accuracy} \approx \text{Margin Loss} = min(0, \psi)\) does not obtain the global optimum, since its gradient is constant for \(\psi > 0\) and therefore violates (b) and (c).
-\end{corollary}
-
-We argue that the surrogate is certainly not well suited if it even does not work in such a basic scenario. More generally, we state the subsequent conjectures a well-suited, monotonically decreasing surrogate loss \(\mathcal{L'}(y, \vp)\) should obey:
-\begin{conjecture}\label{conjecture:saturate}
-  A proper surrogate loss \(\mathcal{L}'(y, \vp)\) should saturate for low confidence values of the correct class: \(\lim_{\psi \to -1^+} \mathcal{L}(y, \vp) = k < \infty\).
-\end{conjecture}
-\begin{conjecture}\label{conjecture:maxgrad}
-  A proper surrogate loss \(\mathcal{L}'(y, \vp)\) should favour points close to the decision boundary: \(\nicefrac{\partial \mathcal{L}(y, \vp)}{\partial \evp_{c^*}} |_{\psi > 0}  > \nicefrac{\partial \mathcal{L}(y, \vp)}{\partial \evp_{c^*}} |_{\psi \to 0^+}\).
-\end{conjecture}
-
-In this work we will study several choices for surrogate loss functions:
+On the other hand, the \(\text{MCE}\) fulfills both properties and reaches the global optimum. Empirically, for a greedy gradient-based attack the \(\text{MCE}\) comes with gains of up to 200\% in strength (see Sec.~\ref{sec:empirical}). Surprisingly, if we apply it to an attack using Projected Gradient Descent (PGD), we observe hardly any improvement over \(\text{CE}\). We identify two potential reasons for that. The first is due to the learning dynamics of PGD. Suppose a misclassified node does not receive any weight in the gradient update, now if the budget is exceeded after the update it is likely to be down-weighted. This can lead to nodes that oscillate around the decision boundary. Second, the assumption about independence between the attacked nodes may be too strong in practice. We propose to  overcome these limitations via enforcing confidently misclassified nodes, i.e.\ we want the attacked nodes to be at a ``safe'' distance from the decision boundary. For this we relax property (1):
 \begin{enumerate}
-  \item Cross Entropy: \(\text{CE} = \log(\evp_{c^*})\)
-  \item Carlini-Wagner~\cite{Carlini2017}: \(\text{CW} = (\min_{c \ne c^*} \evz_{c^*} - \evz_{c})+\)
-  \item Second-most-likely CE: \(\text{SCE} = \log(\arg\max_{c \ne c^*} \evp_{c})\)
-  \item Masked CE: \(\text{MCE} = \frac{1}{|\sV^+|} \sum_{n \in \sV^+} \log(\evp_{c^*}^{(n)})\)
-  \item \(\text{tanh Margin} = \tanh(\min_{c \ne c^*} \evz_{c^*} - \evz_{c})\)
+  \setcounter{enumi}{2}
+  \item A \emph{well-suited} surrogate loss should saturate for confidently misclassified nodes: \(\lim_{\psi \to -1^+} \mathcal{L}'(y, \vp) = k < \infty\).
 \end{enumerate}
-Note that \(\sV^+\) is the set of correctly classified nodes, \(\vp\) is the vector of confidence scores, and \(\vz\) is the vector with logits. To simplify notation, we define the losses for a single node (except for \(\text{MCE}\)) and denote the correct class with \(c^*\). 
+Additionally propose to use the tanh on the margin in logit space, i.e. \(\text{tanh Margin} = \tanh(\min_{c \ne c^*} \evz_{c^*} - \evz_{c})\) which obeys properties (2) and (3).
 
-We choose the losses (1-3) since they are alleged natural choices or have been used in the literature~\citep{Chen2018, Wu2019, Xu2018, Zugner2019a}. Loss (1) violates Conjecture~\ref{conjecture:saturate} and losses (2) and (3) violate Conjecture~\ref{conjecture:saturate}. (4) and (5) are both losses that obeys both conjectures. Note that (5) would not pass the test of Theorem~\ref{theorem:goodsurrogate}. We study it nevertheless since a surrogate loss that saturates already for small negative values could negatively impact the learning dynamics for projected gradient descent.
+\section{Scalable Attacks}\label{sec:attack}
 
-\todo{Should we already teaser that thos losses are much better?}
-
-\section{Attacks}\label{sec:prbcd}
-
-\todo{Explain chapter}
-
-\subsection{Related Work}\label{sec:related} % Simon
-
-\begin{algorithm}[b]
-  \small
-  \caption{R-BCD~\citep{Nesterov2012}}
-  \label{algo:rbcd}
-  \begin{algorithmic}[1]
-    \STATE Choose \(\vx_0 \in \R^d\)
-    \FOR{\(k \in \{1,2, \dots, K\}\)}
-    \STATE Draw random indices \(\vi_k \in \{0, 1, \dots, n\}^b\)
-    \STATE \(\vx_{k} \leftarrow \vx_{k-1} - \alpha_{k} \nabla_{\vi_{k}} \mathcal{L}(\vx_{k-1})\)
-    \ENDFOR
-  \end{algorithmic}
-\end{algorithm}
-
-\textbf{Large scale optimization.} In a big data setting, the cost to calculate the gradient towards all variables can be prohibitively high. For this reason, coordinate descent has gained importance in machine learning and large scale optimization~\citep{Wright2015}. \citet{Nesterov2012} proposed (and analyzed the convergence) of Randomized Block Coordinate Descent (R-BCD). For R-BCD's pseudo code see Algorithm~\ref{algo:rbcd}. In R-BCD only a subset of variables is optimized at a time and, hence, only the gradients towards those variables are required. In many cases, this allows for a lower memory footprint and in some settings even converges faster than standard methods~\citep{Nesterov2017}. Constrained optimization with first-order methods can be solved with methods such as Projected Gradient Descent (PGD) or Fast Gradient Sign Method (FGSM)~\cite{Goodfellow2015}. Similarly, one can extend R-BCD to constrained optimization~\citep{Nesterov2012}.
-
-\textbf{Adversarial attacks.} Beginning with~\citep{Dai2018, Zugner2018}, many adversarial attacks on the graph structure have been proposed~\citep{Zugner2019a, Xu2019a, Bojchevski2019, Wu2019, Wang2019, Tang2020}. We limit the scope to an adversary with perfect knowledge about the graph, GNN and test labels. Even this white-box scenario has not been studied for large graphs and our primary goal is to asses adversarial robustness. Further, we make a distinction between local attacks that attack a single node or small group and global attacks that attack the whole graph. It is apparent that local attacks are much easier to scale than global attacks. 
-
-First-order optimization attacks such as Metattack~\citep{Zugner2019a} or integrated gradients~\citep{Wu2019} rely on the gradient towards all possible entries in the \textit{dense} adjacency matrix \(\adj\) (quadratic space complexity) to solve the optimization problem for structure perturbations:
+Beginning with~\citep{Dai2018, Zugner2018}, many adversarial attacks on the graph structure have been proposed~\citep{Zugner2019a, Xu2019a, Bojchevski2019, Wu2019, Wang2019, Tang2020}. Gradient-based attacks such as Metattack~\citep{Zugner2019a} or integrated gradients~\citep{Wu2019} rely on the gradient towards all possible entries in the \textit{dense} adjacency matrix \(\adj\) (quadratic space complexity) to solve the optimization problem for structure perturbations:
 \begin{equation}\label{eq:attack}
   \max_{\adj} \mathcal{L}(f_{\theta}(\adj, \features))
 \end{equation}
-with the adjacency matrix \(\adj\), node features \(\features\), loss \(\mathcal{L}\), and the trained network \(f_{\theta}\).
+with the trained network \(f_{\theta}\) and (surrogate) loss function \(\mathcal{L}\) (or $\mathcal{L}'$).
 %We will consider more sophisticated threat models in future work.
+Since most attacks come with very limited scalability (e.g.\ see Fig.~\ref{fig:memorycomparison}), GNNs robustness on larger graphs has barely been studied so far. In Sec.~\ref{sec:prbcd}, we propose a family of attacks that does not require a dense adjacency matrix and comes with linear complexity w.r.t.\ the number of nodes. We show in Sec.~\ref{sec:localattack} how we can even maintain this scalability for a scalable GNN called PPRGo~\citep{Bojchevski2020a} and, hence, are almost unlimited by memory restrictions.
 
-\citet{Dai2018} scale their local reinforcement learning approach to a very sparse, large-scale graph for financial transactions. In contrast to our work, they scale their local attack only using a very small budget \(\Delta\) (their time complexity scales linearly with \(\Delta\)). \citet{Wang2019} also scale their attack to a larger graph than PubMed but they do not attack GNNs. \todo{Adversarial attack on large scale graph} analyze adversarial attacks on mini-batch techniques such as Cluster-GCN~\todo{cite}. However, they only scale to a dataset with around 200k nodes and also only consider a local attack. We scale to much bigger datasets, consider a wider class of Graph Neural Networks and also propose a global attack that is scalable. \todo{Mention Fake Node Attacks} propose an attack based on GANs that inserts fake nodes and is the closest related work to our attack in Section~\ref{sec:attackkdd}.
-\todo{MGA: Momentum Gradient Attack on Network}
+\textbf{Related work.} \citet{Dai2018} scale their local reinforcement learning approach to a sparse graph for financial transactions with roughly 2.5 million nodes. In contrast to our work, they scale their \emph{local} attack only using a tiny budget \(\Delta\) of a single edge deletion and only need to consider the receptive field of a single node. We scale our local attack to a 111M nodes graph and allow large budgets \(\Delta\). \citet{Li2020a} analyze their \emph{local} adversarial attack on mini-batch techniques such as Cluster-GCN applied to a graph with around 200k nodes. We consider a wider class of Graph Neural Networks and we even scale our \emph{global} attack to a graph ten times larger. With PPRGo we even outscale them by factor of 500.
 
-\subsection{Adding and Removing Edges}\label{sec:prbcd}
+\textbf{Large scale optimization.} In a big data setting, the cost to calculate the gradient towards all variables can be prohibitively high. For this reason, coordinate descent has gained importance in machine learning and large scale optimization~\citep{Wright2015}. \citet{Nesterov2012} proposed (and analyzed the convergence) of Randomized Block Coordinate Descent (R-BCD). In R-BCD only a subset (called a block) of variables is optimized at a time and, hence, only the gradients towards those variables are required. In many cases, this allows for a lower memory footprint and in some settings even converges faster than standard methods~\citep{Nesterov2017}.
 
-In this section we discuss the case where the attack vector is to perturb the existing, binary graph structure:
+\subsection{Projected Randomized Block Coordinate Descent (PR-BCD)}\label{sec:prbcd}
+
+In this section we discuss attacking the existing, binary graph structure via additions and deletions of edges:
 %
 \begin{equation}\label{eq:pgd}
   \max_{\mP\,\,\text{s.t.}\, \sum \mP \le \Delta} \mathcal{L}(f_{\theta}(\adj \oplus \mP, \features))\,.
 \end{equation}
 %
-Here, \(\oplus\) stands for an element-wise exclusive or and \(\Delta\) denotes the edge budget (i.e.\ the number of altered entries in the perturbed adjacency matrix). In the following, we use set \(\sP\) and matrix notation \(\mP\) for the sparse perturbations \(\sP\) interchangeably. Naively, applying R-BCD to optimize towards the dense adjacency matrix would only save some computation on obtaining the respective gradient, but still has a space complexity of \(\mathcal{O}(n^2)\) (on top of the complexity of the attacked model; in the following we will neglect this fact). Note that in R-BCD we interpret each possible entry in the perturbation set \(\sP\) as one dimension of our optimization problem. To mitigate the quadratic complexity, we make use of the fact that the solution is going to be sparse (\(L_0\) perturbation). As in evolutionary algorithms, in each epoch, we keep that part of the search space which is promising and resample the rest. We can view the underlying problem as a combination of \(L_0\)-norm PGD and an adaptive version of Randomized Block Coordinate Descent (R-BCD). We give a formal definition of Projected and Randomized Block Coordinate Descent (PR-BCD) in Algorithm~\ref{algo:prbcd}. PR-BCD comes with a space complexity of \(\Theta(m)\), as we typically choose \(\Delta\) to be a fraction of \(m\).
+Here, \(\oplus\) stands for an element-wise exclusive or, \(\Delta\) denotes the edge budget (i.e.\ the number of altered entries in the perturbed adjacency matrix) and \(\mP \in \{0, 1\}^{n \times n}\) denotes edge flips at the respective location where $\mP_{ij} = 1$. Naively, applying R-BCD to optimize towards the dense adjacency matrix would only save some computation on obtaining the respective gradient. It still has a space complexity of \(\mathcal{O}(n^2)\) on top of the complexity of the attacked model because we still have to store up to \(n^2\) parameters.
+Note that the \(L_0\) perturbation constraint with limited budget \(\Delta\) implies that the solution will be sparse. We build upon this fact and in each epoch, in a survival-of-the-fittest manner, we keep that part of the search space which is ``promising'' and resample the rest. Despite the differences, we simply call our approach \textbf{Projected Randomized Block Coordinate Descent (PR-BCD)} and provide the pseudo code in Algorithm~\ref{algo:prbcd}. On top of the GNN, PR-BCD comes with space complexity of \(\Theta(b)\) where \(b\) is the block size (number of coordinates). Since we typically choose \(\Delta\) to be a fraction of \(m\) and \(b > \Delta\), in practice, we have a linear overhead.
 
-As proposed by~\citet{Xu2019a}, \(\vp\) is interpreted as the probability for flipping each potential entry in the perturbation set \(\sP\) and is used in the end to sample the final edge additions/removals. In each epoch \(e \in \{1,2, \dots, E\}\), this probability mass \(\vp\) is used as edge weight. In this case we overload \(\oplus\) s.t.\ \(\adj_{ij} \oplus p_{ij} = \adj_{ij} + p_{ij}\) if \(\adj_{ij} = 1\) and \(\adj_{ij} - p_{ij}\) otherwise. The projection \(\Pi_{\E[\text{Bernoulli}(\vp)] = \Delta} (\vp)\) adjusts the probability mass such that \(\E[\text{Bernoulli}(\vp)] = \sum_{i \in b} \evp_i \approx \Delta\) and that \(\vp \in [0, 1]\) (line 8). If using an undirected graph, the potential edges are restricted to the the upper/lower triangular \(n \times n\) matrix. In the end we sample \(\sP \sim \text{Bernoulli}(\vp)\) (line 16).
+\textbf{PR-BCD}. For \(L_0\)-norm PGD we relax the discrete edge perturbations \(\mP\) from \(\{0, 1\}^{(n \times n)}\) to \([0, 1]^{(n \times n)}\) as proposed by~\citet{Xu2019a}. Each entry of \(\mP\) denotes the probability for flipping it. In each epoch we only look at a randomly sampled block of \(\mP\) of size \(b\) (line 3, line 10-13). In each epoch \(e \in \{1,2, \dots\}\), \(\vp\) is added/subtracted from the discrete edge weight (line 6). We overload \(\oplus\) s.t.\ \(\adj_{ij} \oplus p_{ij} = \adj_{ij} + p_{ij}\) if \(\adj_{ij} = 0\) and \(\adj_{ij} - p_{ij}\) otherwise. We index \(\vp\) via its corresponding index of \(\mP\). After each gradient update (line 7), the projection \(\Pi_{\E[\text{Bernoulli}(\vp)] = \Delta} (\vp)\) adjusts the probability mass such that \(\E[\text{Bernoulli}(\vp)] = \sum_{i \in b} \evp_i \approx \Delta\) and that \(\vp \in [0, 1]\) (line 8). 
+%If using an undirected graph, the potential edges are restricted to the upper/lower triangular \(n \times n\) matrix. 
+In the end we sample \(\mP \in \{0, 1\}^{(n \times n)}\) via \(\mP \sim \text{Bernoulli}(\vp)\) (line 16).
 
-Note that the projection of the perturbation set \(\Pi_{\E[\text{Bernoulli}(\vp)] = \Delta} (\vp)\) contains many zero elements, but is not guaranteed to be sparse. If \(\vp\) has more than 50\% non-zero entries, we remove the entries with the lowest probability mass such that 50\% of the search space is resampled. Otherwise, we resample all zero entries in \(\vp\). However, one also might apply a more sophisticated heuristic \(h(\vp)\) (see line 11).
-
-We keep the random block fixed and run \(K_{\text{resample}}\) epochs. Thereafter, we decay the learning rate as in~\cite{Xu2019a}. We also employ early stopping for both stages (\(k \le K_{\text{resample}} \text{ and } k > K_{\text{resample}}\) with the epoch \(k\)) such that we take the result of the epoch with highest loss \(\mathcal{L}\).
-
-With growing \(n\) it is unrealistic that each possible entry of the adjacency matrix was part of at least one random search space of (P)R-BCD. Apparently, with a constant search space size, the number of mutually exclusive chunks of the perturbation set grows with \(\Theta(n^2)\) and this would imply a quadratic runtime. However, as evident in randomized black-box attacks~\citep{Waniek2018}, it is not necessary to test every possible edge to obtain an effective attack. In Fig.~\ref{fig:randomblocksizeinfluence}, we analyze the influence of the random block size on the perturbed accuracy. For a sufficient block size \(b\) our method performs comparably to its dense equivalent. For larger graphs, we observe that depending on the block size we observe a greater influence of the block size \(b\). However, as shown in Fig.~\ref{fig:arxivrandomblocksizeinfluence}, one might increase the number of epochs for an even improved attack strength. We argue that this indicates that PRBCD successfully spots the right edges to keep.
-
-\begin{figure}[t]
-  \centering
-  \resizebox{\linewidth}{!}{\input{assets/global_PRBCD_novel_loss_cora_ml_0.25_block_size_legend.pgf}}
-  \makebox[\linewidth][c]{
-    \(\begin{array}{cc}
-      \subfloat[\(\epsilon=0.1\) (i.e. \(\Delta=798\)]{\resizebox{0.5\linewidth}{!}{\input{assets/global_PRBCD_novel_loss_cora_ml_0.1_block_size_no_legend.pgf}}} &
-      \subfloat[\(\epsilon=0.25\) (i.e. \(\Delta=1995\)]{\resizebox{0.48\linewidth}{!}{\input{assets/global_PRBCD_novel_loss_cora_ml_0.25_block_size_no_legend.pgf}}}  \\
-    \end{array}\)
-  }
-  \caption{We perform the proposed PR-BCD (solid lines) to obtain a perturbed adjacency matrix with the fraction of perturbed edges \(\epsilon=0.1\) and \(\epsilon=0.25\) with loss (5) of Sec.~\ref{sec:ceisbad}. We run 50 epochs where we resample the search space and subsequently fine-tune for 250 epochs. The dashed lines show the performance of vanilla PGD~\citep{Xu2019a}. We report the mean and its three-sigma error over five random seeds. \label{fig:randomblocksizeinfluence}}
-\end{figure}
-
-\begin{figure}[t]
-  \centering
-  \resizebox{\linewidth}{!}{\input{assets/global_prbcd_arxiv_0_1_block_size_cmp_epochs_loss_legend.pgf}}
-  \makebox[\linewidth][c]{
-    \(\begin{array}{cc}
-      \subfloat[]{\resizebox{0.5\linewidth}{!}{\input{assets/global_prbcd_arxiv_0_1_block_size_cmp_epochs_loss_no_legend.pgf}}} &
-      \subfloat[]{\resizebox{0.48\linewidth}{!}{\input{assets/global_prbcd_arxiv_0.1_block_size_cmp_epochs_accuracy_no_legend.pgf}}}  \\
-    \end{array}\)
-  }
-  \caption{The perturbed loss and perturbed accuracy over the epochs \(k\) on the arXiv dataset (see Tab.~\ref{tab:datasets}) using PR-BCD for different block sizes \(b\) with loss (5) of Sec.~\ref{sec:ceisbad}. The number of epochs \(k\) is chosen such that \(k b = \text{const.}\). Hence, approximately the same amount of edges has been ``visited''. At \(k=100\) the accuracy varies in the range of around 5\% despite the very different choices of \(b\). Furthermore, it seems like that the attacks that ran more epochs are slightly stronger.\label{fig:arxivrandomblocksizeinfluence}}
-\end{figure}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \begin{algorithm}[h]
   \small
@@ -374,7 +337,7 @@ With growing \(n\) it is unrealistic that each possible entry of the adjacency m
   \begin{algorithmic}[1]
     \STATE {\bfseries Input:} Adj.\ \(\adj\), feat.\ \(\features\), labels\ \(\vy\), GNN \(f_{\theta}(\adj, \features)\), loss \(\mathcal{L}\)
     \STATE {\bfseries Parameter:} budget \(\Delta\), block size \(b\), epochs \(K\), heur.\ \(h(\dots)\)
-    \STATE Draw random indices \(\vi_0 \in \{0, 1, \dots, N\}^b\)
+    \STATE Draw random indices w/o replacement \(\vi_0 \in \{0, 1, \dots, n^2 - 1\}^b\)
     \STATE Initialize zeros for \(\vp_0 \in \R^b\)
     \FOR{\(k \in \{1,2, \dots, K\}\)}
     \STATE \(\hat{\vy} \leftarrow f_{\theta}(\adj \oplus \vp_{k-1}, \features)\)
@@ -385,7 +348,7 @@ With growing \(n\) it is unrealistic that each possible entry of the adjacency m
     \IF{\(k \le K_{\text{resample}}\)}
     \STATE \(\text{mask}_{\text{resample}} \leftarrow h(\vp_{k})\)
     \STATE \(\vp_k[\text{mask}_{\text{resample}}] \leftarrow \mathbf{0}\)
-    \STATE Resample \(\vi_{k}[\text{mask}_{\text{resample}}] \in \{0, 1, \dots, N\}^{|\text{mask}_{\text{resample}}|}\)
+    \STATE Resample \(\vi_{k}[\text{mask}_{\text{resample}}] \in \{0, 1, \dots, n^2 - 1\}^{|\text{mask}_{\text{resample}}|}\)
     \ENDIF
     \ENDFOR
     \STATE \(\mP \sim \text{Bernoulli}(\vp_{k})\) s.t.\ \(\sum \mP \le \Delta\)
@@ -394,98 +357,99 @@ With growing \(n\) it is unrealistic that each possible entry of the adjacency m
   \end{algorithmic}
 \end{algorithm}
 
-We also compare this approach to a Greedy R-BCD (GR-BCD), that greedily flips the entries with largest gradient in the random search space, such that after \(K\) iterations the budget requirements are met.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\todo{Local version}
-%If we performed a targeted instead of a global attack, we could further reduce the space requirements since we only need to consider the node's ``receptive field''. Such an attack could be very similar to adding one node in the introduced GANG attack with further constraints (see Section~\ref{sec:attackkdd}).
+Note that the projection of the perturbation \(\Pi_{\E[\text{Bernoulli}(\vp)] = \Delta} (\vp)\) likely contains many zero elements, but is not guaranteed to be sparse. If \(\vp\) has more than 50\% non-zero entries, we remove the entries with the lowest probability mass such that 50\% of the search space is resampled. Otherwise, we resample all zero entries in \(\vp\). However, one also might apply a more sophisticated heuristic \(h(\vp)\) (see line 11). We keep the random block size \(b\) fixed and run \(K_{\text{resample}}\) epochs. Thereafter, we decay the learning rate as in~\cite{Xu2019a}. We also employ early stopping for both stages (\(k \le K_{\text{resample}} \text{ and } k > K_{\text{resample}}\) with the epoch \(k\)) such that we take the result of the epoch with highest loss \(\mathcal{L}\).
 
-\subsection{Adding Adversarial Nodes}\label{sec:attackkdd}
+\textbf{Block size \(b\).} With growing \(n\) it is unrealistic that each possible entry of the adjacency matrix was part of at least one random search space of (P)R-BCD. As is apparent, with a constant search space size, the number of mutually exclusive chunks of the perturbation matrix grows with \(\Theta(n^2)\) and this would imply a quadratic runtime. However, as evident in randomized black-box attacks~\citep{Waniek2018}, it is not necessary to test every possible edge to obtain an effective attack. In Fig.~\ref{fig:randomblocksizeinfluence} (a), we analyze the influence of the block size \(b\) on the perturbed accuracy. On such a small dataset and over a wide range of block sizes \(b\), our method performs comparably to its dense equivalent. For larger graphs, we observe that the block size \(b\) has a stronger influence on the perturbed accuracy. However, as shown in Fig.~\ref{fig:randomblocksizeinfluence} (b), one might increase the number of epochs for an even improved attack strength. We argue that this indicates that PR-BCD successfully spots the right edges to keep.
 
 \begin{figure}[t]
   \centering
-  \hbox{\hspace{45pt} \resizebox{0.7\linewidth}{!}{\input{assets/global_gang_cora_ml_0.1_node_degree_legend.pgf}}}
-  \vspace{-14pt}
+  \resizebox{\linewidth}{!}{\input{assets/global_PRBCD_novel_loss_cora_ml_0.25_block_size_legend.pgf}}
   \makebox[\linewidth][c]{
     \(\begin{array}{cc}
-      \subfloat[]{\resizebox{0.5\linewidth}{!}{\input{assets/global_gang_cora_ml_0.1_node_degree_no_legend.pgf}}} &
-      \subfloat[]{\resizebox{0.5\linewidth}{!}{\input{assets/global_gang_cora_ml_0.25_node_degree_no_legend.pgf}}}  \\
+      \subfloat[Cora ML]{\resizebox{0.5\linewidth}{!}{\input{assets/global_PRBCD_novel_loss_cora_ml_0.1_block_size_no_legend.pgf}}} &
+      \subfloat[arXiv]{\resizebox{0.48\linewidth}{!}{\input{assets/global_prbcd_arxiv_0.1_block_size_cmp_epochs_accuracy.pgf}}}  \\
     \end{array}\)
   }
-  \caption{Influence of the degree of the added nodes on the perturbed accuracy on Cora ML. (a) shows the perturbed accuracy with a budget of changing \(\epsilon=0.1\) edges, and (b) for \(\epsilon=0.25\). The number of nodes is determined as \(\Delta_n = \nicefrac{\epsilon}{\Delta_e}\). We report the mean perturbed accuracy and its three-sigma error over five random seeds. \label{fig:gangnodeeffectiveness}}
+  \caption{
+  We perturb the graph with our PR-BCD attack (solid lines) 
+  using the tanh Margin loss (Sec.~\ref{sec:ceisbad}) and \(\epsilon=0.1\).
+  In (a) we report the mean and its three-sigma error over five random seeds on Cora ML (Tab.~\ref{tab:datasets}) for different block sizes $b$. We run 50 epochs where we resample the search space and then fine-tune for 250 epochs. The dashed lines show the performance of vanilla PGD~\citep{Xu2019a}. In (b) we show the perturbed accuracy over epochs \(k\) on arXiv (170k nodes, Tab.~\ref{tab:datasets})
+  using PR-BCD for three different block sizes \(b\) shown with different lines. We choose \(k\) such that \(k b = \text{const.}\), i.e. approximately the same number of edges are ``visited''. \label{fig:randomblocksizeinfluence}}
 \end{figure}
 
-In this section we discuss how solve the attack optimization problem via adding nodes
-\begin{equation}\label{eq:gang}
-  \max_{\adj^\prime, \features^\prime} \mathcal{L}(f_{\theta}(\adj | \adj^\prime, \features | \features^\prime))
+As an alternative to PR-BCD, we propose Greedy R-BCD (GR-BCD), which greedily flips the entries with the largest gradient in the block so that after \(K\) iterations the budget is met.
+
+\subsection{Attacking Scalable GNNs}\label{sec:localattack}
+Up to now, we implicitly assumed that there is enough memory for the GNN to compute both the prediction for a given node, as well as obtain the gradient towards the edges.
+% the GNN can make a prediction for a node in the graph at once and that enough space is left to obtain the gradient towards the edges.
+Such GNNs that typically process the whole graph ``at once'', are inherently limited in their scalability. Our attack PR-BCD is even applicable when operating at those limits (see experiments on the Product dataset in Sec.~\ref{sec:empirical}). However, to assess the adversarial robustness at scale, we must consider more scalable GNNs. Scaling traditional GNNs to massive graphs is difficult. Several approaches have been proposed to scale GNNs further. They either sample subgraphs~\citep{Chen2018a, Chiang2019} or simplify the message passing operation~\citep{Bojchevski2020a}.
+
+To scale to massive graphs, it is desirable to obtain an attack with sublinear complexity w.r.t.\ the number of graph nodes. This severely restricts the possibilities of how one might approach a global attack. Therefore, we focus on local attacks.
+For an \(L\)-layer message passing GNN we need to recursively compute the \(L\)-hop neighborhood to obtain the prediction of a single node.
+This makes it difficult to obtain a sublinear space complexity. In contrast, PPRGo~\citep{Bojchevski2020a} leverages the Personalized Page Rank (PPR) matrix \(\Pi = \alpha(\mI - (1-\alpha)\mD^{-1}\mA)^{-1}\) (here with row normalization) to reduce the number of explicit message passing steps to one. This allows us to efficiently attack a single node if we are able to update PPR scores efficiently (inserting and removing edges). As it turns out, we can leverage PR-BCD to obtain an attack on a single node (i.e.\ a local attack) for PPRGo with constant memory (assuming \(b \ll n\)) (i.e.\ it is sublinear). This approach does not restrict us on how we can sample other edges and allows us to obtain the gradient towards the input cheaply. Since all components are fully differentiable we can omit the use of a surrogate model as proposed by many previous approaches~\cite{Zugner2018, Wang2020}. Note that our novel PR-BCD algorithm is general and with only minor modifications we can apply it to other scalable GNNs than PPRGo.
+
+% An \(L\)-layer GNNs recursive message passing requires that we consider use the \(L\)-hop neighborhood for the prediction of a single node. On large graphs we often also require more layers for competitive performance. Prevalent approaches to scale GNNs such as~\cite{Chen2018a, Chiang2019} sample subgraphs, roughly speaking, cleverly combining multiple nodes into a batch that the required sub graph is small. This imposes several challenges for attacking such a network. Attacking such a GNN is studied in~\citep{Wang2020} and is significantly less scalable than ours since it requires a k-hop neighborhood (potentially very large). \citet{Wang2020} also use a surrogate model while we perform a direct attack on the desired GNN. 
+
+%For a global attack we at least need to consider a significant fraction of nodes. This implies that it is hardly possible to obtain a global attack with sublinear complexity that attentively attacks the GNN (i.e.\ more sophisticated than a simple random/greedy scheme).
+
+%This comes with two implications for attacking those architectures. First, they predict on a subset of nodes at time which makes global attacks difficult. Second, they sample a sub graph which should be small enough for efficient training. Attacking such a GNN is studied in~\citep{Wang2020} and is significantly less scalable than ours since it requires a k-hop neighborhood (potentially very large). \citet{Wang2020} also use a surrogate model while we perform a direct attack on the desired GNN. 
+
+%In the case of a local attack (one node at a time) and using PPRGo~\citep{Bojchevski2020a}, a scaleable GNN scheme based on Personalized Page Rank (PPR), we can leverage PR-BCD to obtain an attack with constant memory (assuming \(b \ll n\)) and constant time complexity (number of epochs). This approach does not restrict us on how we can sample other edges and allows us to obtain the gradient towards the input cheaply. Since all components are fully-differentiable we can omit the use of a surrogate model as proposed by many previous approaches~\cite{Zugner2018, Wang2020}.
+
+%As mentioned PPRGo batches the GNN utilizing the Personalized Page Rank (PPR) matrix \(\Pi = \alpha(\mI - (1-\alpha)\mD^{-1}\mA)^{-1}\) (here with row normalization) and a single propagation step. However, after each update of the edge weights, we also need to update the PPR matrix \(\Pi\) s.t.\ we can differentiate it. 
+%Note that the single propagation is equivalent to an infinite amount of message passing steps~\cite{Klicpera2019a}. 
+To update the PPR scores for a given node in \(\Pi\), we use the Sherman-Morrison formula
+\begin{equation}\label{eq:shermanmorrison}
+    (\mB + \vu\vv^\top)^{-1} = \mB^{-1} - \frac{\mB^{-1}\vu\vv^\top\mB^{-1}}{1 + \vv^\top\mB^{-1}\vu}
 \end{equation}
-with the space complexity of \(\mathcal{O}(m)\). With \(\adj | \adj^\prime\) we denote the addition of rows \& columns and with \(\features | \features^\prime\) the concatenation of the respective attributes (\(\adj\) \& \(\features\) are const.). For imperceptibility, we further limit the number of nodes \(\Delta_n\) and their degree \(\Delta_e\).
+for rank one update \(\vu\vv^\top\) of the inverse of an invertible matrix \(\mB \in \sR^{n \times n}\). This also allows us to obtain the gradient towards the edges of the current block \(b\), which is all we need for PR-BCD. The rank one \(\vu\vv^\top\) update in general has shape \([n \times n]\) and therefore comes with space complexity \(\mathcal{O}(n^2)\) and the update via the Sherman-Morrison formula has \(\mathcal{O}(n^3)\). Since we use row normalization with PPRGo, we can attack the PPR scores via updating a single row \(\tilde{\Pi}_i = \tilde{\pi}(i)\) of the adjacency matrix \(\mA\) (including normalization). For this we choose \(\evu_j=0\,\forall j \ne i\) and \(\evu_i=1\). We can write the closed-form local PPR update as:
+%
+\begin{equation}\label{eq:pprrowupdate}
+    \tilde{\pi}(i) 
+    = \tilde{\Pi}_i
+    = \alpha \Big[ \mI - (1-\alpha)\mD^{-1}\mA +  \vu\vv^\top \Big]_i^{-1} 
+    = \alpha \left( \Pi'_i - \frac{\Pi'_{ii} \vv \Pi'}{1 + \vv \Pi'_{:i}} \right)
+\end{equation}
+%
+where \(\Pi' = (\mI - (1-\alpha)\mD^{-1}\mA)^{-1} = \alpha^{-1}\Pi\) and \(\vv = (\mD_{ii} + \sum \vp)^{-1} (\mA_i + \vp) - \mD^{-1}_{ii} \mA_i\). We optimize over the \(b\) potentially non-zero entries in \(\vp\). \(\vv\) contains only zero elements, but for the current node that is being attacked.
 
-The attacks add one node (or a small group of nodes) at a time to the sparse adjacency matrix and connect it to every other node with edge weight zero. Subsequently, we perform a constrained gradient-based optimization to determine the best edges with a given budget. We decide to add nodes in an greedy manner. For each new node, we determine the edges in \(s_e\) steps via a greedy FGSM-like procedure (PGD/PRBCD is an alternative). Then, the initial features (randomly sampled) are optimized via PGD (\(s_x\) epochs). In Algorithm~\ref{algo:gang}, we give a formal definition of GANG.
+With dense matrices, this would leave us with a complexity of \(\mathcal{O}(b n)\) due to the vector-matrix product \(\vv \Pi'\). We follow~\citet{Bojchevski2020a} and use the top-k-sparsified PPR \(\Pi^{(k)}\) instead of \(\Pi\) with at most \(k\) entries per row. Since \(\vv\) has at most \(b\) non-zero entries, most columns in the slice \(\Pi^{(k)}_{\vv\ne0}\) only contain zero elements. Thus, we can equivalently write \(\vv \Pi'\) as a dense vector matrix product of shapes \([1, b]\) and \([b, r]\), where r is the number of non-zero columns in the rows \(\Pi'_b\). With randomly distributed ones, the probability of a non-zero entry is \(\nicefrac{k}{n}\). Hence we can approximate \(P(\sum \Pi^{(k)}_{\vv\ne0, j}) = \text{Bin}(b, \nicefrac{k}{n})\) for column \(j\) and analogously \(\mathbb{E}[r]  = n \cdot P(\sum \Pi^{(k)}_{\vv\ne0, j} > 0) = n [ 1 - P(\sum \Pi^{(k)}_{\vv\ne0, j} = 0) ] = \nicefrac{k^b}{n^{b-1}} = \mathcal{O}(1) \) for \(k \ll n\) and \(b \ll n\). For appropriate choices of \(k\) and \(b\) the expected complexity of our local attack is \(\mathcal{O}(b r) = \mathcal{O}(b \nicefrac{k^b}{n^{b-1}}) = \mathcal{O}(b)\). Please note that in contrast to the global PR-BCD attack, this \emph{includes} the GNN/PPRGo, and therefore is much more scalable. 
 
-\begin{algorithm}[t]
-  \small
-  \caption{Greedy Adversarial Node Generation (GANG)}
-  \label{algo:gang}
-  \begin{algorithmic}[1]
-    \STATE {\bfseries Input:} Adj.\ \(\adj\), feat.\ \(\features\), labels\ \(\vy\), GNN \(f_{\theta}(\adj, \features)\), loss \(\mathcal{L}\)
-    \STATE {\bfseries Parameter:} budgets \(\Delta_n\) \& \(\Delta_e\), step size \(s_e\), steps features \(s_x\)
-    \STATE Initialize empty \(\adj^\prime\) and \(\features^\prime\)
-    \FOR{\(k \in \{1, \dots, \Delta_n\}\)}
-    \STATE \(\adj^\prime \leftarrow\) concatenate new node to \(\adj^\prime\) (empty row and column)
-    \STATE \(\features^\prime \leftarrow\) concatenate \(\features^\prime\) vector \(\tilde{\vx}_k \sim \Pi(\mathcal{N}(0, \sigma_n^2))\)
-    \FOR{\(j \in \{0, \dots, \Delta_e / s_e\}\)}
-    \STATE \(\hat{\vy} \leftarrow f_{\theta}(\adj | \adj^\prime, \features | \features^\prime)\)
-    \STATE \(g \leftarrow \nabla_{\adj^\prime_k} \mathcal{L}(\hat{\vy}, \vy)\) for all nodes where \(\hat{\vy} = \vy\)
-    \STATE \(\adj^\prime \leftarrow\) add the top \(s_e\) edges to \(\adj^\prime\) w.r.t.~\(g\)
-    \ENDFOR
+To obtain this local attack we simply need to change lines 3 and 13 of Algo.~\ref{algo:prbcd} to sample only indices \(\vi_0 \in \{0, 1, \dots, n-1\}\). Further, we either keep line 6 if we attack e.g.\ GCN~\cite{Kipf2017} or update \(\tilde{\pi}(i)\) as described in Eq.~\ref{eq:pprrowupdate}. We further simply use a margin loss in logit space since we also only have a local budget.
 
-    %\STATE \(l \leftarrow \nabla \mathcal{L}(f_{\theta}(\tilde{\adj}, \tilde{\features}), \vy)\) for \(i\)-th added node
-    %\STATE \(\tilde{\adj} \leftarrow\) remove between \(s_e\) and \(2s_e\) from \(\tilde{\adj}\) according to the lowest \(s_e\) values of \(l\)
+\section{Scalable Defense}\label{sec:defense}
+We are not aware of any defense that scales to graphs significantly larger than PubMed. We conclude, defending GNNs at scale is an entirely new research area. We propose a novel, scalable defense based on a robust message-passing aggregation, relying on recent advancements in differentiable sorting~\cite{Prillo2020}. Our method \emph{Soft Median} performs similarly to~\citet{Geisler2020}'s Soft Medoid, but comes with better complexity w.r.t.\ the neighborhood size, lower memory footprint, and enables us to scale to bigger graphs. We can also use this aggregation neatly in the PPRGo architecture resulting in the first defense that scales to massive graphs.
 
-    \FOR{\(j \in \{1, \dots, s_x\}\)}
-    %\STATE \(\features^\prime \leftarrow \Pi_{\|\features^\prime\|_\infty \le \max(\mX)}(\tilde{\features} + \alpha_x \nabla_{\features^\prime} \mathcal{L}(f_{\theta}(\adj | \adj^\prime, \features | \features^\prime))\)
-    \STATE \(\features^\prime \leftarrow \Pi(\tilde{\features} + \alpha_x \nabla_{\features^\prime} \mathcal{L}(f_{\theta}(\adj | \adj^\prime, \features | \features^\prime))\)
-    \ENDFOR
-    \ENDFOR
-  \end{algorithmic}
-\end{algorithm}
+\textbf{Related work.} Many defenses counteract specific, observed characteristics of some attacks. In general we classify defenses into categories such as (1) preprocessing~\citep{Entezari2020,Wu2019}, (2) robust training~\citep{Xu2019a, Zugner2019a}, and (3) modifications of the architecture~\citep{Zhu2019, Zhang2019a,Geisler2020}. To start with a strong and practical baseline, we avoid defenses such as robust training due to the severe overhead during training. Nonetheless, our attacks would in principle allow robust training of GNNs at scale, but we leave this investigation for future work.
 
-In Fig.~\ref{fig:gangnodeeffectiveness} we analyze the influence of the degree of the added nodes via GANG. Interestingly, low degree nodes seem to be more effective than high degree nodes. This could be due to the normalization by the square root of the inverse node degree for a GCN~\cite{Kipf2017}. Surprisingly, we find that especially GDC~\cite{Klicpera2019a} (i.e.~personalized PageRank) and a low-rank SVD approximation~\cite{Entezari2020} are effective defenses (prepossessing techniques of the adjacency matrix). SVD is a strong defense against low-degree nodes and personalized page rank is particularly strong against high degree nodes. The recent defense Soft Medoid GDC~\citep{Geisler2020}, seems to be effective regardless of the node degree.
-
-\section{Defense}
-
-We build upon the very recent defence using a robust message passing aggregation that they call Soft Medoid~\citet{Geisler2020}. Our method \emph{Soft Median} performs similarly to Soft Medoid with better complexity w.r.t. the neighborhood size lower memory footprint and enables us to scale bigger graphs. For this we rely on the recent advancements in differentiable sorting~\citet{Prillo2020}.
-
-\textbf{Related work.} Many defenses have been proposed, often observing specific characteristics of some attacks. We can classify those defenses into categories such as (1) preprocessing~\citep{Entezari2020,Wu2019}, (2) robust training~\citep{Xu2019a, Zugner2019a}, and (3) modifications of the architecture~\citep{Zhu2019, Zhang2019a,Geisler2020}. In this section, we improve the Soft Medoid of~\cite{Geisler2020}. They suggest to interpret a GNNs such as:
+\textbf{Background.} \citet{Geisler2020} relies on an observation about the message passing framework:
 \begin{equation}\label{eq:mean-how-powerfull}
   \mathbf{h}^{(l)}_v = \sigma^{(l)} \left[ \text{AGG}^{(l)} \left \{ \left( \adj_{vu}, \mathbf{h}^{(l-1)}_u \weight^{(l)} \right), \forall \, u\in \neighbors'(v) \right \} \right]
 \end{equation}
-with the neighborhood \(\neighbors'(v) = \neighbors(v) \cup v\) including the node itself, some message passing aggregation \(\text{AGG}^{(l)}\) of the \(l\)-th layer, the embeddings \(\mathbf{h}^{(l)}_v\), the normalized message passing matrix \(\adj\), the weights \(\weight^{(l)}\), and activations \( \sigma^{(l)}\). And they propose to use the differentiable robust aggregation for \(\text{AGG}^{(l)}\) which they call Soft Medoid (for simplicity we only present the unweighted version):
-\begin{equation}\label{eq:softoutsoftmedoid}
-  t_{\text{SoftMedoid}}(\features)
-  = \text{s}\left(-\frac{1}{T} \vd \right)^\top \features \text{,~with}~\evd_{v} = \sum_{u\in \neighbors'(v)} \|\features_{u,:} - \features_{v,:}\| 
-\end{equation}
-where \(s(\vz)_i = \nicefrac{\exp{\left(-T^{-1} \evz_i \right )}}{\sum_{j=1}^n \exp{\left(-T^{-1} \evz_j \right )}}\) is the \(i\)-th element of the softmax with temperature. Note that calculating \(\vd\) is equivalent to a row/column sum over the distance matrix with respect to a nodes neighborhood. Hence this operation has a quadratic complexity w.r.t.\ the neighborhood size and comes with a recognizable memory overhead during training and inference. \todo{Scalable defenses}
+with the neighborhood \(\neighbors'(v) = \neighbors(v) \cup v\) including the node itself, some message passing aggregation \(\text{AGG}^{(l)}\) of the \(l\)-th layer, the embeddings \(\mathbf{h}^{(l)}_v\), the normalized message passing matrix \(\adj\), the weights \(\weight^{(l)}\), and activations \( \sigma^{(l)}\). Since common aggregations (e.g.\ sum or mean) in Eq.~\ref{eq:mean-how-powerfull} are known to be non-robust, \citet{Geisler2020} propose a differentiable robust aggregation for \(\text{AGG}^{(l)}\) and call it Soft Medoid. It is a continuous relaxation of the Medoid and requires the row/column sum over the distance matrix of the embeddings of the nodes in the neighborhood. Hence this operation has a quadratic complexity w.r.t.\ the neighborhood size and comes with a sizable memory overhead during training and inference.
 
-\textbf{Our novel, robust, differentiable aggregation.} For improving the previous aggregation we leverage two key facts. First, the Medoid is a multivariate generalization of the median Median and here we look into an alternative that is the dimension-wise Median. Second, we do not need to sort all inputs to obtain the median. This principle can be generalized to soft sorting which is a differentiable relaxation of the sort operation. In summary, we propose a differentiable relaxation of the Median in the space of distances to the dimension-wise Median \(\bar{\vx}\):
+\textbf{Soft Median.} For improving the previous aggregation we leverage two key facts. First, the Medoid is a multivariate generalization of the Median. Here we look into an alternative that is the dimension-wise Median. Second, we do not need to sort all inputs to obtain the median. This principle can be generalized to soft sorting which is a differentiable relaxation of the sort operation. In summary, we propose a differentiable relaxation of the Median that softly selects the embedding which is closest the dimension-wise Median \(\bar{\vx}\):
 \begin{equation}\label{eq:softmedian}
   \begin{aligned}
   t_{\text{SoftMedian}}(\features)
-  &= \text{s}\left(-\frac{1}{T} \vd \right)^\top \features \text{,~with}~\evd_{v} = \|\bar{\vx} - \features_{v,:}\| \\
+  &= \text{s}\left(-\frac{1}{T\sqrt{D}} \vd \right)^\top \features \text{,~with}~\evd_{v} = \|\bar{\vx} - \features_{v,:}\| \\
   &= \softout^\top\features \approx \argmin_{\vx' \in \featset} \| \bar{\vx} - \vx' \|,
   \end{aligned}
 \end{equation}
-Intuitively, our proposed aggregation relies on a robust version of the Mahalanobis distance on a spherical Gaussian. To recover the Mahalanobis distance, we would simply need to replace dimension-wise Median with the sample mean. Equivalently, we use the standardized Euclidean distance. Due to the weighting of the samples with the softmax with temperature this also has connections to the density of a bell shaped distribution.
+We normalized by the dimensions \(D\), so that \(T\) does not depend on the number of dimensions. Our proposed aggregation can be interpreted as the Mahalanobis distance to the median with a spherical covariance matrix, or \emph{standardized} Euclidean distance to the median. This is in particular a good assumption in the presence of batch normalization. Due to the weighting of the samples with the softmax with temperature $T$, our Soft Median also has connections to the density of the Gaussian distribution.
 
-\textbf{The temperature hyperparameter}. Temperature parameter $T$ controls the steepness of the weight distribution $\hat{\softout}$ between the neighbors and corresponds to the twice the standard deviation in the interpretation as Mahalanobis distance. In the extreme case as $T \to 0$ we recover the point which is closes to the dimension-wise Median (i.e. \(\argmin_{\vx' \in \featset} \| \bar{\vx} - \vx' \|\)). In the other extreme temperature as $T\to\infty$, the Soft Median is equivalent to the sample mean. We observe a similar behavior as~\citet{Geisler2020} and by grid search decide for a temperature value of \(T=0.2\) which is a good compromise between clean accuracy and robustness (similar to \(T=0.5\) for the Soft Medoid).
+\textbf{The temperature hyperparameter}. Temperature parameter $T$ controls the steepness of the weight distribution $\hat{\softout}$ between the neighbors and corresponds to twice the standard deviation in the interpretation as Mahalanobis distance. In the extreme case as $T \to 0$ we recover the point which is closest to the dimension-wise Median (i.e. \(\argmin_{\vx' \in \featset} \| \bar{\vx} - \vx' \|\)). In the other extreme case $T\to\infty$, the Soft Median is equivalent to the sample mean. We observe a similar empirical behavior as~\citet{Geisler2020} and we decide on a temperature value in our experiments by grid search.
 
-\textbf{Robustness.} Naturally, the question arises if this estimator is robust since in one extreme it recovers the sample mean which is non to be non-robust. Many metrics have been proposed that capture robustness with different flavours. One of the most widely used properties is the break down point. The (finite-sample) breakdown point captures the minimal fraction \(\epsilon = \nicefrac{m}{n}\) so that the result of the location estimator \(t(\features)\) can be arbitrarily placed~\citep{Donoho1983} (here \(m\) denotes the number of perturbed examples):
+\textbf{Robustness.} Naturally, the question arises if this estimator is robust since in one extreme it recovers the sample mean which is known to be non-robust. Many metrics have been proposed that capture robustness with different flavours. One of the most widely used properties is the break down point. The (finite-sample) breakdown point captures the minimal fraction \(\epsilon = \nicefrac{m}{n}\) so that the result of the location estimator \(t(\features)\) can be arbitrarily placed~\citep{Donoho1983} (here \(m\) denotes the number of perturbed examples):
 %
 \begin{equation}\label{eq:breakdown}
   \epsilon^*(t, \features) = \min_{1 \le m \le n} \left \{ \frac{m}{n}: \sup_{\pertm} \|t(\features)-t(\pertm)\| = \infty \right \}
 \end{equation}
 %
-Following Theorem 1 of~\citet{Geisler2020}, our proposed Soft Median comes with the best possible breakdown point as we state formally in \autoref{theorem:softmedianbreakdown}.
+
+Our proposed Soft Median has the best possible breakdown point of 0.5 as we state formally in \autoref{theorem:softmedianbreakdown}\footnote{This does not prove adversarial robustness, but is a common proxy for robustness.}. Note that despite the lower complexity of the Soft Median, we maintain the same breakdown point.
 
 \begin{theorem}\label{theorem:softmedianbreakdown}
   Let \(\featset = \{ \mathbf{\mathbf{x}}_1, \dots, \mathbf{\mathbf{x}}_n\} \) be a collection of points in \(\mathbb{R}^d\) with finite coordinates and temperature \(T \in [0, \infty) \). Then the Soft Median location estimator (\autoref{eq:softmedian}) has the finite sample breakdown point of \(\epsilon^*(t_{\text{Soft Median}}, \features) = \nicefrac{1}{n} \lfloor \nicefrac{(n+1)}{2}\rfloor \) (asymptotically \( \lim_{n \to \infty} \epsilon^*(t_{\text{SoftMedian}}, \features) = 0.5 \)).
@@ -494,14 +458,14 @@ Following Theorem 1 of~\citet{Geisler2020}, our proposed Soft Median comes with 
 \begin{proof}\label{proof:actual_soft_median}
   Let \( \pertmset \) be decomposable such that \(\pertmset = \pertmset^{(\text{c})} \cup \pertmset^{(\text{p})} \). We now have to find the minimal fraction of outliers \(\epsilon\) for which \newline\(\lim_{\tilde{\evd_{v}} \to \infty} \|t_{\text{SoftMedian}}(\pertm)\| < \infty\) does not hold anymore. According to Eq.~\ref{eq:breakdown}, if we now want to arbitrarily perturb the Soft Median, 
   %the distance to the median \(\tilde{\evd_{v}} = \|\bar{\vx} - \tilde{\features}_{v,:}\| = \|\bar{\vx} - \tilde{\vx}_{v}\|\) 
-  we must \(\tilde{\vx_{v}} \to \infty,\,\exists v \in \pertmset^{(\text{p})}\). Next we analyze the influence of this point on Eq.~\ref{eq:softmedian}:
+  we must \(\tilde{\vx_{v}} \to \infty ,\,\exists\, v \in \pertmset^{(\text{p})}\). Next we analyze the influence of this point on Eq.~\ref{eq:softmedian} (w.l.o.g\ we omit the factor \(\sqrt{D}\)):
   \[
     \begin{aligned}
       \hat{\softout}_{v} \vx_{v}
       &= \frac{\exp \left\{-\frac{1}{T} \|\bar{\vx} - \tilde{\vx}_{v}\| \right\} \vx_{v}}{\sum\limits_{i \in \pertmset^{(\text{c})}} \exp \left \{-\frac{1}{T} \|\bar{\vx} - \vx_{i}\| \right\} + \sum\limits_{j \in \pertmset^{(\text{p})}} \exp \left \{-\frac{1}{T} \|\bar{\vx} - \vx_{j}\| \right\}} \\
     \end{aligned}
   \]
-  Instead of \(\lim_{\|\tilde{\vx}_{v}\| \to \infty} \hat{\softout}_{v} \vx_{v}\), we can equivalently derive the limit for the enumerator and the denominator independently (as long as the denominator does not approach 0 and it is easy to show that the denominator is \(> 0\) and \(\le |\pertmset|\)):
+  Instead of \(\lim_{\|\tilde{\vx}_{v}\| \to \infty} \hat{\softout}_{v} \vx_{v}\), we can equivalently derive the limit for the numerator and the denominator independently (as long as the denominator does not approach 0 and it is easy to show that the denominator is \(> 0\) and \(\le |\pertmset|\)):
   \[
     \begin{aligned}
       \lim_{\|\tilde{\vx}_{v}\| \to \infty} \exp \left\{-\frac{1}{T} \|\bar{\vx} - \tilde{\vx}_{v}\| \right\} \|\vx_{v}\| = 
@@ -516,9 +480,15 @@ Following Theorem 1 of~\citet{Geisler2020}, our proposed Soft Median comes with 
   As long as \(\epsilon < 0.5\), we know that for each dimension the perturbed dimension-wise Median must be still within the range of the clean points. Or in other words, the perturbed Median lays within the smallest possible hypercube around the original clean data \(\featset\). As long as \(\epsilon < 0.5\) we have that \(\lim_{\tilde{\vx}_{v}\| \to \infty} \|\bar{\vx} - \tilde{\vx}_{v}\| = 0\). Consequently, \(\|t(\features)-t(\pertm)\| = \infty\) can only be true if \(m \ge n\) for \(T \in [0, \infty)\).
 \end{proof}
 
-\todo{Add weighted version}
+Analogously to~\citet{Geisler2020}, we define the \emph{weighted} Soft Median as:
+\begin{equation}\label{eq:resulting-wsm}
+  \tilde{t}_{\text{WSM}}(\features, \mathbf{a}) = c\,(\softout \circ \mathbf{a})^\top\features
+\end{equation}
+where \(\softout\) is the softmax weight of Eq.\ref{eq:softmedian} obtained using the weighted dimension-wise Median and \(c\) is a normalization s.t.\ \(\sum \softout \circ \mathbf{a} = \sum \mathbf{a}\). It is easy to show that our proof also holds in the weighted case (see argument in~\citep{Geisler2020}). Note that we recover the message passing operation of a GCN (mean)~\cite{Kipf2017} for \(T \to \infty\).
 
-\textbf{Empirical robustness.} The optimal breakdown point does not necessarily imply that the proposed aggregation is more robust for finite perturbations. In Fig.~\ref{fig:empbiascurve}, we analyze the \(L_2\) distance in the latent space after the first message passing operation for a clean vs.\ perturbed graph. Empirically the Soft Median has a 20\% lower error than the weighted sum (we call it sum since the weights do not sum up to 1). At least in the latent space, the Soft Medoid seems to be more robust. However, this is not consistent with the perturbed accuracy values in Tab.\~ref{tab:losscompare} and~ref{tab:global}. An important and interesting fact is, that similarily to the Soft Medoid
+\textbf{Empirical robustness.} The optimal breakdown point does not necessarily imply that the proposed aggregation is more robust for finite perturbations. In Fig.~\ref{fig:empbiascurve}, we analyze the \(L_2\) distance in the latent space after the first message passing operation for a clean vs.\ perturbed graph. Empirically the Soft Median has a 20\% lower error than the weighted sum (we call it sum since the weights do not sum up to 1). At least in the latent space, the Soft Medoid seems to be more robust. However, this is not consistent with the perturbed accuracy values in Tab.~\ref{tab:global_small} and Tab.~\ref{tab:global_large}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \begin{figure}
   \centering
@@ -533,211 +503,221 @@ Following Theorem 1 of~\citet{Geisler2020}, our proposed Soft Median comes with 
   \caption{Empirical bias \(B(\epsilon)\) for the second layer of a GDC~\citep{Klicpera2019a} network. (a) shows the absolute bias for a PGD attack, with loss (5) of Sec.~\ref{sec:ceisbad}, and a budget of changing \(\epsilon=0.25\) edges. (b) shows the relative bias over the weighted mean of a GDC. We use for all estimator a temperature of \(T=0.2\)\label{fig:empbiascurve}}
 \end{figure}
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+We can easily plug this aggregation into PPRGo with explicitly calculated PPR scores:
+\begin{equation}\label{eq:robustpprgo}
+  \vp_{i} = \text{softmax} \left[ \text{AGG} \left \{ \left( \pi(v)_{u}, f_{\text{enc}}(\vx_u) \right), \forall \, u \in \neighbors'(v) \right \} \right]
+\end{equation}
+with feature encoder \(f_{\text{enc}}\) and for \(\text{AGG}\) we use the Soft Median.
+
 \section{Empirical Evaluation}\label{sec:empirical}
 
-\begin{table*}
-  \centering
-  \caption{Perturbed accuracy comparing the conventional losses with our loss. We report the mean over three different seeds. \(\epsilon\) denotes the fraction of edges perturbed (relative to the clean graph). We use random split with 20 nodes per class. For each architecture and budget we embolden the better loss. For details about the set up we refer to Section~\ref{sec:empirical}.}
-  \label{tab:losscompare}
-  \resizebox{\linewidth}{!}{
-    \begin{tabular}{lcl|ccccccc|ccccccc}
-    \toprule
-                               &      &     & \multicolumn{7}{c|}{\textbf{Cora ML~\citep{Bojchevski2018}}} & \multicolumn{7}{c}{\textbf{Citeseer~\citep{McCallum2000}}} \\
-                               \rotatebox{90}{\textbf{Attack}} & \makecell{\textbf{Frac.}\\\textbf{edges}\\\(\boldsymbol{\epsilon}\)} & \textbf{Loss} &                 \makecell{Vanilla\\GCN} & \makecell{Vanilla\\GDC} & \makecell{SVD\\GCN} & \makecell{Jaccard\\GCN} &  \makecell{RGCN} & \makecell{Soft\\Medoid\\GDC} & \makecell{Soft\\Median\\GDC} &                \makecell{Vanilla\\GCN} & \makecell{Vanilla\\GDC} & \makecell{SVD\\GCN} & \makecell{Jaccard\\GCN} &  \makecell{RGCN} & \makecell{Soft\\Medoid\\GDC} & \makecell{Soft\\Median\\GDC} \\
-    \midrule
-    \midrule
-    \multirow{20}{*}{\rotatebox{90}{\textbf{greedy FGSM}}} & \multirow{5}{*}{0.01} & CE &                  0.8087 &                  0.8144 &              0.7576 &                  0.8066 &           0.7864 &                       0.8061 &                       0.8092 &                  0.7052 &                  0.7000 &              0.6401 &                  0.7091 &           0.6389 &                       0.7045 &                       0.7061 \\
-                                 &      & CW &                  0.8079 &                  0.8145 &              0.7573 &                  0.8041 &           0.7843 &                       0.8149 &                       0.8167 &                  0.6966 &                  0.6916 &              0.6394 &                  0.7018 &           0.6312 &                       0.7070 &                       0.7077 \\
-                                 &      & MCE &         \textbf{0.7859} &         \textbf{0.7953} &              0.7573 &         \textbf{0.7871} &  \textbf{0.7730} &                       0.8070 &                       0.8078 &         \textbf{0.6850} &         \textbf{0.6832} &     \textbf{0.6376} &         \textbf{0.6959} &  \textbf{0.6305} &                       0.7037 &                       0.7046 \\
-                                 &      & SCE &                  0.8124 &                  0.8204 &              0.7580 &                  0.8084 &           0.7872 &                       0.8157 &                       0.8170 &                  0.7009 &                  0.6975 &              0.6387 &                  0.7046 &           0.6328 &                       0.7075 &                       0.7089 \\
-                                 &      & tanh Margin &                  0.7920 &                  0.7953 &     \textbf{0.7567} &                  0.7905 &           0.7756 &              \textbf{0.8033} &              \textbf{0.8025} &                  0.6895 &                  0.6856 &              0.6383 &                  0.6970 &           0.6335 &              \textbf{0.7029} &              \textbf{0.7021} \\
-    \cline{2-17}
-                                 & \multirow{5}{*}{0.05} & CE &                  0.7577 &                  0.7586 &              0.7414 &                  0.7605 &           0.7428 &                       0.7722 &                       0.7722 &                  0.6693 &                  0.6594 &              0.6244 &                  0.6799 &           0.6077 &              \textbf{0.6852} &                       0.6831 \\
-                                 &      & CW &                  0.7378 &                  0.7531 &              0.7445 &                  0.7465 &           0.7318 &                       0.8054 &                       0.8016 &                  0.6332 &                  0.6385 &              0.6225 &                  0.6560 &           0.5818 &                       0.7029 &                       0.7039 \\
-                                 &      & MCE &         \textbf{0.6908} &                  0.7045 &              0.7426 &                  0.7116 &           0.7004 &                       0.7885 &                       0.7850 &         \textbf{0.6064} &         \textbf{0.6036} &              0.6212 &                  0.6410 &  \textbf{0.5815} &                       0.6952 &                       0.6911 \\
-                                 &      & SCE &                  0.7623 &                  0.7750 &              0.7444 &                  0.7647 &           0.7466 &                       0.8083 &                       0.8062 &                  0.6519 &                  0.6565 &              0.6205 &                  0.6693 &           0.5879 &                       0.7061 &                       0.7059 \\
-                                 &      & tanh Margin &                  0.7011 &         \textbf{0.7007} &     \textbf{0.7389} &         \textbf{0.7071} &  \textbf{0.6993} &              \textbf{0.7713} &              \textbf{0.7639} &                  0.6082 &                  0.6094 &     \textbf{0.6168} &         \textbf{0.6348} &           0.5927 &                       0.6889 &              \textbf{0.6802} \\
-    \cline{2-17}
-                                 & \multirow{5}{*}{0.10} & CE &                  0.7188 &                  0.7179 &              0.7153 &                  0.7221 &           0.7080 &                       0.7426 &                       0.7410 &                  0.6316 &                  0.6223 &              0.6025 &                  0.6476 &           0.5766 &              \textbf{0.6665} &              \textbf{0.6590} \\
-                                 &      & CW &                  0.6751 &                  0.7001 &              0.7265 &                  0.7005 &           0.6874 &                       0.7924 &                       0.7874 &                  0.5692 &                  0.5763 &              0.5884 &                  0.6112 &           0.5348 &                       0.6984 &                       0.6968 \\
-                                 &      & MCE &         \textbf{0.6086} &                  0.6385 &              0.7215 &                  0.6441 &           0.6387 &                       0.7773 &                       0.7693 &                  0.5335 &         \textbf{0.5346} &              0.5991 &                  0.5922 &  \textbf{0.5323} &                       0.6893 &                       0.6791 \\
-                                 &      & SCE &                  0.7042 &                  0.7235 &              0.7271 &                  0.7166 &           0.7065 &                       0.7947 &                       0.7881 &                  0.6004 &                  0.6096 &              0.5866 &                  0.6298 &           0.5455 &                       0.7012 &                       0.6998 \\
-                                 &      & tanh Margin &                  0.6337 &         \textbf{0.6350} &     \textbf{0.7107} &         \textbf{0.6430} &  \textbf{0.6370} &              \textbf{0.7415} &              \textbf{0.7320} &         \textbf{0.5323} &                  0.5417 &     \textbf{0.5848} &         \textbf{0.5763} &           0.5492 &                       0.6797 &                       0.6668 \\
-    \cline{2-17}
-                                 & \multirow{5}{*}{0.25} & CE &                  0.6353 &                  0.6391 &              0.6399 &                  0.6427 &           0.6312 &              \textbf{0.6785} &                       0.6746 &                  0.5401 &                  0.5330 &     \textbf{0.3626} &                  0.5729 &           0.5130 &              \textbf{0.6201} &              \textbf{0.6073} \\
-                                 &      & CW &                  0.4987 &                  0.5788 &              0.6344 &                  0.5635 &           0.5613 &                       0.7738 &                       0.7635 &                  0.4431 &                  0.4804 &              0.4998 &                  0.5355 &           0.4369 &                       0.6895 &                       0.6807 \\
-                                 &      & MCE &         \textbf{0.4599} &                  0.5275 &              0.6374 &                  0.5245 &  \textbf{0.5101} &                       0.7632 &                       0.7524 &                  0.3898 &                  0.4128 &              0.5036 &                  0.4973 &  \textbf{0.4244} &                       0.6820 &                       0.6674 \\
-                                 &      & SCE &                  0.5364 &                  0.5931 &     \textbf{0.4644} &                  0.5833 &           0.5785 &                       0.7679 &                       0.7569 &                  0.4558 &                  0.4783 &              0.4854 &                  0.5373 &           0.4449 &                       0.6879 &                       0.6768 \\
-                                 &      & tanh Margin &                  0.5128 &         \textbf{0.5165} &              0.6195 &         \textbf{0.5233} &           0.5173 &                       0.6841 &              \textbf{0.6744} &         \textbf{0.3897} &         \textbf{0.4116} &              0.4973 &         \textbf{0.4590} &           0.4360 &                       0.6560 &                       0.6369 \\
-    \cline{1-17}
-    \cline{2-17}
-    \multirow{20}{*}{\rotatebox{90}{\textbf{PGD}}} & \multirow{5}{*}{0.01} & CE &                  0.8047 &                  0.8107 &              0.7568 &                  0.8020 &           0.7848 &                       0.8053 &                       0.8069 &                  0.7032 &                  0.6980 &     \textbf{0.6378} &                  0.7057 &           0.6373 &              \textbf{0.7030} &              \textbf{0.7041} \\
-                                 &      & CW &                  0.8124 &                  0.8204 &     \textbf{0.7563} &                  0.8087 &           0.7904 &                       0.8142 &                       0.8161 &                  0.7011 &                  0.6975 &              0.6378 &                  0.7053 &  \textbf{0.6339} &                       0.7064 &                       0.7086 \\
-                                 &      & MCE &                  0.8245 &                  0.8314 &              0.7606 &                  0.8191 &           0.8000 &                       0.8167 &                       0.8195 &                  0.7121 &                  0.7094 &              0.6408 &                  0.7137 &           0.6456 &                       0.7073 &                       0.7093 \\
-                                 &      & SCE &                  0.8245 &                  0.8314 &              0.7606 &                  0.8191 &           0.8000 &                       0.8167 &                       0.8195 &                  0.7121 &                  0.7094 &              0.6408 &                  0.7137 &           0.6456 &                       0.7073 &                       0.7093 \\
-                                 &      & tanh Margin &         \textbf{0.7892} &         \textbf{0.7960} &              0.7567 &         \textbf{0.7903} &  \textbf{0.7758} &              \textbf{0.8050} &              \textbf{0.8053} &         \textbf{0.6873} &         \textbf{0.6840} &              0.6383 &         \textbf{0.6957} &           0.6355 &                       0.7045 &                       0.7045 \\
-    \cline{2-17}
-                                 & \multirow{5}{*}{0.05} & CE &                  0.7547 &                  0.7555 &              0.7348 &                  0.7564 &           0.7390 &              \textbf{0.7735} &              \textbf{0.7742} &                  0.6595 &                  0.6551 &              0.6144 &                  0.6718 &           0.6068 &              \textbf{0.6852} &              \textbf{0.6829} \\
-                                 &      & CW &                  0.7719 &                  0.7838 &              0.7369 &                  0.7764 &           0.7617 &                       0.8083 &                       0.8074 &                  0.6677 &                  0.6613 &              0.4257 &                  0.6797 &  \textbf{0.5998} &                       0.7039 &                       0.7050 \\
-                                 &      & MCE &                  0.8245 &                  0.8314 &              0.7606 &                  0.8191 &           0.8000 &                       0.8167 &                       0.8195 &                  0.7121 &                  0.7094 &              0.6408 &                  0.7137 &           0.6456 &                       0.7073 &                       0.7093 \\
-                                 &      & SCE &                  0.8245 &                  0.8314 &              0.7606 &                  0.8191 &           0.8000 &                       0.8167 &                       0.8195 &                  0.7121 &                  0.7094 &              0.6408 &                  0.7137 &           0.6456 &                       0.7073 &                       0.7093 \\
-                                 &      & tanh Margin &         \textbf{0.7065} &         \textbf{0.7165} &     \textbf{0.7253} &         \textbf{0.7153} &  \textbf{0.7155} &                       0.7816 &                       0.7762 &         \textbf{0.6264} &         \textbf{0.6205} &     \textbf{0.4137} &         \textbf{0.6419} &           0.6020 &                       0.6884 &                       0.6868 \\
-    \cline{2-17}
-                                 & \multirow{5}{*}{0.10} & CE &                  0.7053 &                  0.7045 &              0.6957 &                  0.7080 &           0.6991 &              \textbf{0.7432} &              \textbf{0.7402} &                  0.6184 &                  0.6102 &              0.5925 &                  0.6392 &           0.5836 &              \textbf{0.6708} &              \textbf{0.6617} \\
-                                 &      & CW &                  0.7411 &                  0.7540 &              0.7043 &                  0.7472 &           0.7325 &                       0.7988 &                       0.7950 &                  0.6440 &                  0.6376 &              0.4009 &                  0.6640 &           0.5733 &                       0.7012 &                       0.6989 \\
-                                 &      & MCE &                  0.8245 &                  0.8314 &              0.7606 &                  0.8191 &           0.8000 &                       0.8167 &                       0.8195 &                  0.7121 &                  0.7094 &              0.6408 &                  0.7137 &           0.6456 &                       0.7073 &                       0.7093 \\
-                                 &      & SCE &                  0.8245 &                  0.8314 &              0.7606 &                  0.8191 &           0.8000 &                       0.8167 &                       0.8195 &                  0.7121 &                  0.7094 &              0.6408 &                  0.7137 &           0.6456 &                       0.7073 &                       0.7093 \\
-                                 &      & tanh Margin &         \textbf{0.6379} &         \textbf{0.6481} &     \textbf{0.6905} &         \textbf{0.6577} &  \textbf{0.6560} &                       0.7603 &                       0.7532 &         \textbf{0.5592} &         \textbf{0.5620} &     \textbf{0.3947} &         \textbf{0.5932} &  \textbf{0.5554} &                       0.6838 &                       0.6713 \\
-    \cline{2-17}
-                                 & \multirow{5}{*}{0.25} & CE &                  0.5901 &                  0.5953 &              0.6028 &                  0.6011 &           0.5942 &              \textbf{0.6830} &              \textbf{0.6775} &                  0.5260 &                  0.5175 &              0.4904 &                  0.5542 &           0.5039 &              \textbf{0.6283} &              \textbf{0.6086} \\
-                                 &      & CW &                  0.6819 &                  0.7198 &              0.6144 &                  0.7078 &           0.6856 &                       0.7848 &                       0.7846 &                  0.5982 &                  0.5907 &              0.4902 &                  0.6357 &           0.5217 &                       0.6900 &                       0.6836 \\
-                                 &      & MCE &                  0.8245 &                  0.8314 &              0.7606 &                  0.8191 &           0.8000 &                       0.8167 &                       0.8195 &                  0.7121 &                  0.7094 &              0.6408 &                  0.7137 &           0.6456 &                       0.7073 &                       0.7093 \\
-                                 &      & SCE &                  0.8245 &                  0.8314 &              0.7606 &                  0.8191 &           0.8000 &                       0.8167 &                       0.8195 &                  0.7121 &                  0.7094 &              0.6408 &                  0.7137 &           0.6456 &                       0.7073 &                       0.7093 \\
-                                 &      & tanh Margin &         \textbf{0.4993} &         \textbf{0.5254} &     \textbf{0.5791} &         \textbf{0.5332} &  \textbf{0.5311} &                       0.7246 &                       0.7175 &         \textbf{0.4283} &         \textbf{0.4342} &     \textbf{0.4713} &         \textbf{0.5043} &  \textbf{0.4599} &                       0.6674 &                       0.6487 \\
-    \bottomrule
-  \end{tabular}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{figure*}[ht]
+\centering
+\begin{minipage}{0.38\textwidth}
+\centering
+  \hbox{\resizebox{\linewidth}{!}{\input{assets/global_transfer_FGSM_cora_ml_Vanilla GCN_surrloss_legend.pgf}}}
+  \vspace{-14pt}
+  \makebox[\linewidth][c]{
+    \(\arraycolsep=1pt\def\arraystretch{2}\begin{array}{cc}
+      \subfloat[FGSM - Cora ML]{\resizebox{0.5\linewidth}{!}{\input{assets/global_transfer_FGSM_cora_ml_Vanilla GCN_surrloss_no_legend.pgf}}} &
+      \subfloat[PGD - Cora ML]{\resizebox{0.5\linewidth}{!}{\input{assets/global_transfer_PGD_cora_ml_Vanilla GCN_surrloss_no_legend.pgf}}} \\
+      \subfloat[FGSM - Citeseer]{\resizebox{0.5\linewidth}{!}{\input{assets/global_transfer_FGSM_citeseer_Vanilla GCN_surrloss_no_legend.pgf}}} &
+      \subfloat[PGD - Citeseer]{\resizebox{0.5\linewidth}{!}{\input{assets/global_transfer_PGD_citeseer_Vanilla GCN_surrloss_no_legend.pgf}}} \\
+    \end{array}\)
   }
-\end{table*}
+  \caption{Comparison of our \(\text{MCE}\) and \(\text{tanh Margin}\) with previous surrogate losses on a Vanilla GCN attacked via greedy FGSM and PGD. \(\epsilon\) denotes the fraction of edges perturbed (relative to the clean graph).\label{fig:empsurrogate}}
+\end{minipage}
+%
+\hspace{0.03\textwidth}
+%
+\begin{minipage}{0.56\textwidth}
+\captionsetup{type=table}
+%\begin{table*}[ht]
+\centering
+\caption{Drop in accuracy for the proposed \emph{global} attacks (see Sec.~\ref{sec:prbcd}) and baselines on Cora ML and Citeseer (see Tab.~\ref{tab:datasets}). The drop is relative to the clean accuracy (last column). A stronger attack results in a larger drop and a stronger defense results in a lower drop. We embolden the strongest attack per budget over all architectures and underline the strongest defense per attack and budget. The budget \(\epsilon\) denotes the fraction of perturbed edges (relative to the clean graph). Our defenses Soft Median GDC and Soft Median PPRGo are consistently among the best.}
+\label{tab:global_small}
+\resizebox{\linewidth}{!}{
+\begin{tabular}{llccccccccccccc}
+\toprule
+                                  & \textbf{Attack} & \multicolumn{3}{c}{\textbf{greedy FGSM}} & \multicolumn{3}{c}{\textbf{GR-BCD (ours)}} & \multicolumn{3}{c}{\textbf{PGD}} & \multicolumn{3}{c}{\textbf{PR-BCD (ours)}} & \textbf{Acc.} \\
+                                  & Frac. edges \(\boldsymbol{\epsilon}\) &                 0.01 &               0.05 &             0.1 &                   0.01 &               0.05 &             0.1 &            0.01 &               0.05 &             0.1 &                   0.01 &               0.05 & \multicolumn{2}{l}{0.1} \\
+    & \textbf{Architecture} &                      &                    &                 &                        &                    &                 &                 &                    &                 &                        &                    &                 &               \\
+\midrule
+\multirow{10}{*}{\rotatebox{90}{\textbf{Cora ML}}} & Vanilla GCN &       \textbf{0.039} &     \textbf{0.134} &     \textbf{0.216} &                  0.035 &              0.125 &              0.198 &                       0.032 &              0.103 &              0.164 &                       0.035 &                       0.113 &                       0.183 &          0.82 \\
+                                  & Vanilla GDC &                0.036 &     \textbf{0.127} &     \textbf{0.193} &                  0.033 &              0.122 &              0.191 &                       0.031 &                0.1 &              0.155 &              \textbf{0.037} &                       0.114 &                       0.182 &          0.83 \\
+                                  & SVD GCN &    \underline{0.003} &  \underline{0.018} &  \underline{0.039} &      \underline{0.003} &  \underline{0.017} &  \underline{0.039} &  \underline{\textbf{0.004}} &     \textbf{0.031} &     \textbf{0.072} &  \underline{\textbf{0.004}} &           \underline{0.027} &                       0.069 &          0.76 \\
+                                  & Jaccard GCN &       \textbf{0.032} &     \textbf{0.108} &     \textbf{0.175} &                   0.03 &              0.103 &              0.164 &                       0.026 &              0.091 &              0.141 &                       0.029 &                       0.095 &                       0.159 &          0.82 \\
+                                  & RGCN &       \textbf{0.027} &       \textbf{0.1} &     \textbf{0.161} &                  0.026 &              0.094 &              0.157 &                       0.024 &              0.076 &              0.128 &                       0.023 &                       0.088 &                       0.142 &          0.80 \\
+                                  & Soft Medoid GDC &                 0.01 &              0.028 &              0.039 &         \textbf{0.011} &              0.029 &              0.042 &                       0.008 &  \underline{0.028} &              0.046 &              \textbf{0.011} &              \textbf{0.037} &              \textbf{0.059} &          0.82 \\
+                                  & Soft Median GDC &                0.012 &              0.035 &               0.05 &                  0.012 &              0.038 &              0.052 &                       0.011 &              0.034 &              0.054 &              \textbf{0.014} &              \textbf{0.043} &              \textbf{0.069} &          0.82 \\
+                                  & Vanilla PPRGo &                0.026 &               0.08 &              0.107 &                  0.024 &              0.078 &              0.105 &                       0.024 &              0.069 &                0.1 &              \textbf{0.029} &              \textbf{0.082} &              \textbf{0.122} &          0.83 \\
+                                  & Soft Medoid PPRGo &        \textbf{0.02} &      \textbf{0.04} &              0.049 &                  0.019 &              0.039 &              0.052 &                       0.017 &              0.036 &              0.052 &                       0.018 &               \textbf{0.04} &              \textbf{0.059} &          0.82 \\
+                                  & Soft Median PPRGo &                0.016 &               0.03 &               0.04 &                  0.016 &              0.032 &              0.044 &              \textbf{0.017} &              0.031 &  \underline{0.045} &              \textbf{0.017} &              \textbf{0.036} &  \underline{\textbf{0.055}} &          0.82 \\
+\cline{1-15}
+\multirow{10}{*}{\rotatebox{90}{\textbf{Citeseer}}} & Vanilla GCN &                0.027 &              0.106 &              0.179 &          \textbf{0.03} &      \textbf{0.11} &     \textbf{0.184} &                       0.016 &              0.063 &              0.102 &                       0.027 &                       0.104 &                       0.168 &          0.71 \\
+                                  & Vanilla GDC &                0.026 &              0.106 &     \textbf{0.175} &                  0.028 &     \textbf{0.107} &              0.172 &                       0.019 &              0.068 &              0.106 &              \textbf{0.031} &                       0.098 &                        0.17 &          0.71 \\
+                                  & SVD GCN &    \underline{0.003} &               0.02 &              0.042 &      \underline{0.002} &              0.016 &              0.048 &                       0.003 &              0.028 &              0.065 &              \textbf{0.006} &              \textbf{0.033} &              \textbf{0.079} &          0.64 \\
+                                  & Jaccard GCN &                0.018 &              0.073 &              0.122 &                   0.02 &     \textbf{0.078} &     \textbf{0.125} &                       0.011 &              0.042 &              0.076 &              \textbf{0.021} &                       0.077 &                       0.124 &          0.71 \\
+                                  & RGCN &       \textbf{0.015} &     \textbf{0.064} &     \textbf{0.113} &                  0.012 &              0.055 &              0.096 &                       0.012 &              0.049 &              0.086 &                       0.009 &                       0.047 &                       0.085 &          0.65 \\
+                                  & Soft Medoid GDC &                0.004 &  \underline{0.012} &  \underline{0.018} &         \textbf{0.005} &  \underline{0.013} &  \underline{0.018} &                       0.002 &  \underline{0.007} &  \underline{0.014} &  \underline{\textbf{0.005}} &  \underline{\textbf{0.016}} &  \underline{\textbf{0.025}} &          0.71 \\
+                                  & Soft Median GDC &                0.005 &              0.018 &               0.03 &                  0.005 &              0.014 &              0.025 &           \underline{0.001} &              0.012 &              0.021 &              \textbf{0.007} &              \textbf{0.024} &              \textbf{0.041} &          0.71 \\
+                                  & Vanilla PPRGo &                0.016 &     \textbf{0.058} &              0.085 &                  0.018 &              0.053 &              0.075 &                       0.012 &              0.032 &              0.046 &              \textbf{0.019} &                       0.052 &              \textbf{0.086} &          0.72 \\
+                                  & Soft Medoid PPRGo &       \textbf{0.009} &     \textbf{0.023} &     \textbf{0.032} &                  0.007 &     \textbf{0.023} &               0.03 &              \textbf{0.009} &              0.017 &              0.021 &              \textbf{0.009} &                        0.02 &                       0.026 &          0.71 \\
+                                  & Soft Median PPRGo &       \textbf{0.014} &              0.026 &     \textbf{0.037} &                  0.013 &     \textbf{0.027} &              0.035 &                       0.013 &              0.023 &              0.032 &                       0.013 &                       0.023 &                       0.032 &          0.71 \\
+\bottomrule
+\end{tabular}
+}
+%\end{table*}
+\end{minipage}
+\end{figure*}
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\begin{table*}
-  \centering
-  \caption{Perturbed accuracy for the proposed attacks (see Sections~\ref{sec:attackkdd}-\ref{sec:prbcd}) and baselines on all datasets (see Table~\ref{tab:datasets}). \(\epsilon\) denotes the fraction of edges perturbed (relative to the clean graph). The last column contains the clean accuracy. As this a work-in-progress report, the experiments for the defenses on the large datasets are due and on Products we did not optimize the hyperparameters for GANG. For each architecture we italicize the strongest attack where \(\epsilon=0.05\), underline where \(\epsilon=0.1\), and embolden where \(\epsilon=0.25\). From an attack perspective, a lower perturbed accuracy is better. We rerun the experiments with three different seeds. For OGB we use the provided data splits and otherwise we use random split with 20 nodes per class.}
-  \label{tab:global}
-  \resizebox{\linewidth}{!}{
-    \begin{tabular}{ll|cccc|cccc|cccc|cccc|cccc|cccc|c}
-      \toprule
-                                         & \textbf{Attack}                       & \multicolumn{4}{c|}{\textbf{DICE}} & \multicolumn{4}{c|}{\textbf{GANG (ours)}} & \multicolumn{4}{c|}{\textbf{greedy FGSM}} & \multicolumn{4}{c|}{\textbf{GR-BCD (ours)}} & \multicolumn{4}{c|}{\textbf{PGD}} & \multicolumn{4}{c|}{\textbf{PR-BCD (ours)}} & \textbf{Accuracy}                                                                                                                                                                                                                                                                                   \\
-                                         & Frac. edges \(\boldsymbol{\epsilon}\) & 0.01                              & 0.05                                     & 0.1                                      & 0.25                                       & 0.01                             & 0.05                                       & 0.1               & 0.25  & 0.01  & 0.05           & 0.1               & 0.25           & 0.01  & 0.05           & 0.1               & 0.25           & 0.01  & 0.05           & 0.1               & 0.25           & 0.01  & 0.05           & 0.1               & 0.25 &         \\
-                                         \toprule
-                                         & \textbf{Attack} & \multicolumn{4}{l}{\textbf{DICE}} & \multicolumn{4}{l}{\textbf{GANG (ours)}} & \multicolumn{4}{l}{\textbf{greedy FGSM}} & \multicolumn{4}{l}{\textbf{GR-BCD (ours)}} & \multicolumn{4}{l}{\textbf{PGD}} & \multicolumn{4}{l}{\textbf{PR-BCD (ours)}} & \textbf{Accuracy} \\
-                                         & Frac. edges \(\boldsymbol{\epsilon}\) &          0.01 &   0.05 &    0.1 &   0.25 &                 0.01 &            0.05 &                0.1 &   0.25 &                 0.01 &            0.05 &                0.1 &            0.25 &                   0.01 &            0.05 &                0.1 &            0.25 &         0.01 &   0.05 &    0.1 &   0.25 &                   0.01 &            0.05 &                0.1 & \multicolumn{2}{l}{0.25} \\
-           & \textbf{Architecture} &               &        &        &        &                      &                 &                    &        &                      &                 &                    &                 &                        &                 &                    &                 &              &        &        &        &                        &                 &                    &                 &                   \\
-       \midrule
-       \multirow{7}{*}{\rotatebox{90}{\textbf{Cora ML}}} & Vanilla GCN &         0.822 &  0.813 &  0.803 &  0.765 &                0.809 &           0.766 &              0.732 &  0.658 &                0.792 &           0.701 &              0.634 &           0.513 &                  0.790 &  \textit{0.699} &  \underline{0.627} &           0.506 &        0.825 &  0.825 &  0.825 &  0.825 &                  0.790 &           0.711 &              0.641 &  \textbf{0.498} &             0.825 \\
-                                         & Vanilla GDC &         0.829 &  0.820 &  0.807 &  0.774 &                0.822 &           0.788 &              0.762 &  0.712 &                0.795 &  \textit{0.701} &  \underline{0.635} &  \textbf{0.516} &                  0.798 &           0.709 &              0.640 &           0.542 &        0.831 &  0.831 &  0.831 &  0.831 &                  0.794 &           0.717 &              0.649 &           0.526 &             0.831 \\
-                                         & SVD GCN &         0.758 &  0.754 &  0.741 &  0.696 &                0.770 &           0.764 &              0.760 &  0.722 &                0.757 &           0.739 &              0.711 &           0.619 &                  0.757 &           0.743 &              0.722 &           0.633 &        0.761 &  0.761 &  0.761 &  0.761 &                  0.757 &  \textit{0.733} &  \underline{0.691} &  \textbf{0.570} &             0.761 \\
-                                         & Jaccard GCN &         0.817 &  0.810 &  0.801 &  0.769 &                0.808 &           0.788 &              0.768 &  0.737 &                0.791 &  \textit{0.707} &  \underline{0.643} &  \textbf{0.523} &                  0.789 &           0.716 &              0.655 &           0.557 &        0.819 &  0.819 &  0.819 &  0.819 &                  0.790 &           0.724 &              0.660 &           0.532 &             0.819 \\
-                                         & RGCN &         0.799 &  0.794 &  0.785 &  0.756 &                0.732 &           0.701 &              0.674 &  0.603 &                0.776 &  \textit{0.699} &  \underline{0.637} &  \textbf{0.517} &                  0.774 &           0.706 &              0.643 &           0.529 &        0.800 &  0.800 &  0.800 &  0.800 &                  0.777 &           0.712 &              0.658 &           0.528 &             0.800 \\
-                                         & Soft Medoid GDC &         0.816 &  0.813 &  0.806 &  0.793 &                0.772 &  \textit{0.769} &              0.765 &  0.755 &                0.803 &           0.771 &  \underline{0.742} &  \textbf{0.684} &                  0.806 &           0.788 &              0.775 &           0.755 &        0.817 &  0.817 &  0.817 &  0.817 &                  0.806 &           0.780 &              0.758 &           0.725 &             0.817 \\
-                                         & Soft Median GDC &         0.819 &  0.814 &  0.811 &  0.797 &                0.791 &           0.789 &              0.785 &  0.773 &                0.803 &  \textit{0.764} &  \underline{0.732} &  \textbf{0.674} &                  0.808 &           0.782 &              0.767 &           0.742 &        0.819 &  0.819 &  0.819 &  0.819 &                  0.805 &           0.776 &              0.750 &           0.711 &             0.819 \\
-       \cline{1-27}
-       \multirow{7}{*}{\rotatebox{90}{\textbf{Citeseer}}} & Vanilla GCN &         0.710 &  0.702 &  0.691 &  0.663 &                0.700 &           0.675 &              0.644 &  0.593 &                0.689 &           0.608 &              0.532 &           0.390 &                  0.682 &  \textit{0.602} &  \underline{0.528} &  \textbf{0.368} &        0.712 &  0.712 &  0.712 &  0.712 &                  0.685 &           0.608 &              0.544 &           0.410 &             0.712 \\
-                                         & Vanilla GDC &         0.706 &  0.694 &  0.682 &  0.649 &                0.701 &           0.686 &              0.662 &  0.630 &                0.686 &           0.609 &              0.542 &           0.412 &                  0.681 &  \textit{0.602} &  \underline{0.537} &           0.407 &        0.709 &  0.709 &  0.709 &  0.709 &                  0.679 &           0.611 &              0.539 &  \textbf{0.405} &             0.709 \\
-                                         & SVD GCN &         0.637 &  0.625 &  0.606 &  0.566 &                0.639 &           0.627 &  \underline{0.420} &  0.539 &                0.638 &           0.617 &              0.585 &           0.497 &                  0.639 &           0.624 &              0.593 &           0.484 &        0.641 &  0.641 &  0.641 &  0.641 &                  0.635 &  \textit{0.608} &              0.562 &  \textbf{0.464} &             0.641 \\
-                                         & Jaccard GCN &         0.712 &  0.707 &  0.699 &  0.676 &                0.710 &           0.705 &              0.698 &  0.691 &                0.697 &  \textit{0.635} &  \underline{0.576} &  \textbf{0.459} &                  0.694 &           0.636 &              0.589 &           0.494 &        0.714 &  0.714 &  0.714 &  0.714 &                  0.693 &           0.637 &              0.590 &           0.481 &             0.714 \\
-                                         & RGCN &         0.643 &  0.634 &  0.624 &  0.597 &                0.641 &           0.624 &              0.601 &  0.543 &                0.634 &           0.593 &  \underline{0.549} &  \textbf{0.436} &                  0.634 &  \textit{0.590} &              0.550 &           0.452 &        0.646 &  0.646 &  0.646 &  0.646 &                  0.637 &           0.599 &              0.560 &           0.462 &             0.646 \\
-                                         & Soft Medoid GDC &         0.707 &  0.703 &  0.701 &  0.694 &                0.706 &           0.704 &              0.700 &  0.695 &                0.703 &  \textit{0.689} &  \underline{0.680} &  \textbf{0.656} &                  0.702 &           0.694 &              0.689 &           0.678 &        0.707 &  0.707 &  0.707 &  0.707 &                  0.702 &           0.691 &              0.682 &           0.661 &             0.707 \\
-                                         & Soft Median GDC &         0.709 &  0.708 &  0.701 &  0.693 &                0.710 &           0.707 &              0.703 &  0.697 &                0.702 &  \textit{0.680} &  \underline{0.667} &  \textbf{0.637} &                  0.704 &           0.695 &              0.684 &           0.663 &        0.709 &  0.709 &  0.709 &  0.709 &                  0.702 &           0.685 &              0.669 &           0.643 &             0.709 \\
-       \cline{1-27}
-       \multirow{4}{*}{\rotatebox{90}{\textbf{PubMed}}} & Vanilla GCN &         0.780 &  0.767 &  0.753 &  0.712 &                0.758 &           0.695 &              0.631 &  0.493 &                    - &               - &                  - &               - &                  0.752 &  \textit{0.654} &  \underline{0.575} &  \textbf{0.457} &            - &      - &      - &      - &                  0.755 &           0.678 &              0.607 &           0.459 &             0.783 \\
-                                         & Vanilla GDC &         0.781 &  0.767 &  0.754 &  0.713 &                0.761 &           0.722 &              0.685 &  0.623 &                    - &               - &                  - &               - &                  0.753 &  \textit{0.661} &  \underline{0.588} &  \textbf{0.496} &            - &      - &      - &      - &                  0.756 &           0.686 &              0.633 &           0.550 &             0.784 \\
-                                         & Soft Medoid GDC &         0.770 &  0.763 &  0.757 &  0.734 &                0.726 &           0.724 &              0.723 &  0.719 &                    - &               - &                  - &               - &                  0.756 &  \textit{0.717} &  \underline{0.687} &  \textbf{0.660} &            - &      - &      - &      - &                  0.758 &           0.728 &              0.708 &           0.679 &             0.770 \\
-                                         & Soft Median GDC &         0.770 &  0.762 &  0.757 &  0.736 &                0.727 &           0.725 &              0.724 &  0.720 &                    - &               - &                  - &               - &                  0.755 &  \textit{0.714} &  \underline{0.683} &  \textbf{0.653} &            - &      - &      - &      - &                  0.758 &           0.725 &              0.703 &           0.671 &             0.772 \\
-       \cline{1-27}
-       \multirow{4}{*}{\rotatebox{90}{\textbf{arXiv}}} & Vanilla GCN &         0.699 &  0.685 &  0.661 &  0.613 &                0.618 &           0.489 &              0.377 &  0.180 &                    - &               - &                  - &               - &                  0.599 &           0.473 &              0.394 &           0.297 &            - &      - &      - &      - &                  0.597 &  \textit{0.421} &  \underline{0.304} &  \textbf{0.175} &             0.686 \\
-                                         & Vanilla GDC &         0.635 &  0.634 &  0.609 &  0.552 &                0.697 &           0.689 &              0.663 &  0.646 &                    - &               - &                  - &               - &                  0.497 &           0.381 &              0.305 &           0.247 &            - &      - &      - &      - &                  0.559 &  \textit{0.379} &  \underline{0.277} &  \textbf{0.176} &             0.677 \\
-                                         & Soft Medoid GDC &         0.574 &  0.562 &  0.552 &  0.530 &                0.564 &           0.557 &              0.553 &  0.548 &                    - &               - &                  - &               - &                  0.502 &  \textit{0.446} &              0.429 &           0.428 &            - &      - &      - &      - &                  0.527 &           0.456 &  \underline{0.420} &  \textbf{0.373} &             0.585 \\
-                                         & Soft Median GDC &         0.656 &  0.641 &  0.628 &  0.593 &                0.658 &           0.650 &              0.644 &  0.634 &                    - &               - &                  - &               - &                  0.572 &           0.465 &              0.422 &           0.414 &            - &      - &      - &      - &                  0.584 &  \textit{0.463} &  \underline{0.389} &  \textbf{0.298} &             0.665 \\
-       \cline{1-27}
-       \multirow{3}{*}{\rotatebox{90}{\textbf{Products}}} & Vanilla GCN &         0.709 &  0.674 &  0.636 &  0.545 &                0.708 &           0.659 &              0.594 &  0.390 &                    - &               - &                  - &               - &                  0.604 &  \textit{0.508} &  \underline{0.441} &  \textbf{0.321} &            - &      - &      - &      - &                  0.619 &           0.516 &              0.533 &           0.480 &             0.719 \\
-                                         & Vanilla GDC &         0.701 &  0.677 &  0.657 &  0.618 &                0.706 &           0.700 &              0.695 &  0.685 &                    - &               - &                  - &               - &                  0.610 &           0.575 &  \underline{0.560} &  \textbf{0.528} &            - &      - &      - &      - &                  0.628 &  \textit{0.564} &              0.572 &           0.539 &             0.709 \\
-                                         & Soft Median GDC &             - &      - &      - &      - &                    - &               - &                  - &      - &                    - &               - &                  - &               - &                      - &               - &                  - &               - &            - &      - &      - &      - &                  0.382 &  \textit{0.376} &  \underline{0.373} &  \textbf{0.174} &             0.391 \\
-       \bottomrule
-    \end{tabular}
-  }
-\end{table*}
+In the following, we present our experiments to show the effectiveness and scalability of our proposed attacks and the defense. We first describe our setup and then discuss the results over wide range of graphs of different scales. We will open source the code with configurations that reproduce the results. If not stated otherwise, we report the average over three random seeds/splits and 3-sigma error of the mean.
 
-In the following, we present our experiments to show the effectiveness and scalability of our proposed attacks and the defense. We first describe our setup and then discuss the results over wide range of graphs of different scale. %Once the experiments have been finalized, we will open source the code with configuration to reproduce the results.
+\textbf{Attacks.} We compare our local PR-BCD (Sec.~\ref{sec:localattack}) with Nettack
+~\cite{Zugner2018}. We compare our global attacks PR-BCD and GR-BCD (Sec.~\ref{sec:prbcd}) with PGD~\citep{Xu2019a}, and greedy FGSM (similar to~\citet{Dai2018}) attacks. The greedy FGSM-like attack is the dense equivalent of our GR-BCD attack with the exception of flipping one edge at a time. On the large datasets, we also compare to the global DICE~\citep{Waniek2018} attack. DICE is a greedy, randomized black-box attack that flips one randomly determined entry in the adjacency matrix at a time. An edge is deleted if both nodes share the same label and an edge is added if the labels of the nodes differ. We ensure that a single node does not become disconnected. Moreover, we use 60\% of the budget to add new edges and otherwise remove edges.
 
-\textbf{Defenses.} We also report the results on state of the art defenses of~\citep{Entezari2020, Geisler2020, Wu2019, Zhu2019}. For the Soft Medoid GDC, we use the temperature \(T=0.5\) as it is a good compromise between accuracy and robustness. The SVD GCN~\citep{Entezari2020} uses a (dense) low-rank approximation (here rank 50) of the adjacency matrix to filter adversarial perturbations. RGCN~\citep{Zhu2019} models the neighborhood aggregation via Gaussian distribution to filter outliers, and Jaccard GCN~\citep{Wu2019} filters edges based on attribute dissimilarity (here threshold 0.01).
+\textbf{Defenses.} We compare our Soft Median architectures with state-of-the-art defenses \citep{Entezari2020, Geisler2020, Wu2019, Zhu2019}.
+The SVD GCN~\citep{Entezari2020} uses a (dense) low-rank approximation (here rank 50) of the adjacency matrix to filter adversarial perturbations.
+RGCN~\citep{Zhu2019} models the neighborhood aggregation via Gaussian distribution to filter outliers, and Jaccard GCN~\citep{Wu2019} filters edges based on attribute dissimilarity (here threshold 0.01). Following~\cite{Geisler2020}, we use the GDC/PPR preprocessing~\cite{Klicpera2019a} in combinatin with out Soft Median. 
+We set the temperature to \(T=0.2\) for all datasets, except Products and Papers 100M where we choose \(T=5.0\) via grid search. For the Soft Medoid GDC, we use the temperature \(T=0.5\) as it is a good compromise between accuracy and robustness.
 
-%\todo{Hyperparams}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\textbf{Attacks.} We compare our GANG, PR-BCD, and GR-BCD attacks (see Sections~\ref{sec:attackkdd}-\ref{sec:prbcd}) with the global DICE~\citep{Waniek2018}, PGD~\citep{Xu2019a}, and greedy FGSM attacks~\citet{Geisler2020}. The greedy FGSM-like attack is the dense equivalent of our GR-BCD attack with the exception of flipping one edge at a time. DICE is a greedy, randomized black-box attack that flips one randomly determined entry in the adjacency matrix at a time. An edge is deleted if both nodes share the same label and an edge is added if the labels of the nodes differ. We ensure that a single node does not become disconnected. Moreover, we use 60\% of the budget to add new edges and otherwise remove edges.
-
-\begin{table}[t]
+\begin{table}[b]
   \centering
   \caption{Statistics of the used datasets. For the dense adjacency matrix we assume that each element is represented by 4 bytes. In the sparse case we use two 8 byte integer pointers and a 4 bytes float value.}
   \label{tab:datasets}
   \resizebox{\linewidth}{!}{
     \begin{tabular}{lrrrrr}
     \toprule
-    {} & \textbf{\#Nodes $n$} & \textbf{\#Edges $e$} & \textbf{\#Features $d$} & \textbf{Size (dense)} & \textbf{Size (sparse)} \\
+    \textbf{Dataset} & \textbf{\#Nodes $n$} & \textbf{\#Edges $e$} & \textbf{\#Features $d$} & \textbf{Size (dense)} & \textbf{Size (sparse)} \\
     \midrule
-    \textbf{Cora ML~\citep{Bojchevski2018}} &                2,995 &                8,416 &                   2,879 &              35.88 MB &              168.32 kB \\
-    \textbf{Citeseer~\citep{McCallum2000}}  &                3,312 &                4,715 &                   3,703 &              43.88 MB &               94.30 kB \\
-    \textbf{PubMed~\citep{Sen2008}}         &               19,717 &               88,648 &                     500 &               1.56 GB &                1.77 MB \\
-    \textbf{arXiv~\citep{Hu2020}}           &              169,343 &            1,166,243 &                     128 &             114.71 GB &               23.32 MB \\
-    \textbf{Products~\citep{Hu2020}}        &            2,449,029 &          123,718,280 &                     100 &              23.99 TB &                2.47 GB \\
-    \textbf{Papers 100M~\citep{Hu2020}}     &          111,059,956 &        1,615,685,872 &                     128 &              49.34 PB &               32.31 GB \\
+    \textbf{Cora ML~\citep{Bojchevski2018}} &                2.8 k &                8.4 k &                   2,879 &              35.88 MB &              168.32 kB \\
+    \textbf{Citeseer~\citep{McCallum2000}}  &                3.3 k &                4.7 k &                   3,703 &              43.88 MB &               94.30 kB \\
+    \textbf{PubMed~\citep{Sen2008}}         &               19.7 k &               88.6 k &                     500 &               1.56 GB &                1.77 MB \\
+    \textbf{arXiv~\citep{Hu2020}}           &              169.3 k &            1.2 M &                     128 &             114.71 GB &               23.32 MB \\
+    \textbf{Products~\citep{Hu2020}}        &            2.4 M &          123.7 M &                     100 &              23.99 TB &                2.47 GB \\
+    \textbf{Papers 100M~\citep{Hu2020}}     &          111.1 M &        1.6 G &                     128 &              49.34 PB &               32.31 GB \\
     \bottomrule
     \end{tabular}
   }
 \end{table}
 
-\textbf{Datasets.} We use the common Cora ML~\citep{Bojchevski2018}, Citeseer~\citep{McCallum2000}, and PubMed~\citep{Sen2008} for comparing against the other state of the art attacks and defenses. For large scale experiments, we use two graphs of the recent Open Graph Benchmark~\citep{Hu2020}. In comparison to Pubmed, we scale the global attack by more than 100 times (number of nodes), or by factor 15,000 if counting the possible adjacency matrix entries (see Table~\ref{tab:datasets}). For Cora, Citeseer, PubMed, arXiv as well as Papers 100M we use an 11GB GeForce GTX 1080 Ti. The only exception are the full-batch experiments on Products where we use a 32GB Tesla V100. We exclusively perform the calculations on GPU, but for products where we coalesce the adjacency matrix on CPU.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\textbf{Checkpointing.} Empirically, almost 30 GB are required to train a three-layer GCN on Products (our largest dataset) using sparse matrices. However, obtaining the gradient, e.g.\ towards the perturbation set, requires extra memory. We notice that most operations in modern GNNs only depend on the neighborhood size (i.e.~a row in the adjacency matrix). As proposed by~\citet{Chen2016}, the gradient is obtainable with sublinear memory cost via checkpointing. The idea is to discard some intermediate results in the forward phase and recompute them in the backward phase. Specifically, we chunk some operations (e.g. matrix multiplication) within the message passing step to successfully scale to larger graphs. This allows us to attack a three-layer GCN on Products with full GPU acceleration.
+\textbf{Datasets.} We use the common Cora ML~\citep{Bojchevski2018} and Citeseer~\citep{McCallum2000} for a comprehensive comparison of state of the art attacks and defenses. For large scale experiments, we use PubMed~\citep{Sen2008} as well as arXiv, Products and Papers 100M of the recent Open Graph Benchmark~\citep{Hu2020}. In comparison to Pubmed, we scale the global attack by more than 100 times (number of nodes), or by factor 15,000 if counting the possible adjacency matrix entries (see Tab.~\ref{tab:datasets}).
+We scale our local attack to Papers 100M which has 111 million nodes, outscaling previous local attacks by a factor of 500.
+% We scale our local attack to the 111 million nodes of Papers 100M and hence outscale previous work on local attacks by factor of 500.
+We use an 11GB GeForce GTX 1080 Ti for all our experiments. The only exception are the full-batch experiments on Products where we use a 32GB Tesla V100. We exclusively perform the calculations on GPU, but for Products where we coalesce the adjacency matrix on CPU. On Papers 100M we only load the required parts on the GPU.
 
-\textbf{Hyperparameters.} We use the same setup as~\citet{Geisler2020} in their evaluation and for models on OGB we follow~\citet{Hu2020}, For the attacks GR-BCD and PR-BCD, we run the attack for 500 epochs (100 epochs fine-tuning with PR-BCD). We choose the search space size to be at least twice the edge perturbation ratio \(\epsilon\) (depends on the dataset). Since the edge budget \(\Delta_e\) in GANG influences the perturbed accuracy (see Figure~\ref{fig:gangnodeeffectiveness}), we decide for a relatively low value of 250. As these are preliminary results, the only exception is Products on which we report the results with the budget of \(\Delta_e=25,000\). Moreover with GANG we binarize the attributes on Cora ML, Citeseer and PubMed and use \(L_0\)-norm PGD analogously to PR-BCD.
+\textbf{Checkpointing.} Empirically, almost 30 GB are required to train a three-layer GCN on Products (our largest dataset for global attacks) using sparse matrices. However, obtaining the gradient, e.g.\ towards the perturbation vector/matrix, requires extra memory. We notice that most operations in modern GNNs only depend on the neighborhood size (i.e.~a row in the adjacency matrix). As proposed by~\citet{Chen2016}, the gradient is obtainable with sublinear memory cost via checkpointing. The idea is to discard some intermediate results in the forward phase and recompute them in the backward phase. Specifically, we chunk some operations (e.g. matrix multiplication) within the message passing step to successfully scale to larger graphs. This allows us to attack a three-layer GCN on Products with full GPU acceleration.
 
-\textbf{Evaluation of Losses.} In Table~\ref{tab:losscompare}, we compare the convectional CE loss with our newly proposed losses. For the admittedly large budget of \(\epsilon=0.25\), we see gains of up to 40\% on the perturbed accuracy. Moreover, if we compare the accuracy drop (i.e.\ clean minus perturbed accuracy) we also achieve for low budgets like \(\epsilon=0.01\) an improvements of more then 100\%. And those are only the numbers for the small datasets. On larger graphs such as arXiv we even observe gains of more than 100\% directly on the perturbed accuracy.
+\textbf{Hyperparameters.} We use the same setup as~\citet{Geisler2020} in their evaluation and for models on OGB we follow~\citet{Hu2020}. For the attacks GR-BCD and PR-BCD, we run the attack for 500 epochs (100 epochs fine-tuning with PR-BCD). We choose the search space size to be at least twice the edge perturbation ratio \(\epsilon\) (depends on the dataset). Further hyperparameters such as learning rates, weight decay etc.\ will be released with the code.
 
-\textbf{Results overview.} In~Table~\ref{tab:global} we present the preliminary experimental results for our proposed attacks. We do not observe that sampling the search space harms the attack strength. Similarly to Figure~\ref{fig:randomblocksizeinfluence}, we even outperform the dense PGD on Cora ML. We conclude that our attacks are as effective as the other state of the art attacks.
+\textbf{Surrogate Loss.} In Fig.~\ref{fig:empsurrogate}, we compare the conventional \(\text{CE}\) loss with our newly proposed losses. Overall we compare:
+\begin{enumerate}
+  \item Cross Entropy: \(\text{CE} = \log(\evp_{c^*})\)
+  \item Carlini-Wagner~\cite{Carlini2017}: \(\text{CW} = (\min_{c \ne c^*} \evz_{c^*} - \evz_{c})+\)
+  \item Second-most-likely CE: \(\text{SCE} = -\log(\arg\max_{c \ne c^*} \evp_{c})\)
+  \item Masked \(\text{CE}\): \(\text{MCE} = \frac{1}{|\sV^+|} \sum_{n \in \sV^+} \log(\evp_{c^*}^{(n)})\)
+  \item \(\text{tanh Margin} = \tanh(\min_{c \ne c^*} \evz_{c^*} - \evz_{c})\)
+\end{enumerate}
+To simplify notation, we define the losses for a single node (except for \(\text{MCE}\)) and denote the correct class with \(c^*\). Note that \(\sV^+\) is the set of correctly classified nodes, \(\vp\) is the vector of confidence scores, and \(\vz\) is the vector with logits. 
+We see that our losses (4) Masked \(\text{CE}\) (\(\text{MCE}\)) and (5) the \(\text{tanh Margin}\) perform equally well with FGSM. As expected and discussed in Sec.~\ref{sec:ceisbad}, for PGD the \(\text{tanh Margin}\) is consistently and significantly stronger. Even for the small datasets and over all tested \(\epsilon\), we see relative gains of more 100\% on the drop of the perturbed accuracy. We omit the results on larger data due to space limitations. Comparing \(\text{CE}\) with our novel \(\text{tanh Margin}\) loss we sometimes observe attack improvements of more than 200 \%.
 
-\textbf{GNNs' fragility on large graphs.} In the following, we analyze the results of PR-BCD, with a budget of \(\epsilon=0.25\), and the GCN. We observe a relative drop in the perturbed accuracy by 20\% on Cora, 25\% on PubMed, 33 \% on arXiv. On products with the lower budget of \(\epsilon=0.1\), we already see a drop of the perturbed accuracy of 31\%. We conclude that there is likely some relationship between the fragility and the graph size. This relationship is similar for GR-BCD but much stronger for GANG. However, for GANG we have to consider that we may choose the attributes as well. arXiv as well as Products have \textit{dense} continuous features, and all the other datasets have \textit{sparse} continuous features. This relationship seems to persist for architectures other than GCN as well. Please note that further experiments are required to confirm this hypothesis. For example, on arXiv and products we use a three-layer GCN (to achieve state of the art accuracy) and for the other datasets we use just two layers. Moreover, the datasets have a different number of classes.
 
-\todo{Dedicated Experiment}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\iffalse
+\begin{table}
+\centering
+\caption{Analogous to Tab.\ref{tab:global_small}, we report the drop in accuracy for the \emph{global} attacks on the large datasets. We GNNs and attacks that do not scale and report DICE as baseline for our attacks. We also embolden the strongest attack per budget over all architectures and underline the strongest defense per attack and budget.}
+\label{tab:global_large}
+\resizebox{1\linewidth}{!}{
+\begin{tabular}{llcccccccccc}
+\toprule
+                                  & \textbf{Attack} & \multicolumn{3}{c}{\textbf{DICE}} & \multicolumn{3}{c}{\textbf{GR-BCD (ours)}} & \multicolumn{3}{c}{\textbf{PR-BCD (ours)}} & \textbf{Acc.} \\
+                                  & Frac. edges \(\boldsymbol{\epsilon}\) &                0.01 &               0.05 &                0.1 &                        0.01 &                        0.05 &                         0.1 &                       0.01 &                        0.05 & \multicolumn{2}{l}{0.1} \\
+\midrule
+\multirow{4}{*}{\rotatebox{90}{\textbf{PubMed}}} & Vanilla GCN &               0.003 &              0.017 &               0.03 &              \textbf{0.032} &              \textbf{0.129} &              \textbf{0.209} &                      0.028 &                       0.106 &                       0.176 &          0.78 \\
+                                  & Vanilla GDC &               0.003 &              0.017 &              0.029 &              \textbf{0.031} &              \textbf{0.122} &              \textbf{0.196} &                      0.028 &                       0.098 &                        0.15 &          0.78 \\
+                                  & Soft Medoid GDC &               0.007 &              0.014 &              0.021 &              \textbf{0.018} &              \textbf{0.061} &              \textbf{0.094} &          \underline{0.014} &                       0.049 &                       0.072 &          0.77 \\
+                                  & Soft Median GDC &   \underline{0.002} &  \underline{0.009} &  \underline{0.015} &  \underline{\textbf{0.017}} &  \underline{\textbf{0.058}} &  \underline{\textbf{0.089}} &                      0.014 &           \underline{0.047} &           \underline{0.069} &          0.77 \\
+\cline{1-12}
+\multirow{4}{*}{\rotatebox{90}{\textbf{arXiv}}} & Vanilla GCN &  \underline{-0.013} &  \underline{0.001} &  \underline{0.017} &              \textbf{0.126} &                       0.277 &                       0.357 &                       0.12 &                \textbf{0.3} &              \textbf{0.405} &          0.69 \\
+                                  & Vanilla GDC &               0.036 &              0.043 &              0.068 &                       0.104 &                        0.28 &                       0.367 &             \textbf{0.136} &              \textbf{0.293} &                \textbf{0.4} &          0.68 \\
+                                  & Soft Medoid GDC &               0.011 &              0.022 &              0.032 &  \underline{\textbf{0.082}} &  \underline{\textbf{0.139}} &           \underline{0.156} &          \underline{0.057} &           \underline{0.128} &  \underline{\textbf{0.165}} &          0.58 \\
+                                  & Soft Median GDC &               0.009 &              0.024 &              0.037 &              \textbf{0.093} &                         0.2 &                       0.243 &                      0.081 &              \textbf{0.202} &              \textbf{0.276} &          0.66 \\
+\cline{1-12}
+\multirow{3}{*}{\rotatebox{90}{\textbf{Products}}} & Vanilla GCN &                0.01 &              0.045 &              0.084 &                       0.116 &                       0.212 &                       0.279 &             \textbf{0.127} &              \textbf{0.253} &              \textbf{0.306} &          0.72 \\
+                                  & Vanilla GDC &               0.008 &              0.031 &              0.052 &                       0.099 &                       0.134 &                       0.149 &             \textbf{0.101} &              \textbf{0.176} &              \textbf{0.196} &          0.71 \\
+                                  & Soft Median GDC &   \underline{0.005} &   \underline{0.02} &  \underline{0.032} &           \underline{0.047} &           \underline{0.063} &           \underline{0.072} &  \underline{\textbf{0.05}} &  \underline{\textbf{0.082}} &  \underline{\textbf{0.093}} &          0.66 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\textbf{Robustness w.r.t.\ global attacks.} In Tab.~\ref{tab:global_small}, we present the experimental results for our proposed global attacks on the small datasets Cora ML and Citeseer. Our attacks are as strong as their dense equivalents despite being much more scalable. In Tab.~\ref{tab:global_large}, we compare our our novel attacks on all baselines that fit into memory or can be trained within 24 hours. Our defense Soft Median GDC and Soft Median PPRGo are consisently among the best models tested over all scales. To fit our Soft Median GDC on Products into memory, we had to reduce the number of hidden dimensions in comparison to its baselines. However, note that even a Vanilla GCN requires almost the entire memory of the 32~Gb GPU. Despite the small sacrifice in clean accuracy, we already outperform the baselines for a budget of \(\epsilon=0.01\). We faced similar scaling limitations for the Soft Medoid GDC baseline already on arXiv. This highlights the lower memory requirements for our Soft Median.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 \begin{figure}[t]
   \centering
-  \hbox{\hspace{45pt} \resizebox{0.7\linewidth}{!}{\input{assets/global_gang_cora_ml_0.1_node_degree_legend.pgf}}}
+  \hbox{\hspace{0pt} \resizebox{\linewidth}{!}{\input{assets/local_LocalPRBCD_cora_ml_boxplmargin_legend.pgf}}}
   \vspace{-14pt}
   \makebox[\linewidth][c]{
-    \(\begin{array}{cc}
-      \subfloat[Clean graph]{\resizebox{0.5\linewidth}{!}{\input{assets/global_prbcd_arxiv_0.0_graph_size_vs_robustness_no_legend.pgf}}} &
-      \subfloat[\(\epsilon=0.01\)]{\resizebox{0.5\linewidth}{!}{\input{assets/global_prbcd_arxiv_0.01_graph_size_vs_robustness_drop_no_legend.pgf}}}  \\
-      \subfloat[\(\epsilon=0.1\)]{\resizebox{0.5\linewidth}{!}{\input{assets/global_prbcd_arxiv_0.1_graph_size_vs_robustness_drop_no_legend.pgf}}} &
-      \subfloat[\(\epsilon=0.25\)]{\resizebox{0.5\linewidth}{!}{\input{assets/global_prbcd_arxiv_0.25_graph_size_vs_robustness_drop_no_legend.pgf}}}  \\
+    \(\arraycolsep=1pt\def\arraystretch{2}\begin{array}{cc}
+      \subfloat[PRBCD - Cora ML]{\resizebox{0.5\linewidth}{!}{\input{assets/local_LocalPRBCD_cora_ml_boxplmargin_no_legend.pgf}}} &
+      \subfloat[Nettack - Cora ML]{\resizebox{0.5\linewidth}{!}{\input{assets/local_Nettack_cora_ml_boxplmargin_no_legend.pgf}}} \\
+      \subfloat[PRBCD - Citesser]{\resizebox{0.5\linewidth}{!}{\input{assets/local_LocalPRBCD_citeseer_boxplmargin_no_legend.pgf}}} &
+      \subfloat[Nettack - Citesser]{\resizebox{0.5\linewidth}{!}{\input{assets/local_Nettack_citeseer_boxplmargin_no_legend.pgf}}} \\
+      \subfloat[PRBCD - Products]{\resizebox{0.5\linewidth}{!}{\input{assets/local_LocalPRBCD_ogbn-products_boxplmargin_no_legend.pgf}}} &
+      \subfloat[PRBCD - Papers100M]{\resizebox{0.5\linewidth}{!}{\input{assets/local_LocalPRBCD_ogbn-papers100M_boxplmargin_no_legend.pgf}}}
     \end{array}\)
   }
-  \caption{For each of the 500 experiments, we sample 8 classes out of the 40 classes of the arXiv dataset and then take the largest connected component. We argue that the difficulty of a classification task is strongly influenced by the number of classes which is apparent by the lower random chance for more classes. In (a) we see, that there is some variance in the results, but the slope is not significant. For low perturbation budgets (b), we see a clear trend that the large graph is less robust (i.e.\ the  drop in accuracy is stronger for large graphs). Around a budget of \(\epsilon\) the slope becomes insignificant and (d) with a large budget the smaller graphs are less robust. In (b) we observe a correlation of \(\rho_b=0.36\) with a significance of \(\alpha_b=2e-16\) and in (d) \(\rho_b=-0.28\) with a significance of \(\alpha_b=2e-10\) \label{fig:graphsizevsrobustness}}
+  \caption{Perturbed classification margins \(\tilde{\psi}_i\) of the attacked nodes. In (a)-(d), we compare our local PR-BCD attack with Nettack~\cite{Zugner2018} on Cora ML and Citeseer. In (e) and (f), we show the results on the large scale datasets Products (2.5 million nodes) and Papers 100M (111 million nodes), respectively. Our Soft Medoid PPRGo resists the attacks much better than the baselines. \label{fig:emplocal}}
 \end{figure}
-\fi
 
-\begin{figure*}[t]
-  \centering
-  \makebox[\linewidth][c]{
-    \(\begin{array}{cccc}
-      \subfloat[Clean graph]{\resizebox{0.3\linewidth}{!}{\input{assets/global_prbcd_arxiv_joint_n_nodes_largest_component_vs_robustness_no_legend.pgf}}} &
-      \subfloat[\(\epsilon=0.01\)]{\resizebox{0.275\linewidth}{!}{\input{assets/global_prbcd_arxiv_joint_average_degree_largest_component_vs_robustness_no_leglab.pgf}}}  &
-      \subfloat[\(\epsilon=0.1\)]{\resizebox{0.275\linewidth}{!}{\input{assets/global_prbcd_arxiv_joint_frac_train_labels_vs_robustness_no_leglab.pgf}}} 
-      \resizebox{0.125\linewidth}{!}{\input{assets/global_prbcd_arxiv_joint_n_nodes_largest_component_vs_robustness_legend.pgf}} \\
-    \end{array}\)
-  }
-  \caption{For each of the 500 experiments, we sample 8 classes out of the 40 classes of the arXiv dataset and then take the largest connected component. We argue that the difficulty of a classification task is strongly influenced by the number of classes which is apparent by the lower random chance for more classes. In (a) we see, that there is some variance in the results, but the slope is not significant. For low perturbation budgets (b), we see a clear trend that the large graph is less robust (i.e.\ the  drop in accuracy is stronger for large graphs). Around a budget of \(\epsilon\) the slope becomes insignificant and (d) with a large budget the smaller graphs are less robust. In (b) we observe a correlation of \(\rho_b=0.36\) with a significance of \(\alpha_b=2e-16\) and in (d) \(\rho_b=-0.28\) with a significance of \(\alpha_b=2e-10\) \label{fig:graphsizevsrobustness}}
-\end{figure*}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\textbf{Time and memory cost.} On arXiv, we train for 500 epochs and run the PR-BCD attack for 500 epochs. The whole training and attacking procedure requires less than 2 minutes and the peak usage of GPU memory is below 2.5 GB.
+\textbf{Robustness w.r.t.\ local attacks.} In Fig.~\ref{fig:emplocal}, we compare the results of our local PR-BCD with Nettack on Cora ML and Citeseer. Similarly to~\citet{Zugner2018}, we define the budget \(\Delta_i = \epsilon d_i\). We apply the attack only to correclty classified nodes: 10 with highest confidence, 10 with lowest and 30 random nodes. To attack a GCN with PR-BCD we do not need the PPR update via the Sherman Morrison formula. We clearly see that our attack is stronger than Nettack on both datasets, all architectures and budgets. Nettack has the advantage of solving a discrete optimization problem. However, it performs a transfer attack with a linearized surrogate. Evidently, it hurts more to neglect the non-linearities and to transfer the attack as in Nettack, than relaxing the optimization problem as done in PR-BCD. On the large datasets Products and Papers 100M we observe that the Vanilla PPRGo is very fragile and even low budgets suffice to flip almost every nodes prediction. Our proposed defense Soft Median PPRGo on the other hand remains similary robust as on the small datasets. 
+%The only exception is the Products dataset, where the perturbed margins are spread over the whole range.
+On Papers 100M, the Soft Median PPRGo reduces the attacker's success rate from around 100\% to just 40\% (80\% vs. 50\% on Products). On Papers 100M, equipping PPRGo with the Soft Median does degrade the clean accuracy of around 60\%.
+
+\textbf{Relation between fragility and graph size.} In the following, we analyze the results of PR-BCD, with a budget of \(\epsilon=0.1\) for the GCN model. With PR-BCD, we observe a relative drop in the perturbed accuracy by 22\% on Cora, 59 \% on arXiv, and 43\% on Products. On the larger graphs the degradation of the accuracy is much larger which indicates a relationship between the adversarial robustness and the size of the graph. This relationship seems to persist for architectures other than GCN as well, though, it also depends of course on the characteristics of the dataset itself. Similarly, for local attacks we observe that even small budgets suffice to fool almost all nodes. On small graphs PPRGo already seems to be quite an effective defense (see Fig.~\ref{fig:emplocal}). However, on large graphs it seems to be easier to successfully attack many of the nodes. We leave a detailed study of this relationship for future work.
+
+\textbf{Time and memory cost.} On arXiv, we train for 500 epochs and run the global PR-BCD attack for 500 epochs. The whole training and attacking procedure requires less than 2 minutes and the peak usage of GPU memory is below 2.5 GB.
 %If we use checkpointing and chunk matrix multiplications into 16 parts, the same procedure takes 6 minutes but only requires 1.9 GB. 
-Note that only loading the adjacency matrix for traditional attacks (no training etc.) would require around 115 GB (see Table~\ref{tab:datasets}). Naively attacking the dense adjacency matrix would certainly require more than 1 TB.
-
-\todo{PPRGo / PRBCD vs. NETTACK}
+Note that only loading the adjacency matrix for traditional attacks (no training etc.) would require around 115 GB (see Tab.~\ref{tab:datasets}). Naively attacking the dense adjacency matrix would certainly require more than 1 TB (compare with Fig.~\ref{fig:memorycomparison}). One epoch on Papers 100M with the local PR-BCD attack takes less then 10 seconds and we require 6 GB at maximum while attacking the Vanilla PPRGo.
 
 \section{Conclusion}\label{sec:conclusion} % Open
 
-\todo{We propose three new attacks that all have the potential to scale to much larger graphs. We are this first to study adversarial attacks on graphs of practical size and, hence, set the cornerstone for the important evaluation of adversarial robustness at scale. We give some intriguing insights. For example, our experiments suggest that adversarial robustness seems to decrease with the size of the graph.Moreover, it seems to be very different to defend against adversarially added nodes than edge additions or deletions within the existing graph structure. For most applications, we believe that adding new nodes is more realistic than adding edges between existing nodes and, hence, we argue that this setting should be studied more in future work.}
+We study adversarial robustness of GNNs at scale. We tackle all three of the identified challenges. First, we study previous surrogate losses for global attacks on GNNs, and we propose two alternatives that overcome the problems we identified. Our new losses easily double the strength of the attacks we tested. Second, we propose a new family of first-order optimization attacks that are much more scalable than previous attacks without sacrificing strength. We apply this general framework to global attacks on the graph accuracy for different GNNs, and to local attacks on massive graphs in combination with PPRGo. Third, we propose a cheap aggregation function called Soft Median, that has the best possible breakdown point of 0.5 and is fully differentiable. We can apply this defense to both the message passing step of traditional GNNs, as well as PPRGo and we show its efficacy against different attacks.
+
+In summary, we scale adversarial attacks and defenses to graphs of up to 111 million nodes. Our attacks and defenses are practical 
+and allow for the first time to assess the adversarial robustness and to defend against attacks for  real-world massive-scale applications.
+
+% since they are the first that allow the assessment of adversarial robustness and defending adversarial attacks for massive-scale applications.
 
 %%
 %% The acknowledgments section is defined using the "acks" environment
 %% (and NOT an unnumbered section). This ensures the proper
 %% identification of the section in the article metadata, and the
 %% consistent spelling of the heading.
-\begin{acks}
-  To Robert, for the bagels and explaining CMYK and color spaces.
-\end{acks}
+%\begin{acks}
+ % To Robert, for the bagels and explaining CMYK and color spaces.
+%\end{acks}
+
+
+
+
 
 %%
 %% The next two lines define the bibliography style to be used, and
@@ -750,123 +730,58 @@ Note that only loading the adjacency matrix for traditional attacks (no training
 \newpage
 \appendix
 
-\todo{table of hyperparameters}
 
-\section{Alternative Motivation: Cross Entropy is a Bad Surrogate}\label{sec:related} % Simon
+\iffalse
+\centering
+\label{tab:global_small}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{llcccccccccc}
+\toprule
+ & \textbf{Architecture} & \multicolumn{2}{c}{\textbf{Jaccard GCN}} & \multicolumn{2}{c}{\textbf{RGCN}} & \multicolumn{2}{c}{\textbf{SVD GCN}} & \multicolumn{2}{c}{\textbf{Soft Median GDC (T=0.2)}} & \multicolumn{2}{c}{\textbf{Soft Median GDC (T=0.5)}}\\
+&\textbf{Dataset}
+	 & \textbf{Citeseer}
+	 & \textbf{Cora ML}
+	 & \textbf{Citeseer}
+	 & \textbf{Cora ML}
+	 & \textbf{Citeseer}
+	 & \textbf{Cora ML}
+	 & \textbf{Citeseer}
+	 & \textbf{Cora ML}
+	 & \textbf{Citeseer}
+	 & \textbf{Cora ML}\\
+ & \textbf{Parameter} &  &  &  &  &  &  &  &  &  & \\\midrule
+\multirow{6}{*}{\rotatebox{90}{\textbf{Train Parameter}}}
+	& Learning Rate& 0.01& 0.01& 0.01& 0.01& 0.01& 0.01& 0.01& 0.01& 0.01& 0.01\\
+	& Weight Decay& 0.0005& 0.0005& 0.0005& 0.0005& 0.0005& 0.0005& 0.0005& 0.0005& 0.0005& 0.0005\\
+	& Max Epochs& 300& 300& 300& 300& 300& 300& 300& 300& 300& 300\\
+	& Patience& 200& 200& 200& 200& 200& 200& 200& 200& 200& 200\\
+	& Batch Size& -& -& -& -& -& -& -& -& -& -\\
+	& Annealing Scheduler& -& -& -& -& -& -& -& -& -& -\\
+\cline{1-12}
+\multirow{16}{*}{\rotatebox{90}{\textbf{Model Parameter}}}
+	& Num. Layer& -& -& -& -& -& -& -& -& -& -\\
+	& Num. Filter& 64& 64& 64& 64& 64& 64& 64& 64& 64& 64\\
+	& Hidden Size& -& -& -& -& -& -& -& -& -& -\\
+	& Dropout& 0.5& 0.5& 0.5& 0.5& 0.5& 0.5& 0.5& 0.5& 0.5& 0.5\\
+	& Batch Norm& -& 0.0& -& 0.0& -& 0.0& -& 0.0& -& 0.0\\
+	& GDC Alpha& -& -& -& -& -& -& 0.15& 0.15& 0.15& 0.15\\
+	& GDC K& -& -& -& -& -& -& 64.0& 64.0& 64.0& 64.0\\
+	& SVD Rank& -& -& -& -& 50.0& 50.0& -& -& -& -\\
+	& Jaccard Threshold& 0.01& 0.01& -& -& -& -& -& -& -& -\\
+	& Aggregation (Mean)& -& -& -& -& -& -& soft_median& soft_median& soft_median& soft_median\\
+	& Aggregation (Mean) topk& -& -& -& -& -& -& -& -& -& -\\
+	& Aggregation (Mean) temp.& -& -& -& -& -& -& 0.2& 0.2& 0.5& 0.5\\
+	& PPR Alpha& -& -& -& -& -& -& -& -& -& -\\
+	& PPR Norm& -& -& -& -& -& -& -& -& -& -\\
+	& PPR TopK& -& -& -& -& -& -& -& -& -& -\\
+	& PPR TopK eps& -& -& -& -& -& -& -& -& -& -\\
 
-In the context of images, typically a single sample is attacked. In the context of graph neural networks this corresponds to a local attack. For such a scenario an untargeted attack it is often sufficient to maximize the cross entropy 
-\begin{equation}\label{oldeq:crossentropy}
-\text{CE}^{(n)}(y, \vp) = \sum_{c \in \sC} \mathbb{I}[y^{(n)} = c] \log(\evp_{c})^{(n)}\,.
-\end{equation}
-Many \emph{global} attacks~\citet{Chen2018, Wu2019, Xu2018, Zugner2019a} also attack via maximizing the cross entropy \(\max_{\adj} \text{CE}(f_{\theta}(\adj, \features))\). However, in our experiments, while attacking GNNs on large graphs, we have often observed that the CE loss increased while the accuracy did not decline. This can be explained by a bias of CE towards nodes which had a low confidence score (misclassified). This is apparent in Figure~\ref{oldfig:negceprob}. Intuitively, in contrast of attacking a single image/node, a global structure attack has to 1) keep house with the budget \(\Delta\) and 2) find edges that degrade the accuracy maximally.
+\bottomrule
+\end{tabular}
+}
 
-\begin{figure}[t]
-  \centering
-  \makebox[\linewidth][c]{
-    \(\begin{array}{cc}
-      \subfloat[Clean graph]{\resizebox{0.5\linewidth}{!}{\input{assets/global_prbcd_arxiv_0.01_probability_nodes.pgf}}} &
-      \subfloat[Attacked nodes]{\resizebox{0.5\linewidth}{!}{\input{assets/global_prbcd_arxiv_0.01_attacked_nodes.pgf}}}  \\
-    \end{array}\)
-  }
-  \caption{In (a) we show the distribution of confidence scores for the correct class \(p^*\) over all test nodes on the clean graph. We observe a large fraction of very confident nodes. In stark contrast, in (b) we analyze the distribution of the directly attacked test nodes before the evasion attack started (i.e.\ if the attack would randomly attack nodes this distribution should match (a)). Here we small budget of one percent of edges (\(\Delta=\epsilon=0.01\))\label{oldfig:negceprob}}
-\end{figure}
+\fi
 
-In Theorem~\ref{oldtheorem:goodsurrogate}, we propose. According to Corollary~\ref{oldcorollary:ce} and Corollary~\ref{oldcorollary:margin} it follows that maximizing the CE or the margin loss do not work well for the constructed scenario. For the following discussion, we define the classification margin as \(\psi = \min_{c \,\text{s.t.}\, c \ne c^*} \evp_{c^*} - \evp{c}\).
-
-%Despite its wide use, the surrogate loss cross entropy can be completely uncorrelated with the accuracy if the budget \(\Delta\) of flipping edges is limited. Using the negative CE leads to a strong focus on the nodes which which had a low confidence score (misclassified) before the attack even started (see Figure~\ref{oldfig:negceprob}). %In contrast, in the traditional (semi-) supervised learning task the budget is only limited via sharing parameters over all samples and regularization.
-%The CE loss is unbounded and if the probability of the correct class \(\evp_{c^*}\) approaches 0 it diverges (i.e.\ \(\lim_{p_{c^*} \to 0} \text{CE} = \infty\)). Hence, for small enough budgets \(\Delta\) on a large graph it is possible that the attack only focuses on nodes that are \emph{already wrongly classified} before the attack has even started (for those nodes the gradient is the largest).
-
-\begin{theorem}\label{oldtheorem:goodsurrogate}
-  Let \(f_{\theta}(\adj, \features)\) be a GNN applied to a large (possibly infinite), diverse graph with the adjacency matrix \(\adj\). Due to the size and diversity of the graph, the attack can move any node's predicted probability it chooses by exactly \(d\) and there exists a node for every possible confidence score \(p^*\) for the correct class on the clean graph. The budget \(\Delta\) is chosen such that the global optimum of
-  \begin{equation}\label{oldeq:goodsurrogate}
-    \max_{\tilde{\adj}\text{ s.t.\ }\|\tilde{\adj} - \adj\|_0 < \Delta} \mathcal{L}(f_{\theta}(\tilde{\adj}, \features))
-  \end{equation}
-  can be obtained by moving a single node's prediction such that the decision boundary is just crossed. That is, after attacking \(d \le \tilde{\psi} < 0\) with an arbitrary small constant \(d\). The derivative of the surrogate loss \(\nicefrac{\partial \mathcal{L}'}{\partial p^*}\) that maximizes Eq.~\ref{oldeq:goodsurrogate}, must have its unique global minimum s.t. for \(\psi \to 0^+\).
-\end{theorem}
-
-\begin{proof}
-  We know that \(\mathcal{L}'(\psi - d) > \mathcal{L}'(\psi)\) or equivalently we can analyze the normalized gain \(g(\psi)\) and let \(d \to 0\): \[
-    g(\psi) = \lim_{d \to 0^+} 
-    %\frac{\mathcal{L}'(\psi - d) - \mathcal{L}'(\psi)}{\psi - d - \psi} = 
-    -\frac{\mathcal{L}'(\psi - d) - \mathcal{L}'(\psi)}{d} = -\frac{\partial \mathcal{L}'(\psi)}{\partial \psi}
-  \]
-  Further, to make sure that \(\arg\max_\psi \mathcal{L}' = \arg\max_\psi \mathcal{L}\) we must perturb a node that is within \(0 \le \psi < d\) of the decision boundary. Hence,  \[
-    \frac{\partial \mathcal{L}'(\psi)}{\partial \psi} \Big|_{\psi \to 0^+} < \frac{\partial \mathcal{L}'(\psi)}{\partial \psi} \Big|_{r}\,\,\,\forall r \in \mathbb{R}_*^-
-  \] and \[
-    \frac{\partial \mathcal{L}'(\psi)}{\partial \psi} \Big|_{\psi \to 0^+} < \lim_{d \to 0^+} \frac{\partial \mathcal{L}'(\psi)}{\partial \psi} \Big|_{d + r}\,\,\,\forall r \in \mathbb{R}_*^+
-  \] must hold. Or equivalently, \[
-    \arg\max_\psi \mathcal{L}' = \arg\min_\psi \frac{\partial \mathcal{L}'(\psi)}{\partial \psi} = \frac{\partial \mathcal{L}'(\psi)}{\partial \psi} \Big|_{\psi \to 0^+}
-  \] with the unique global minima for \(\psi \to 0^+\). 
-\end{proof}
-
-\begin{corollary}\label{oldcorollary:ce}
-  The cross entropy surrogate loss \(\mathcal{L} = \text{Accuracy} \approx CE\) (Eq.~\ref{oldeq:crossentropy}) does not obtain the global optimum since the loss is maximal for nodes with \(p^* \to 0^+\).
-\end{corollary}
-
-\begin{corollary}\label{oldcorollary:margin}
-  The margin loss \(\mathcal{L} = \text{Accuracy} \approx \text{Margin Loss} = min(0, \psi)\) does not obtain the global optimum, since its gradient is constant for \(\psi > 0\).
-\end{corollary}
-
-Of course, the formal statements up to now just covered a very basic scenario where we do not worry about effects such as dependencies between the nodes. However, we argue that the surrogate is certainly not well suited if it even does not work in such a basic scenario. More generally, we state the subsequent conjectures a well-suited, monotonically decreasing surrogate loss \(\mathcal{L^*}(y, \vp)\) should obey for globally attacking a node-classification algorithm.
-\begin{conjecture}\label{oldconjecture:conjecture1}
-  The loss \(\mathcal{L^*}(y, \vp)\) should saturate for low confidence values of the correct class: \(\lim_{\psi \to -1^+} \mathcal{L}(y, \vp) = k < \infty\).
-\end{conjecture}
-\begin{conjecture}\label{oldconjecture:conjecture2}
-  The loss should favour points close to the decision boundary: \(\nicefrac{\partial \mathcal{L}(y, \vp)}{\partial \evp_{c^*}} |_{\psi = 1}  > \nicefrac{\partial \mathcal{L}(y, \vp)}{\partial \evp_{c^*}} |_{\psi \to 0^+}\).
-\end{conjecture}
-
-One natural choice that obeys the restrictions of the conjectures and the theorem is the masked cross entropy
-\begin{equation}\label{oldeq:mce}
-  \text{MCE} = \frac{1}{|\sV^+|} \sum_{n \in \sV^+} \sum_{c \in \sC} \mathbb{I}[y^{(n)} = c] \log(\evp_{c}^{(n)})
-\end{equation}
-where \(\sV^+\) is the set of correctly classified nodes. %Conjecture 1 holds since for a negative margin \(\psi < 0\) the node will be simply omitted. Conjecture 2 holds since the gradient \(\nicefrac{\partial \text{MCE}}{\partial \evp_{c^*}}\) is strictly decreasing w.r.t.\ \(\psi\). This loss is well suited for greedy attacks.
-
-However, \(\text{MCE}\) is not a good choice for a projected gradient descent method like the one we are going to propose in Section~\ref{sec:prbcd}. For such an optimization, we typically tune the learning rate such that the budget \(\Delta\) is exceeded after each gradient update and then the project operation maps the parameters back into the feasible region. If we now set the loss to zero / mask it out if wrongly classified, the contributing edges will not gain anything in the gradient update and likely loose strength in the upcoming project step. Hence, those nodes will oscillate at the decision boundary. Therefore, we use tanh of the classification margin
-\begin{equation}\label{oldeq:mce}
-  \tanh\text{Margin} = \frac{1}{|\sV|} \sum_{n \in \sV} \tanh(\psi^{(n)})
-\end{equation}
-where \(\psi\) denotes the classification margin. This loss obviously fulfills both conjectures.
-
-In Table~\ref{oldtab:losscompare}, we compare the convectional CE loss with our newly proposed losses. For the admittedly large budget of \(\epsilon=0.25\), we see gains of up to 40\% on the perturbed accuracy. Moreover, if we compare the accuracy drop (i.e.\ clean minus perturbed accuracy) we also achieve for low budgets like \(\epsilon=0.01\) an improvements of more then 100\%. And those are only the numbers for the small datasets. On larger graphs such as arXiv we even observe gains of more than 100\% directly on the perturbed accuracy.
-
-\begin{table*}
-  \centering
-  \caption{Perturbed accuracy comparing the conventional losses with our loss. We report the mean over three different seeds. \(\epsilon\) denotes the fraction of edges perturbed (relative to the clean graph). We use random split with 20 nodes per class. For each architecture and budget we embolden the better loss. For details about the set up we refer to Section~\ref{sec:empirical}.}
-  \label{oldtab:losscompare}
-  \resizebox{\linewidth}{!}{
-    \begin{tabular}{lcl|ccccccc|ccccccc}
-    \toprule
-                               &      &     & \multicolumn{7}{c|}{\textbf{Cora ML~\citep{Bojchevski2018}}} & \multicolumn{7}{c}{\textbf{Citeseer~\citep{McCallum2000}}} \\
-                               \rotatebox{90}{\textbf{Attack}} & \makecell{\textbf{Frac.}\\\textbf{edges}\\\(\boldsymbol{\epsilon}\)} & \textbf{Loss} &                 \makecell{Vanilla\\GCN} & \makecell{Vanilla\\GDC} & \makecell{SVD\\GCN} & \makecell{Jaccard\\GCN} &  \makecell{RGCN} & \makecell{Soft\\Medoid\\GDC} & \makecell{Soft\\Median\\GDC} &                \makecell{Vanilla\\GCN} & \makecell{Vanilla\\GDC} & \makecell{SVD\\GCN} & \makecell{Jaccard\\GCN} &  \makecell{RGCN} & \makecell{Soft\\Medoid\\GDC} & \makecell{Soft\\Median\\GDC} \\
-    \midrule
-    \multirow{8}{*}{\rotatebox{90}{\textbf{greedy FGSM}}} & \multirow{2}{*}{0.01} & CE &                                  0.8087 &                  0.8144 &              0.7576 &                  0.8066 &           0.7864 &                       0.8061 &                       0.8092 &                                 0.7052 &                  0.7000 &              0.6401 &                  0.7091 &           0.6389 &              \textbf{0.7045} &                       0.7061 \\
-                                &      & MCE &                         \textbf{0.7859} &         \textbf{0.7953} &     \textbf{0.7573} &         \textbf{0.7871} &  \textbf{0.7730} &              \textbf{0.8070} &              \textbf{0.8078} &                        \textbf{0.6850} &         \textbf{0.6832} &     \textbf{0.6376} &         \textbf{0.6959} &  \textbf{0.6305} &                       0.7037 &              \textbf{0.7046} \\
-    \cline{2-17}
-                                & \multirow{2}{*}{0.05} & CE &                                  0.7577 &                  0.7586 &              0.7414 &                  0.7605 &           0.7428 &              \textbf{0.7722} &              \textbf{0.7722} &                                 0.6693 &                  0.6594 &              0.6244 &                  0.6799 &           0.6077 &              \textbf{0.6852} &              \textbf{0.6831} \\
-                                &      & MCE &                         \textbf{0.6908} &         \textbf{0.7045} &     \textbf{0.7426} &         \textbf{0.7116} &  \textbf{0.7004} &                       0.7885 &                       0.7850 &                        \textbf{0.6064} &         \textbf{0.6036} &     \textbf{0.6212} &         \textbf{0.6410} &  \textbf{0.5815} &                       0.6952 &                       0.6911 \\
-    \cline{2-17}
-                                & \multirow{2}{*}{0.10} & CE &                                  0.7188 &                  0.7179 &              0.7153 &                  0.7221 &           0.7080 &              \textbf{0.7426} &              \textbf{0.7410} &                                 0.6316 &                  0.6223 &              0.6025 &                  0.6476 &           0.5766 &              \textbf{0.6665} &              \textbf{0.6590} \\
-                                &      & MCE &                         \textbf{0.6086} &         \textbf{0.6385} &     \textbf{0.7215} &         \textbf{0.6441} &  \textbf{0.6387} &                       0.7773 &                       0.7693 &                        \textbf{0.5335} &         \textbf{0.5346} &     \textbf{0.5991} &         \textbf{0.5922} &  \textbf{0.5323} &                       0.6893 &                       0.6791 \\
-    \cline{2-17}
-                                & \multirow{2}{*}{0.25} & CE &                                  0.6353 &                  0.6391 &              0.6399 &                  0.6427 &           0.6312 &              \textbf{0.6785} &              \textbf{0.6746} &                                 0.5401 &                  0.5330 &     \textbf{0.3626} &                  0.5729 &           0.5130 &              \textbf{0.6201} &              \textbf{0.6073} \\
-                                &      & MCE &                         \textbf{0.4599} &         \textbf{0.5275} &     \textbf{0.6374} &         \textbf{0.5245} &  \textbf{0.5101} &                       0.7632 &                       0.7524 &                        \textbf{0.3898} &         \textbf{0.4128} &              0.5036 &         \textbf{0.4973} &  \textbf{0.4244} &                       0.6820 &                       0.6674 \\
-    \cline{1-17}
-    \cline{2-17}
-    \multirow{8}{*}{\rotatebox{90}{\textbf{PGD}}} & \multirow{2}{*}{0.01} & CE &                                  0.8047 &                  0.8107 &     \textbf{0.7568} &                  0.8020 &           0.7848 &              \textbf{0.8053} &              \textbf{0.8069} &                                 0.7032 &                  0.6980 &              0.6378 &                  0.7057 &           0.6373 &              \textbf{0.7030} &              \textbf{0.7041} \\
-                                &      & tanh Margin &                         \textbf{0.7892} &         \textbf{0.7960} &              0.7567 &         \textbf{0.7903} &  \textbf{0.7758} &                       0.8050 &                       0.8053 &                        \textbf{0.6873} &         \textbf{0.6840} &     \textbf{0.6383} &         \textbf{0.6957} &  \textbf{0.6355} &                       0.7045 &                       0.7045 \\
-    \cline{2-17}
-                                & \multirow{2}{*}{0.05} & CE &                                  0.7547 &                  0.7555 &     \textbf{0.7348} &                  0.7564 &           0.7390 &              \textbf{0.7735} &              \textbf{0.7742} &                                 0.6595 &                  0.6551 &     \textbf{0.6144} &                  0.6718 &           0.6068 &              \textbf{0.6852} &              \textbf{0.6829} \\
-                                &      & tanh Margin &                         \textbf{0.7065} &         \textbf{0.7165} &              0.7253 &         \textbf{0.7153} &  \textbf{0.7155} &                       0.7816 &                       0.7762 &                        \textbf{0.6264} &         \textbf{0.6205} &              0.4137 &         \textbf{0.6419} &  \textbf{0.6020} &                       0.6884 &                       0.6868 \\
-    \cline{2-17}
-                                & \multirow{2}{*}{0.10} & CE &                                  0.7053 &                  0.7045 &     \textbf{0.6957} &                  0.7080 &           0.6991 &              \textbf{0.7432} &              \textbf{0.7402} &                                 0.6184 &                  0.6102 &     \textbf{0.5925} &                  0.6392 &           0.5836 &              \textbf{0.6708} &              \textbf{0.6617} \\
-                                &      & tanh Margin &                         \textbf{0.6379} &         \textbf{0.6481} &              0.6905 &         \textbf{0.6577} &  \textbf{0.6560} &                       0.7603 &                       0.7532 &                        \textbf{0.5592} &         \textbf{0.5620} &              0.3947 &         \textbf{0.5932} &  \textbf{0.5554} &                       0.6838 &                       0.6713 \\
-    \cline{2-17}
-                                & \multirow{2}{*}{0.25} & CE &                                  0.5901 &                  0.5953 &     \textbf{0.6028} &                  0.6011 &           0.5942 &              \textbf{0.6830} &              \textbf{0.6775} &                                 0.5260 &                  0.5175 &     \textbf{0.4904} &                  0.5542 &           0.5039 &              \textbf{0.6283} &              \textbf{0.6086} \\
-                                &      & tanh Margin &                         \textbf{0.4993} &         \textbf{0.5254} &              0.5791 &         \textbf{0.5332} &  \textbf{0.5311} &                       0.7246 &                       0.7175 &                        \textbf{0.4283} &         \textbf{0.4342} &              0.4713 &         \textbf{0.5043} &  \textbf{0.4599} &                       0.6674 &                       0.6487 \\
-    \bottomrule
-  \end{tabular}
-  }
-\end{table*}
 
 \end{document}
 \endinput
