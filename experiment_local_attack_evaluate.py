@@ -156,6 +156,7 @@ def run(data_dir: str, dataset: str, db_collection_attacks: str, binary_attr: bo
                 for _, df_model_atk_result in df_model_atk_results.iterrows():
                     atk_node_ix = df_model_atk_result["node_id"]
                     perturbed_edges = df_model_atk_result["perturbed_edges"]
+                    n_perturbations = df_model_atk_result["n_perturbations"]
                     if len(perturbed_edges) == 2:  # if unsucessfull, the perturbed_edges might be empty
                         eps = df_model_atk_result["epsilon"]
                         logging.info(
@@ -170,8 +171,9 @@ def run(data_dir: str, dataset: str, db_collection_attacks: str, binary_attr: bo
 
                         # TODO: we could remove this again because we have the initial logits in df_model_atk_result
                         # but it's also a nice sanity check to make sure everything works and is specified correctly
+                        topk = model.topk + n_perturbations
                         ppr_topk_atk_node = ppr.topk_ppr_matrix(adj, model.alpha, model.eps, np.array(
-                            [atk_node_ix]), model.topk, normalization=model.ppr_normalization)
+                            [atk_node_ix]), topk, normalization=model.ppr_normalization)
                         ppr_topk_atk_node = SparseTensor.from_scipy(ppr_topk_atk_node)
                         initial_logits = F.log_softmax(model.forward(
                             attr, None, ppr_scores=ppr_topk_atk_node), dim=-1).cpu()
@@ -182,7 +184,7 @@ def run(data_dir: str, dataset: str, db_collection_attacks: str, binary_attr: bo
                         pert_adj = flip_edges(adj, pert_rows, pert_cols)
 
                         ppr_topk_atk_node_pert = ppr.topk_ppr_matrix(pert_adj, model.alpha, model.eps, np.array(
-                            [atk_node_ix]), model.topk, normalization=model.ppr_normalization)
+                            [atk_node_ix]), topk, normalization=model.ppr_normalization)
 
                         ppr_topk_atk_node_pert = SparseTensor.from_scipy(ppr_topk_atk_node_pert)
                         pert_logits = F.log_softmax(model.forward(
@@ -196,7 +198,7 @@ def run(data_dir: str, dataset: str, db_collection_attacks: str, binary_attr: bo
                             'attack': df_model_atk_result["attack"],
                             'dataset': df_model_atk_result["dataset"],
                             'epsilon': eps,
-                            'n_perturbations': df_model_atk_result["n_perturbations"],
+                            'n_perturbations': n_perturbations,
                             'degree': df_model_atk_result["degree"],
                             'logits': pert_logits.cpu(),
                             'initial_logits': initial_logits.cpu(),

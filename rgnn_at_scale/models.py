@@ -5,6 +5,7 @@ import collections
 from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
 
 import time
+from datetime import datetime
 import logging
 import numpy as np
 import scipy.sparse as sp
@@ -686,7 +687,7 @@ class PPRGoWrapperBase():
             )
             num_predictions = topk_ppr.shape[0]
 
-            logits = torch.zeros(num_predictions, self.n_classes, device="cpu", dtype=torch.float32)
+            logits = torch.zeros(num_predictions, self.num_classes, device="cpu", dtype=torch.float32)
 
             num_batches = len(data_loader)
             for batch_id, (idx, xbs, _) in enumerate(data_loader):
@@ -713,9 +714,11 @@ class PPRGoWrapperBase():
             weight_decay: int,
             patience: int,
             use_annealing_scheduler=False,
+            scheduler_warm_restarts=True,
             annealing_scheduler_T_0=3,
             scheduler_time="epoch",
             scheduler_step=20,
+            optim="Adam",
             max_epochs: int = 200,
             batch_size=512,
             batch_mult_val=4,
@@ -738,37 +741,62 @@ class PPRGoWrapperBase():
         else:
             mean = "None"
             temp = 0
-            label = "VanillaPPRGo"
+
+            if hasattr(self, "diffuse_on_embedding"):
+                label = "VanillaPPRGoDiffEmb"
+            else:
+                label = "VanillaPPRGo"
 
         hidden_size = self.hidden_size
         nlayers = self.nlayers
         alpha = self.alpha
         eps = self.eps
         topk = self.topk
+        dropout = self.dropout
+        ppr_normalization = self.ppr_normalization
+        batch_norm = self.mlp.use_batch_norm
 
-        suffix = f"/{label}_alpha{alpha:.0e}_eps{eps:.0e}_topk{topk}_L{nlayers}_H{hidden_size:03d}_T{temp:.0e}_{mean}_LR{lr:.0e}_WD{weight_decay:.0e}_S{use_annealing_scheduler:d}_B{batch_size:03d}"
-        suffix += "_" + str(time.time())
+        suffix = f"/{label}_alpha{alpha:.0e}_eps{eps:.0e}_topk{topk}_L{nlayers}_H{hidden_size:03d}_D{dropout}_BN{batch_norm}"
+        suffix += f"_T{temp:.0e}_{mean}_LR{lr:.0e}_WD{weight_decay:.0e}_S{use_annealing_scheduler:d}_B{batch_size:03d}"
+        suffix += f"_N{ppr_normalization}"
+        suffix += "_" + str(datetime.now().strftime('%d-%m_%H-%M-%S'))
         writer = SummaryWriter(log_dir=log_dir + suffix)
 
         if isinstance(adj, SparseTensor):
             adj = adj.to_scipy(layout="csr")
 
+        logging.info(f"tensorboard: {suffix}")
+        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+
         topk_train = ppr.topk_ppr_matrix(adj, self.alpha, self.eps, idx_train,
                                          self.topk,  normalization=self.ppr_normalization)
 
+        logging.info("topk_train calculated")
+        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+
         topk_val = ppr.topk_ppr_matrix(adj, self.alpha, self.eps, idx_val,
                                        self.topk,  normalization=self.ppr_normalization)
+
+        logging.info("topk_val calculated")
+        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
         train_set = RobustPPRDataset(attr_matrix_all=attr,
                                      ppr_matrix=topk_train,
                                      indices=idx_train,
                                      labels_all=labels,
                                      allow_cache=False)
+
+        logging.info("train_set initalized")
+        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+
         val_set = RobustPPRDataset(attr_matrix_all=attr,
                                    ppr_matrix=topk_val,
                                    indices=idx_val,
                                    labels_all=labels,
                                    allow_cache=False)
+
+        logging.info("val_set initalized")
+        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
         train_loader = torch.utils.data.DataLoader(
             dataset=train_set,
@@ -779,6 +807,10 @@ class PPRGoWrapperBase():
             batch_size=None,
             num_workers=0,
         )
+
+        logging.info("train_loader initalized")
+        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+
         trace_train_loss = []
         trace_val_loss = []
         trace_train_acc = []
@@ -788,11 +820,18 @@ class PPRGoWrapperBase():
             for param_group in optimizer.param_groups:
                 return param_group['lr']
 
-        optimizer = torch.optim.Adam(self.parameters(), lr=lr, weight_decay=weight_decay)
+        if optim == "SGD":
+            optimizer = torch.optim.SGD(self.parameters(), lr=lr, weight_decay=weight_decay)
+        else:  # use adam
+            optimizer = torch.optim.Adam(self.parameters(), lr=lr, weight_decay=weight_decay)
 
         if use_annealing_scheduler:
-            scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
-                optimizer, annealing_scheduler_T_0)
+            if scheduler_warm_restarts:
+                scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+                    optimizer, annealing_scheduler_T_0)
+            else:
+                scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+                    optimizer, max_epochs)
 
         best_loss = np.inf
 
@@ -859,7 +898,7 @@ class PPRGoWrapperBase():
 
             # restore the best validation state
         self.load_state_dict(best_state)
-        return {"loss": trace_train_loss, "acc": trace_train_acc}, {"loss": trace_val_loss, "acc": trace_val_acc},
+        return {"loss": trace_val_loss, "acc": trace_val_acc}, {"loss": trace_train_loss, "acc": trace_train_acc}
 
     def __run_batch(self, xbs, yb, optimizer, train):
         # Set model to training mode
@@ -901,9 +940,11 @@ class PPRGoWrapper(PPRGo, PPRGoWrapperBase):
                  forward_batch_size=128,
                  **kwargs):
         super().__init__(n_features, n_classes, hidden_size, nlayers, dropout, **kwargs)
-        self.nlayers = nlayers
+        self.num_features = n_features
+        self.num_classes = n_classes
         self.hidden_size = hidden_size
-        self.n_classes = n_classes
+        self.nlayers = nlayers
+        self.dropout = dropout
         self.alpha = alpha
         self.eps = eps
         self.topk = topk
@@ -936,9 +977,12 @@ class PPRGoDiffEmbWrapper(PPRGoEmmbeddingDiffusions, PPRGoWrapperBase):
                  forward_batch_size=128,
                  **kwargs):
         super().__init__(n_features, n_classes, hidden_size, nlayers, dropout, **kwargs)
-        self.nlayers = nlayers
+        self.diffuse_on_embedding = True
+        self.num_features = n_features
+        self.num_classes = n_classes
         self.hidden_size = hidden_size
-        self.n_classes = n_classes
+        self.nlayers = nlayers
+        self.dropout = dropout
         self.alpha = alpha
         self.eps = eps
         self.topk = topk
@@ -973,9 +1017,11 @@ class RobustPPRGoWrapper(RobustPPRGo, PPRGoWrapperBase):
                  **kwargs):
         super().__init__(n_features, n_classes, hidden_size, nlayers, dropout, mean=mean,  **kwargs)
         self.mean = mean
-        self.nlayers = nlayers
+        self.num_features = n_features
+        self.num_classes = n_classes
         self.hidden_size = hidden_size
-        self.n_classes = n_classes
+        self.nlayers = nlayers
+        self.dropout = dropout
         self.alpha = alpha
         self.eps = eps
         self.topk = topk
@@ -1006,9 +1052,11 @@ class RobustPPRGoDiffEmbWrapper(RobustPPRGoEmmbeddingDiffusions, PPRGoWrapperBas
         super().__init__(n_features, n_classes, hidden_size, nlayers, dropout, mean=mean,  **kwargs)
         self.diffuse_on_embedding = True
         self.mean = mean
-        self.nlayers = nlayers
+        self.num_features = n_features
+        self.num_classes = n_classes
         self.hidden_size = hidden_size
-        self.n_classes = n_classes
+        self.nlayers = nlayers
+        self.dropout = dropout
         self.alpha = alpha
         self.eps = eps
         self.topk = topk

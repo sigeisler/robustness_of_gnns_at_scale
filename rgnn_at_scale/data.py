@@ -664,21 +664,37 @@ def prep_graph(name: str,
             edge_weight = data.edge_attr
         edge_weight = edge_weight.to(device)
 
-        if make_undirected:
-            edge_index, edge_weight = utils.to_symmetric(edge_index, edge_weight, num_nodes)
-
-        if make_unweighted:
-            edge_weight = torch.ones_like(edge_weight)
-
         adj = sp.csr_matrix((edge_weight, edge_index), (num_nodes, num_nodes))
-
-        if normalize:
-            adj = utils.calc_A_hat(adj)
-
-        #adj = torch_sparse.SparseTensor.from_scipy(adj).coalesce()
 
         del edge_index
         del edge_weight
+
+        if make_unweighted:
+            adj.data = np.ones_like(adj.data)
+
+        if make_undirected:
+            logging.info("make undirected")
+            logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+
+            adj = utils.to_symmetric_scipy(adj, is_undirected=make_unweighted)
+
+            logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+            logging.info("make undirected done")
+
+        if normalize == "row":
+            logging.info("normalize row")
+            logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+            adj = utils.normalize_row(adj)
+            logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+            logging.info("normalize done")
+        elif normalize:
+            logging.info("normalize symmetric")
+            logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+            adj = utils.normalize_symmetric(adj)
+            logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+            logging.info("normalize done")
+
+        #adj = torch_sparse.SparseTensor.from_scipy(adj).coalesce()
 
         attr = data.x.to(device)
 

@@ -20,22 +20,22 @@ from pprgo import ppr
 
 from rgnn_at_scale.local import setup_logging
 from rgnn_at_scale.data import prep_graph, split
+from rgnn_at_scale.load_ppr import load_ppr
 
 setup_logging()
 
-logging.info("start")
 
 # dataset = "ogbn-arxiv"  # "ogbn-papers100M"  # "ogbn-arxiv"
 # dataset_root = "/nfs/students/schmidtt/datasets/"
-# input_dir = dataset_root + "ppr/"
-# topk_batch_size = 10240
+# input_dir = dataset_root + "ppr/arxiv/"
+# topk_batch_size = 10240  # int(1e5)
 # dir_name = '_'.join(dataset.split('-'))
 # num_batches = 17
 # num_nodes = int(169343)
 
-dataset = "ogbn-papers100M"  # "ogbn-arxiv"  # "ogbn-papers100M"  # "ogbn-arxiv"
+dataset = "ogbn-products"  # "ogbn-arxiv"  # "ogbn-papers100M"  # "ogbn-arxiv"
 dataset_root = "/nfs/students/schmidtt/datasets/"
-input_dir = dataset_root + "ppr/papers/"
+input_dir = dataset_root + "ppr/products/"
 binary_attr = False
 topk_batch_size = int(1e6)
 num_nodes = int(111059956)
@@ -43,11 +43,26 @@ num_batches = 112
 
 # ppr params
 alpha = 0.1
-eps = 1e-3
+eps = 1e-4
 topk = 64
+normalize = "row"
 ppr_normalization = "row"
 alpha_suffix = int(alpha * 100)
 
+logging.info(f"Start Simon")
+start_simon = datetime.now()
+ppr_matrix = load_ppr(input_dir=input_dir,
+                      dataset=dataset,
+                      alpha=alpha,
+                      eps=eps,
+                      topk=topk,
+                      ppr_normalization=ppr_normalization)
+simon_time = datetime.now() - start_simon
+logging.info(f"Simon took {simon_time} seconds")
+
+print(ppr_matrix.nnz)
+
+logging.info("start me")
 start = datetime.now()
 
 
@@ -98,54 +113,66 @@ logging.info(inputs)
 #                                                                      ppr_normalization,
 #                                                                      i) for i in inputs)
 
-results = [load_ppr_topk_parallel(topk_batch_size,
-                                  input_dir,
-                                  alpha,
-                                  eps,
-                                  topk,
-                                  ppr_normalization,
-                                  list(range(num_batches)))]
+# results = [load_ppr_topk_parallel(topk_batch_size,
+#                                   input_dir,
+#                                   alpha,
+#                                   eps,
+#                                   topk,
+#                                   ppr_normalization,
+#                                   list(range(num_batches)))]
 
-logging.info("Read took time: " + str(datetime.now() - start))
-results = [item for sublist in results for item in sublist]
+# logging.info("Read took time: " + str(datetime.now() - start))
+# results = [item for sublist in results for item in sublist]
 
-sp_0 = results[0]["partial_ppr"].tocoo()
-edge_rows, edge_cols, edge_vals = sp_0.row, sp_0.col, sp_0.data
-edge_rows += results[0]["batch_id"] * topk_batch_size
+# sp_0 = results[0]["partial_ppr"].tocoo()
+# edge_rows, edge_cols, edge_vals = sp_0.row, sp_0.col, sp_0.data
+# edge_rows += results[0]["batch_id"] * topk_batch_size
 
-row_list = [edge_rows]
-col_list = [edge_cols]
-val_list = [edge_vals]
+# row_list = [edge_rows]
+# col_list = [edge_cols]
+# val_list = [edge_vals]
+# nnz = sp_0.nnz
+# for i in range(1, num_batches):
+#     if results[i]["partial_ppr"] is not None:
+#         spi = results[i]["partial_ppr"].tocoo()
+#         nnz += spi.nnz
+#         edge_rows_i, edge_cols_i, edge_vals_i = spi.row, spi.col, spi.data
+#         edge_rows_i += results[i]["batch_id"] * topk_batch_size
 
-for i in range(1, num_batches):
-    if results[i]["partial_ppr"] is not None:
-        spi = results[i]["partial_ppr"].tocoo()
-        edge_rows_i, edge_cols_i, edge_vals_i = spi.row, spi.col, spi.data
-        edge_rows_i += results[i]["batch_id"] * topk_batch_size
+#         row_list.append(edge_rows_i)
+#         col_list.append(edge_cols_i)
+#         val_list.append(edge_vals_i)
 
-        row_list.append(edge_rows_i)
-        col_list.append(edge_cols_i)
-        val_list.append(edge_vals_i)
+# print(nnz)
+# logging.info(f"Start concatinating")
+# concat_start = datetime.now()
+
+# edge_rows = np.concatenate(row_list)
+# concat_time = datetime.now() - concat_start
+# logging.info(f"Concat took {concat_time} seconds")
+
+# concat_start = datetime.now()
+# edge_cols = np.concatenate(col_list)
+# concat_time = datetime.now() - concat_start
+# logging.info(f"Concat took {concat_time} seconds")
+
+# concat_start = datetime.now()
+# edge_vals = np.concatenate(val_list)
+# concat_time = datetime.now() - concat_start
+# logging.info(f"Concat took {concat_time} seconds")
+
+# create_start = datetime.now()
+# ppr_matrix = sp.coo_matrix((edge_vals, (edge_rows, edge_cols)), shape=(num_nodes, num_nodes))
+# create_time = datetime.now() - create_start
+# logging.info(f"coo creation took {create_time} seconds")
+
+# csr_start = datetime.now()
+# ppr_matrix = ppr_matrix.tocsr()
+# csr_time = datetime.now() - csr_start
+# logging.info(f"to csr took {csr_time} seconds")
+
+# logging.info("Read and convert took time: " + str(datetime.now() - start))
+# print(ppr_matrix.nnz)
 
 
-logging.info(f"Start concatinating")
-concat_start = datetime.now()
-
-edge_rows = np.concatenate(row_list)
-concat_time = datetime.now() - concat_start
-logging.info(f"Concat took {concat_time} seconds")
-
-concat_start = datetime.now()
-edge_cols = np.concatenate(col_list)
-concat_time = datetime.now() - concat_start
-logging.info(f"Concat took {concat_time} seconds")
-
-concat_start = datetime.now()
-edge_vals = np.concatenate(val_list)
-concat_time = datetime.now() - concat_start
-logging.info(f"Concat took {concat_time} seconds")
-
-ppr_matrix = sp.coo_matrix((edge_vals, (edge_rows, edge_cols)), shape=(num_nodes, num_nodes))
-
-logging.info("Read and convert took time: " + str(datetime.now() - start))
-print(ppr_matrix)
+print("done")

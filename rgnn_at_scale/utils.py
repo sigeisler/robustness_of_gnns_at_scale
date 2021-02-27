@@ -1,16 +1,19 @@
 """For the util methods such as conversions or adjacency preprocessings.
 """
 from typing import Sequence, Tuple, Union
+import logging
 
 import numba
 import numpy as np
 import scipy.sparse as sp
+from sklearn.preprocessing import normalize
 import torch
 
 from torch_geometric.utils import from_scipy_sparse_matrix, add_remaining_self_loops
 import torch_scatter
 import torch_sparse
 from torch_sparse import SparseTensor, transpose, spmm, coalesce
+from pprgo import utils as ppr_utils
 
 
 # TODO: Move to base attack
@@ -52,9 +55,13 @@ def calc_A_hat(adj_matrix: sp.spmatrix) -> sp.spmatrix:
     """
     nnodes = adj_matrix.shape[0]
     A = adj_matrix + sp.eye(nnodes)
-    D_vec = np.sum(A, axis=1).A1
-    D_vec_invsqrt_corr = 1 / np.sqrt(D_vec)
+    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+
+    D_vec_invsqrt_corr = 1 / np.sqrt(np.sum(A, axis=1).A1)
+    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+
     D_invsqrt_corr = sp.diags(D_vec_invsqrt_corr)
+    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
     return D_invsqrt_corr @ A @ D_invsqrt_corr
 
 
@@ -614,7 +621,11 @@ def to_symmetric(edge_index: torch.Tensor, edge_weight: torch.Tensor,
     symmetric_edge_index = torch.cat(
         (edge_index, edge_index.flip(0)), dim=-1
     )
+    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+
     symmetric_edge_weight = edge_weight.repeat(2)
+    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+
     symmetric_edge_index, symmetric_edge_weight = torch_sparse.coalesce(
         symmetric_edge_index,
         symmetric_edge_weight,
@@ -623,6 +634,34 @@ def to_symmetric(edge_index: torch.Tensor, edge_weight: torch.Tensor,
         op=op
     )
     return symmetric_edge_index, symmetric_edge_weight
+
+
+def to_symmetric_scipy(adjacency: sp.csr_matrix, is_undirected: bool):
+    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+    if is_undirected:
+        sym_adjacency = (adjacency + adjacency.T).astype(bool)
+    else:
+        sym_adjacency = adjacency.astype(float)
+        sym_adjacency += adjacency.T
+
+    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+    sym_adjacency.tocsr().sort_indices()
+
+    return sym_adjacency
+
+
+def normalize_row(adj_matrix: sp.spmatrix) -> sp.spmatrix:
+    return normalize(adj_matrix, norm='l1', axis=1)
+
+
+def normalize_symmetric(adj_matrix: sp.spmatrix) -> sp.spmatrix:
+
+    D_vec_invsqrt_corr = 1 / np.sqrt(np.sum(adj_matrix, axis=1).A1)
+    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+
+    D_invsqrt_corr = sp.diags(D_vec_invsqrt_corr)
+    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+    return D_invsqrt_corr @ adj_matrix @ D_invsqrt_corr
 
 
 def sparse_tensor(spmat: sp.spmatrix, grad: bool = False):
