@@ -110,8 +110,16 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
     logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
     if hasattr(model, 'fit'):
-        trace = model.fit(adj, attr, labels=labels, idx_train=idx_train,
-                          idx_val=idx_val, display_step=display_steps, **train_params)
+        trace = model.fit(adj, attr,
+                          labels=labels,
+                          idx_train=idx_train,
+                          idx_val=idx_val,
+                          display_step=display_steps,
+                          dataset=dataset,
+                          normalize=normalize,
+                          make_undirected=make_undirected,
+                          make_unweighted=make_unweighted,
+                          **train_params)
         if trace is None:
             trace_val, trace_train = None, None
         else:

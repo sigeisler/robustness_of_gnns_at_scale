@@ -38,16 +38,16 @@ dataset_root = "/nfs/students/schmidtt/datasets/"
 output_dir = dataset_root + "ppr/papers100M/"
 binary_attr = False
 normalize = "row"
-make_undirected = True
+make_undirected = False
 make_unweighted = True
-topk_batch_size = int(1e6)
+topk_batch_size = int(1e5)
 dir_name = '_'.join(dataset.split('-'))
 
 
 # ppr params
 alpha = 0.1
-eps = 1e-8
-topk = 256
+eps = 1e-7
+topk = 512
 ppr_normalization = "row"
 alpha_suffix = int(alpha * 100)
 
@@ -91,6 +91,7 @@ def _save_ppr_topk(topk_batch_size,
                    normalize,
                    split_desc):
     dump_suffix = f"{dataset}_{split_desc}_alpha{alpha_suffix}_eps{eps:.0e}_topk{topk}_pprnorm{ppr_normalization}_norm{normalize}_indirect{make_undirected}_unweighted{make_unweighted}"
+    logging.info(dump_suffix)
     num_nodes = len(ppr_idx)
     num_batches = math.ceil(num_nodes / topk_batch_size)
     Path(output_dir).mkdir(parents=True, exist_ok=True)
@@ -109,7 +110,7 @@ def _save_ppr_topk(topk_batch_size,
         nnz += topk_ppr.nnz
         sp.save_npz(output_dir + file_name, topk_ppr)
     np.save(output_dir + f"{dump_suffix}_idx.npy", ppr_idx)
-    print(nnz)
+    logging.info(f"nnz {nnz}")
 
 
 def save_ppr_topk(topk_batch_size,

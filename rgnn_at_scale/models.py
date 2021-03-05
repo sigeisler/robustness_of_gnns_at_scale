@@ -27,6 +27,7 @@ from rgnn_at_scale.aggregation import ROBUST_MEANS, chunked_message_and_aggregat
 from rgnn_at_scale import r_gcn
 from rgnn_at_scale.utils import (get_approx_topk_ppr_matrix, get_ppr_matrix, get_truncated_svd, get_jaccard,
                                  sparse_tensor_to_tuple, tuple_to_sparse_tensor)
+from rgnn_at_scale.load_ppr import load_ppr
 from rgnn_at_scale.data import RobustPPRDataset
 from pprgo.pprgo import RobustPPRGoEmmbeddingDiffusions, RobustPPRGo, PPRGoEmmbeddingDiffusions, PPRGo
 from pprgo import ppr
@@ -667,8 +668,21 @@ class PPRGoWrapperBase():
             if ppr_idx is None:
                 ppr_idx = np.arange(num_nodes)
 
-            topk_ppr = ppr.topk_ppr_matrix(adj, self.alpha, self.eps, ppr_idx,
-                                           self.topk,  normalization=self.ppr_normalization)
+            # try to read topk test from disk:
+            topk_ppr = load_ppr(input_dir=self.ppr_input_dir,
+                                dataset=self.dataset,
+                                idx=self.ppr_idx,
+                                alpha=self.alpha,
+                                eps=self.eps,
+                                topk=self.topk,
+                                ppr_normalization=self.ppr_normalization,
+                                split_desc="test",
+                                normalize=self.normalize,
+                                make_undirected=self.make_undirected,
+                                shape=(len(ppr_idx), adj.shape[1]))
+            if topk_ppr is None:
+                topk_ppr = ppr.topk_ppr_matrix(adj, self.alpha, self.eps, ppr_idx,
+                                               self.topk,  normalization=self.ppr_normalization)
 
             # there are to many node for a single forward pass, we need to do batched prediction
             data_set = RobustPPRDataset(
@@ -725,8 +739,20 @@ class PPRGoWrapperBase():
             eval_step=1,
             display_step=50,
             log_dir="runs",
+            # for loading ppr from disk
+            ppr_input_dir='/nfs/students/schmidtt/datasets/ppr/papers100M',
+            dataset=None,
+            normalize=None,
+            make_undirected=None,
+            make_unweighted=None,
             **kwargs):
+
         device = next(self.parameters()).device
+        self.ppr_input_dir = ppr_input_dir
+        self.dataset = dataset
+        self.normalize = normalize
+        self.make_undirected = make_undirected
+        self.make_unweighted = make_unweighted
 
         logging.info("fit start")
         logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
@@ -768,14 +794,42 @@ class PPRGoWrapperBase():
         logging.info(f"tensorboard: {suffix}")
         logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
-        topk_train = ppr.topk_ppr_matrix(adj, self.alpha, self.eps, idx_train,
-                                         self.topk,  normalization=self.ppr_normalization)
+        # try to read topk train from disk:
+        topk_train = load_ppr(input_dir=ppr_input_dir,
+                              dataset=dataset,
+                              idx=idx_train,
+                              alpha=alpha,
+                              eps=eps,
+                              topk=topk,
+                              ppr_normalization=ppr_normalization,
+                              split_desc="train",
+                              normalize=normalize,
+                              make_undirected=make_undirected,
+                              make_unweighted=make_unweighted,
+                              shape=(len(idx_train), adj.shape[1]))
+        if topk_train is None:
+            # looks like there was no ppr calculated before hand, so we need to calculate it now
+            topk_train = ppr.topk_ppr_matrix(adj, self.alpha, self.eps, idx_train,
+                                             self.topk,  normalization=self.ppr_normalization)
 
-        logging.info("topk_train calculated")
+        logging.info("topk_train loaded")
         logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
-        topk_val = ppr.topk_ppr_matrix(adj, self.alpha, self.eps, idx_val,
-                                       self.topk,  normalization=self.ppr_normalization)
+        # try to read topk train from disk:
+        topk_val = load_ppr(input_dir=ppr_input_dir,
+                            dataset=dataset,
+                            idx=idx_val,
+                            alpha=alpha,
+                            eps=eps,
+                            topk=topk,
+                            ppr_normalization=ppr_normalization,
+                            split_desc="val",
+                            normalize=normalize,
+                            make_undirected=make_undirected,
+                            shape=(len(idx_val), adj.shape[1]))
+        if topk_val is None:
+            topk_val = ppr.topk_ppr_matrix(adj, self.alpha, self.eps, idx_val,
+                                           self.topk,  normalization=self.ppr_normalization)
 
         logging.info("topk_val calculated")
         logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
