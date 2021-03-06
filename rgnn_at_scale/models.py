@@ -671,7 +671,7 @@ class PPRGoWrapperBase():
             # try to read topk test from disk:
             topk_ppr = load_ppr(input_dir=self.ppr_input_dir,
                                 dataset=self.dataset,
-                                idx=self.ppr_idx,
+                                idx=ppr_idx,
                                 alpha=self.alpha,
                                 eps=self.eps,
                                 topk=self.topk,
@@ -679,6 +679,7 @@ class PPRGoWrapperBase():
                                 split_desc="test",
                                 normalize=self.normalize,
                                 make_undirected=self.make_undirected,
+                                make_unweighted=self.make_unweighted,
                                 shape=(len(ppr_idx), adj.shape[1]))
             if topk_ppr is None:
                 topk_ppr = ppr.topk_ppr_matrix(adj, self.alpha, self.eps, ppr_idx,
@@ -826,6 +827,7 @@ class PPRGoWrapperBase():
                             split_desc="val",
                             normalize=normalize,
                             make_undirected=make_undirected,
+                            make_unweighted=make_unweighted,
                             shape=(len(idx_val), adj.shape[1]))
         if topk_val is None:
             topk_val = ppr.topk_ppr_matrix(adj, self.alpha, self.eps, idx_val,
