@@ -82,6 +82,8 @@ def load_ppr(
     make_unweighted=None,
     shape=None,
 ):
+    if input_dir is None:
+        return None
     ppr_idx = None
     dump_suffix = f"{dataset}"
     if split_desc is not None:

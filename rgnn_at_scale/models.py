@@ -636,6 +636,7 @@ class RGCN(r_gcn.RGCN):
 
 
 class PPRGoWrapperBase():
+
     def model_forward(self, *args, **kwargs):
         pass
 
@@ -1006,6 +1007,11 @@ class PPRGoWrapper(PPRGo, PPRGoWrapperBase):
         self.topk = topk
         self.ppr_normalization = ppr_normalization
         self.forward_batch_size = forward_batch_size
+        self.ppr_input_dir = None
+        self.dataset = None
+        self.normalize = None
+        self.make_undirected = None
+        self.make_unweighted = None
 
     def forward(self, *args, **kwargs):
         return self.forward_wrapper(*args, **kwargs)
@@ -1044,6 +1050,11 @@ class PPRGoDiffEmbWrapper(PPRGoEmmbeddingDiffusions, PPRGoWrapperBase):
         self.topk = topk
         self.ppr_normalization = ppr_normalization
         self.forward_batch_size = forward_batch_size
+        self.ppr_input_dir = None
+        self.dataset = None
+        self.normalize = None
+        self.make_undirected = None
+        self.make_unweighted = None
 
     def forward(self, *args, **kwargs):
         return self.forward_wrapper(*args, **kwargs)
@@ -1083,6 +1094,11 @@ class RobustPPRGoWrapper(RobustPPRGo, PPRGoWrapperBase):
         self.topk = topk
         self.ppr_normalization = ppr_normalization
         self.forward_batch_size = forward_batch_size
+        self.ppr_input_dir = None
+        self.dataset = None
+        self.normalize = None
+        self.make_undirected = None
+        self.make_unweighted = None
 
     def forward(self, *args, **kwargs):
         return self.forward_wrapper(*args, **kwargs)
@@ -1118,6 +1134,11 @@ class RobustPPRGoDiffEmbWrapper(RobustPPRGoEmmbeddingDiffusions, PPRGoWrapperBas
         self.topk = topk
         self.ppr_normalization = ppr_normalization
         self.forward_batch_size = forward_batch_size
+        self.ppr_input_dir = None
+        self.dataset = None
+        self.normalize = None
+        self.make_undirected = None
+        self.make_unweighted = None
 
     def forward(self, *args, **kwargs):
         return self.forward_wrapper(*args, **kwargs)
