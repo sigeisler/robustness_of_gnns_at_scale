@@ -9,7 +9,9 @@ import warnings
 import numpy as np
 from ogb.nodeproppred import PygNodePropPredDataset
 import scipy.sparse as sp
+import sklearn
 from sklearn.model_selection import train_test_split
+
 import torch
 import torch_sparse
 from torch_geometric.utils import add_remaining_self_loops, remove_isolated_nodes
@@ -596,6 +598,7 @@ def prep_cora_citeseer_pubmed(name: str,
 def prep_graph(name: str,
                device: Union[int, torch.device] = 0,
                normalize: bool = False,
+               normalize_attr: str = "per_feature",
                make_undirected: bool = True,
                make_unweighted: bool = True,
                binary_attr: bool = False,
@@ -696,7 +699,33 @@ def prep_graph(name: str,
 
         #adj = torch_sparse.SparseTensor.from_scipy(adj).coalesce()
 
-        attr = data.x.to(device)
+        attr_matrix = data.x.to(device).numpy()
+
+        # optional attribute normalization
+        if normalize_attr == 'per_feature':
+            logging.info("normalize per_feature")
+            logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+            if sp.issparse(attr_matrix):
+                scaler = sklearn.preprocessing.StandardScaler(with_mean=False)
+            else:
+                scaler = sklearn.preprocessing.StandardScaler()
+            attr_matrix = scaler.fit_transform(attr_matrix)
+        elif normalize_attr == 'per_node':
+            logging.info("normalize per_node")
+            logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+            if sp.issparse(attr_matrix):
+                attr_norms = sp.linalg.norm(attr_matrix, ord=1, axis=1)
+                attr_invnorms = 1 / np.maximum(attr_norms, 1e-12)
+                attr_matrix = attr_matrix.multiply(attr_invnorms[:, np.newaxis]).tocsr()
+            else:
+                attr_norms = np.linalg.norm(attr_matrix, ord=1, axis=1)
+                attr_invnorms = 1 / np.maximum(attr_norms, 1e-12)
+                attr_matrix = attr_matrix * attr_invnorms[:, np.newaxis]
+
+        attr = torch.from_numpy(attr_matrix)
+
+        logging.info("normalize attr done")
+        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
         labels = data.y.squeeze().to(device)
         logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
