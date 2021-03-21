@@ -14,11 +14,10 @@ from sklearn.model_selection import train_test_split
 
 import torch
 import torch_sparse
-from torch_geometric.utils import add_remaining_self_loops, remove_isolated_nodes
+from torch_geometric.utils import remove_isolated_nodes
 
 from rgnn_at_scale.helper import utils
 
-from pprgo import utils as ppr_utils
 sparse_graph_properties = [
     'adj_matrix', 'attr_matrix', 'labels', 'node_names', 'attr_names', 'class_names', 'metadata'
 ]
@@ -635,7 +634,7 @@ def prep_graph(name: str,
                                                       make_undirected,
                                                       make_unweighted)
     elif name.startswith('ogbn'):
-        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+        logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
 
         pyg_dataset = PygNodePropPredDataset(root=dataset_root, name=name)
 
@@ -677,24 +676,24 @@ def prep_graph(name: str,
 
         if make_undirected:
             logging.info("make undirected")
-            logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+            logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
 
             adj = utils.to_symmetric_scipy(adj, is_undirected=make_unweighted)
 
-            logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+            logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
             logging.info("make undirected done")
 
         if normalize == "row":
             logging.info("normalize row")
-            logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+            logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
             adj = utils.normalize_row(adj)
-            logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+            logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
             logging.info("normalize done")
         elif normalize:
             logging.info("normalize symmetric")
-            logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+            logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
             adj = utils.normalize_symmetric(adj)
-            logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+            logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
             logging.info("normalize done")
 
         #adj = torch_sparse.SparseTensor.from_scipy(adj).coalesce()
@@ -704,7 +703,7 @@ def prep_graph(name: str,
         # optional attribute normalization
         if normalize_attr == 'per_feature':
             logging.info("normalize per_feature")
-            logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+            logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
             if sp.issparse(attr_matrix):
                 scaler = sklearn.preprocessing.StandardScaler(with_mean=False)
             else:
@@ -712,7 +711,7 @@ def prep_graph(name: str,
             attr_matrix = scaler.fit_transform(attr_matrix)
         elif normalize_attr == 'per_node':
             logging.info("normalize per_node")
-            logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+            logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
             if sp.issparse(attr_matrix):
                 attr_norms = sp.linalg.norm(attr_matrix, ord=1, axis=1)
                 attr_invnorms = 1 / np.maximum(attr_norms, 1e-12)
@@ -725,10 +724,10 @@ def prep_graph(name: str,
         attr = torch.from_numpy(attr_matrix)
 
         logging.info("normalize attr done")
-        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+        logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
 
         labels = data.y.squeeze().to(device)
-        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+        logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
 
     if binary_attr:
         # NOTE: do not use this for really large datasets.
