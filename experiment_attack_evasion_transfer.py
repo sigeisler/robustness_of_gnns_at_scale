@@ -60,11 +60,12 @@ def config():
 
 @ex.automain
 def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequence[float], binary_attr: bool,
-        make_undirected: bool, make_unweighted: bool, surrogate_params: Dict[str, Any], seed: int, artifact_dir: str,
-        pert_adj_storage_type: str, pert_attr_storage_type: str, model_label: str, model_storage_type: str,
+        make_undirected: bool, make_unweighted: bool,  normalize: bool, normalize_attr: str, surrogate_params: Dict[str, Any], seed: int, 
+        artifact_dir: str, pert_adj_storage_type: str, pert_attr_storage_type: str, model_label: str, model_storage_type: str,
         device: Union[str, int], data_device: Union[str, int], display_steps: int):
     logging.info({
         'dataset': dataset, 'attack': attack, 'attack_params': attack_params, 'epsilons': epsilons,
+        'normalize': normalize, 'normalize_attr': normalize_attr,
         'binary_attr': binary_attr, 'surrogate_params': surrogate_params, 'seed': seed,
         'artifact_dir': artifact_dir, 'pert_adj_storage_type': pert_adj_storage_type,
         'pert_attr_storage_type': pert_attr_storage_type, 'model_label': model_label,
@@ -79,10 +80,13 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
 
     results = []
     graph = prep_graph(dataset, data_device, dataset_root=data_dir,
+                       normalize=normalize,
+                       normalize_attr=normalize_attr,
                        make_undirected=make_undirected,
                        make_unweighted=make_unweighted,
                        binary_attr=binary_attr,
                        return_original_split=dataset.startswith('ogbn'))
+
     attr, adj, labels = graph[:3]
     if len(graph) == 3:
         idx_train, idx_val, idx_test = split(labels.cpu().numpy())
@@ -161,9 +165,13 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
             storage.save_artifact(pert_adj_storage_type, {**params, **{'epsilon': epsilon}}, adj_per_eps[-1])
             storage.save_artifact(pert_attr_storage_type, {**params, **{'epsilon': epsilon}}, attr_per_eps[-1])
 
+        del adversary
+
+    adj = adj.to('cpu')
+    attr = attr.to('cpu')
     if epsilons[0] == 0:
-        adj_per_eps.insert(0, adj.to('cpu'))
-        attr_per_eps.insert(0, attr.to('cpu'))
+        adj_per_eps.insert(0, adj)
+        attr_per_eps.insert(0, attr)
 
     model_params = dict(dataset=dataset,
                         binary_attr=binary_attr,
@@ -173,16 +181,21 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
         model_params['label'] = model_label
     models_and_hyperparams = storage.find_models(model_storage_type, model_params)
 
+    results = []
     with torch.no_grad():
         for model, hyperparams in models_and_hyperparams:
             model = model.to(device)
             model.eval()
+
+            if hasattr(model, 'release_cache'):
+                model.release_cache()
 
             for eps, adj_perturbed, attr_perturbed in zip(epsilons, adj_per_eps, attr_per_eps):
                 # In case the model is non-deterministic to get the results either after attacking or after loading
                 torch.manual_seed(seed)
                 np.random.seed(seed)
 
+<<<<<<< HEAD
                 pred_logits_target = model(attr_perturbed.to(device), adj_perturbed.to(device))
                 acc_test_target = accuracy(pred_logits_target.cpu(), labels.cpu(), idx_test)
                 results.append({
@@ -190,6 +203,25 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                     'epsilon': eps,
                     'accuracy': acc_test_target
                 })
+=======
+                try:
+
+                    pred_logits_target = model(attr_perturbed.to(device), adj_perturbed.to(device))
+                    acc_test_target = accuracy(pred_logits_target, labels.to(device), idx_test)
+                    results.append({
+                        'label': hyperparams['label'],
+                        'epsilon': eps,
+                        'accuracy': acc_test_target
+                    })
+
+                except Exception as e:
+                    logging.error(f'Failed for {hyperparams["label"]} and epsilon {eps}')
+                    logging.exception(e)
+
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    torch.cuda.synchronize()
+>>>>>>> main
 
     return {
         'results': results

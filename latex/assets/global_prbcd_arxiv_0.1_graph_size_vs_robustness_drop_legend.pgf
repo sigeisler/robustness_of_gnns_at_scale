@@ -1,0 +1,76 @@
+%% Creator: Matplotlib, PGF backend
+%%
+%% To include the figure in your LaTeX document, write
+%%   \input{<filename>.pgf}
+%%
+%% Make sure the required packages are loaded in your preamble
+%%   \usepackage{pgf}
+%%
+%% and, on pdftex
+%%   \usepackage[utf8]{inputenc}\DeclareUnicodeCharacter{2212}{-}
+%%
+%% or, on luatex and xetex
+%%   \usepackage{unicode-math}
+%%
+%% Figures using additional raster images can only be included by \input if
+%% they are in the same directory as the main LaTeX file. For loading figures
+%% from other directories you can use the `import` package
+%%   \usepackage{import}
+%%
+%% and then include the figures with
+%%   \import{<path to file>}{<filename>.pgf}
+%%
+%% Matplotlib used the following preamble
+%%   \usepackage[utf8]{inputenc}
+%%   \usepackage[T1]{fontenc}
+%%   \usepackage{amsmath}
+%%   \newcommand*{\mat}[1]{\boldsymbol{#1}}
+%%
+\begingroup%
+\makeatletter%
+\begin{pgfpicture}%
+\pgfpathrectangle{\pgfpointorigin}{\pgfqpoint{0.288889in}{0.288889in}}%
+\pgfusepath{use as bounding box, clip}%
+\begin{pgfscope}%
+\pgfsetbuttcap%
+\pgfsetmiterjoin%
+\definecolor{currentfill}{rgb}{1.000000,1.000000,1.000000}%
+\pgfsetfillcolor{currentfill}%
+\pgfsetlinewidth{0.000000pt}%
+\definecolor{currentstroke}{rgb}{1.000000,1.000000,1.000000}%
+\pgfsetstrokecolor{currentstroke}%
+\pgfsetstrokeopacity{0.000000}%
+\pgfsetdash{}{0pt}%
+\pgfpathmoveto{\pgfqpoint{0.000000in}{0.000000in}}%
+\pgfpathlineto{\pgfqpoint{0.288889in}{0.000000in}}%
+\pgfpathlineto{\pgfqpoint{0.288889in}{0.288889in}}%
+\pgfpathlineto{\pgfqpoint{0.000000in}{0.288889in}}%
+\pgfpathclose%
+\pgfusepath{fill}%
+\end{pgfscope}%
+\begin{pgfscope}%
+\pgfsetbuttcap%
+\pgfsetmiterjoin%
+\definecolor{currentfill}{rgb}{1.000000,1.000000,1.000000}%
+\pgfsetfillcolor{currentfill}%
+\pgfsetfillopacity{0.800000}%
+\pgfsetlinewidth{1.003750pt}%
+\definecolor{currentstroke}{rgb}{0.800000,0.800000,0.800000}%
+\pgfsetstrokecolor{currentstroke}%
+\pgfsetstrokeopacity{0.800000}%
+\pgfsetdash{}{0pt}%
+\pgfpathmoveto{\pgfqpoint{0.122222in}{0.100000in}}%
+\pgfpathlineto{\pgfqpoint{0.166667in}{0.100000in}}%
+\pgfpathquadraticcurveto{\pgfqpoint{0.188889in}{0.100000in}}{\pgfqpoint{0.188889in}{0.122222in}}%
+\pgfpathlineto{\pgfqpoint{0.188889in}{0.166667in}}%
+\pgfpathquadraticcurveto{\pgfqpoint{0.188889in}{0.188889in}}{\pgfqpoint{0.166667in}{0.188889in}}%
+\pgfpathlineto{\pgfqpoint{0.122222in}{0.188889in}}%
+\pgfpathquadraticcurveto{\pgfqpoint{0.100000in}{0.188889in}}{\pgfqpoint{0.100000in}{0.166667in}}%
+\pgfpathlineto{\pgfqpoint{0.100000in}{0.122222in}}%
+\pgfpathquadraticcurveto{\pgfqpoint{0.100000in}{0.100000in}}{\pgfqpoint{0.122222in}{0.100000in}}%
+\pgfpathclose%
+\pgfusepath{stroke,fill}%
+\end{pgfscope}%
+\end{pgfpicture}%
+\makeatother%
+\endgroup%
