@@ -16,8 +16,8 @@ import torch
 import torch_sparse
 from torch_geometric.utils import add_remaining_self_loops, remove_isolated_nodes
 
-from rgnn_at_scale import utils
-from pprgo.pytorch_utils import matrix_to_torch
+from rgnn_at_scale.helper import utils
+
 from pprgo import utils as ppr_utils
 sparse_graph_properties = [
     'adj_matrix', 'attr_matrix', 'labels', 'node_names', 'attr_names', 'class_names', 'metadata'
@@ -787,7 +787,7 @@ class RobustPPRDataset(torch.utils.data.Dataset):
         key = idx[0]
         if key not in self.cached:
             # shape (batch_size, num_nodes)
-            ppr_matrix = matrix_to_torch(self.ppr_matrix[idx])
+            ppr_matrix = utils.matrix_to_torch(self.ppr_matrix[idx])
 
             # shape (ppr_num_nonzeros)
             source_idx, neighbor_idx, ppr_scores = ppr_matrix.coo()

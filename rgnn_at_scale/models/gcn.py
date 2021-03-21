@@ -16,8 +16,8 @@ from torch_scatter import scatter_add
 from torch_sparse import coalesce, SparseTensor
 
 from rgnn_at_scale.aggregation import chunked_message_and_aggregate
-from rgnn_at_scale.utils import (get_approx_topk_ppr_matrix, get_ppr_matrix, get_truncated_svd, get_jaccard,
-                                 sparse_tensor_to_tuple, tuple_to_sparse_tensor)
+from rgnn_at_scale.helper.utils import (get_approx_topk_ppr_matrix, get_ppr_matrix, get_truncated_svd, get_jaccard,
+                                        sparse_tensor_to_tuple, tuple_to_sparse_tensor)
 
 
 class ChainableGCNConv(GCNConv):

@@ -10,7 +10,7 @@ from sparse_smoothing.prediction import predict_smooth_gnn
 from sparse_smoothing.cert import binary_certificate
 
 from rgnn_at_scale.data import prep_graph, split
-from rgnn_at_scale.io import Storage
+from rgnn_at_scale.helper.io import Storage
 
 
 ex = Experiment()

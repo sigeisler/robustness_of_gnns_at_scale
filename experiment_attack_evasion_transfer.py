@@ -8,10 +8,10 @@ import torch
 
 from rgnn_at_scale.data import prep_graph, split
 from rgnn_at_scale.attacks import create_attack, SPARSE_ATTACKS
-from rgnn_at_scale.io import Storage
+from rgnn_at_scale.helper.io import Storage
 from rgnn_at_scale.models import DenseGCN, GCN
 from rgnn_at_scale.train import train
-from rgnn_at_scale.utils import accuracy
+from rgnn_at_scale.helper.utils import accuracy
 
 
 ex = Experiment()
@@ -32,7 +32,8 @@ def config():
 
     # default params
     dataset = 'cora_ml'  # Options are 'cora_ml' and 'citeseer' (or with a big GPU 'pubmed')
-    attack = 'FGSM'
+    data_dir = './datasets'
+    attack = 'PRBCD'
     attack_params = {}
     epsilons = [0, 0.1, 0.25]
     surrogate_params = {
@@ -46,21 +47,24 @@ def config():
         }
     }
     binary_attr = False
-    seed = 0
-    artifact_dir = 'cache_debug'
-    pert_adj_storage_type = 'evasion_transfer_attack_adj'
-    pert_attr_storage_type = 'evasion_transfer_attack_attr'
-    model_storage_type = 'pretrained'
-    device = 0
-    display_steps = 10
-    model_label = None
+    normalize = False
     make_undirected = True
     make_unweighted = True
+    normalize_attr = None
+    seed = 0
+    artifact_dir = 'cache'
+    pert_adj_storage_type = 'evasion_transfer_attack_adj'
+    pert_attr_storage_type = 'evasion_transfer_attack_attr'
+    model_storage_type = 'attack_cora'
+    device = "cpu"
+    data_device = "cpu"
+    display_steps = 10
+    model_label = None
 
 
 @ex.automain
 def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequence[float], binary_attr: bool,
-        make_undirected: bool, make_unweighted: bool,  normalize: bool, normalize_attr: str, surrogate_params: Dict[str, Any], seed: int, 
+        make_undirected: bool, make_unweighted: bool,  normalize: bool, normalize_attr: str, surrogate_params: Dict[str, Any], seed: int,
         artifact_dir: str, pert_adj_storage_type: str, pert_attr_storage_type: str, model_label: str, model_storage_type: str,
         device: Union[str, int], data_device: Union[str, int], display_steps: int):
     logging.info({
@@ -195,17 +199,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                 torch.manual_seed(seed)
                 np.random.seed(seed)
 
-<<<<<<< HEAD
-                pred_logits_target = model(attr_perturbed.to(device), adj_perturbed.to(device))
-                acc_test_target = accuracy(pred_logits_target.cpu(), labels.cpu(), idx_test)
-                results.append({
-                    'label': hyperparams['label'],
-                    'epsilon': eps,
-                    'accuracy': acc_test_target
-                })
-=======
                 try:
-
                     pred_logits_target = model(attr_perturbed.to(device), adj_perturbed.to(device))
                     acc_test_target = accuracy(pred_logits_target, labels.to(device), idx_test)
                     results.append({
@@ -213,7 +207,6 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                         'epsilon': eps,
                         'accuracy': acc_test_target
                     })
-
                 except Exception as e:
                     logging.error(f'Failed for {hyperparams["label"]} and epsilon {eps}')
                     logging.exception(e)
@@ -221,7 +214,6 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
                     torch.cuda.synchronize()
->>>>>>> main
 
     return {
         'results': results

@@ -9,9 +9,9 @@ import torch
 from torch.nn import functional as F
 
 from rgnn_at_scale.models import BATCHED_PPR_MODELS
-from rgnn_at_scale.utils import sparse_tensor
+from rgnn_at_scale.helper.utils import sparse_tensor
 from rgnn_at_scale.models import GCN
-from rgnn_at_scale.io import Storage
+from rgnn_at_scale.helper.io import Storage
 
 """
 Implementation of the method proposed in the paper:

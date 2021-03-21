@@ -16,7 +16,7 @@ from torch.utils.cpp_extension import load
 import torch_scatter
 import torch_sparse
 
-from rgnn_at_scale.utils import sparse_tensor_to_tuple, tuple_to_sparse_tensor
+from rgnn_at_scale.helper.utils import sparse_tensor_to_tuple, tuple_to_sparse_tensor
 
 try:
     try:

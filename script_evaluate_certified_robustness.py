@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import scipy.stats as stats
 
-from rgnn_at_scale.local import setup_logging, build_configs_and_run
+from rgnn_at_scale.helper.local import setup_logging, build_configs_and_run
 
 
 parser = argparse.ArgumentParser(

@@ -1,19 +1,19 @@
 """For the util methods such as conversions or adjacency preprocessings.
 """
 from typing import Sequence, Tuple, Union
-import logging
+import resource
 
 import numba
+import torch
+import torch_scatter
+
 import numpy as np
 import scipy.sparse as sp
+
 from sklearn.preprocessing import normalize
-import torch
 
 from torch_geometric.utils import from_scipy_sparse_matrix, add_remaining_self_loops
-import torch_scatter
-import torch_sparse
-from torch_sparse import SparseTensor, transpose, spmm, coalesce
-from pprgo import utils as ppr_utils
+from torch_sparse import SparseTensor, SparseStorage, coalesce
 
 
 # TODO: Move to base attack
@@ -34,7 +34,7 @@ def grad_with_checkpoint(outputs: Union[torch.Tensor, Sequence[torch.Tensor]],
     return grad_outputs
 
 
-def sparse_tensor_to_tuple(adj: torch_sparse.SparseTensor) -> Tuple[torch.Tensor, ...]:
+def sparse_tensor_to_tuple(adj: SparseTensor) -> Tuple[torch.Tensor, ...]:
     s = adj.storage
     return (s.value(), s.row(), s.rowptr(), s.col(), s.colptr(),
             s.csr2csc(), s.csc2csr(), torch.tensor(s.sparse_sizes()))
@@ -42,10 +42,10 @@ def sparse_tensor_to_tuple(adj: torch_sparse.SparseTensor) -> Tuple[torch.Tensor
 
 def tuple_to_sparse_tensor(edge_weight: torch.Tensor, row: torch.Tensor, rowptr: torch.Tensor,
                            col: torch.Tensor, colptr: torch.Tensor, csr2csc: torch.Tensor,
-                           csc2csr: torch.Tensor, sparse_size: torch.Tensor) -> torch_sparse.SparseTensor:
-    sp_st = torch_sparse.SparseStorage(row=row, rowptr=rowptr, col=col, colptr=colptr, csr2csc=csr2csc, csc2csr=csc2csr,
-                                       value=edge_weight, sparse_sizes=sparse_size.tolist(), is_sorted=True)
-    sparse_tensor = torch_sparse.SparseTensor.from_storage(sp_st)
+                           csc2csr: torch.Tensor, sparse_size: torch.Tensor) -> SparseTensor:
+    sp_st = SparseStorage(row=row, rowptr=rowptr, col=col, colptr=colptr, csr2csc=csr2csc, csc2csr=csc2csr,
+                          value=edge_weight, sparse_sizes=sparse_size.tolist(), is_sorted=True)
+    sparse_tensor = SparseTensor.from_storage(sp_st)
     return sparse_tensor
 
 
@@ -55,13 +55,11 @@ def calc_A_hat(adj_matrix: sp.spmatrix) -> sp.spmatrix:
     """
     nnodes = adj_matrix.shape[0]
     A = adj_matrix + sp.eye(nnodes)
-    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
     D_vec_invsqrt_corr = 1 / np.sqrt(np.sum(A, axis=1).A1)
-    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
     D_invsqrt_corr = sp.diags(D_vec_invsqrt_corr)
-    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+
     return D_invsqrt_corr @ A @ D_invsqrt_corr
 
 
@@ -174,7 +172,7 @@ def calc_ppr_update(ppr: SparseTensor,
     P_uv_inv_idx = torch.cat((P_inv_idx, P_uv_inv_diff_idx), dim=-1)
     P_uv_inv_weights = torch.cat((P_inv_vals, P_uv_inv_diff_vals * -1))
 
-    P_uv_inv_idx, P_uv_inv_weights = torch_sparse.coalesce(
+    P_uv_inv_idx, P_uv_inv_weights = coalesce(
         P_uv_inv_idx,
         P_uv_inv_weights,
         m=num_nodes,
@@ -502,7 +500,7 @@ def get_approx_topk_ppr_matrix(edge_idx: torch.Tensor,
                                ppr_err: float = 1e-4,
                                **kwargs) -> Tuple[torch.Tensor, torch.Tensor]:
     edge_weight = torch.ones_like(edge_idx[0], dtype=torch.float32)
-    edge_idx, edge_weight = torch_sparse.coalesce(edge_idx, edge_weight, n, n)
+    edge_idx, edge_weight = coalesce(edge_idx, edge_weight, n, n)
 
     row, col = edge_idx
 
@@ -621,12 +619,10 @@ def to_symmetric(edge_index: torch.Tensor, edge_weight: torch.Tensor,
     symmetric_edge_index = torch.cat(
         (edge_index, edge_index.flip(0)), dim=-1
     )
-    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
     symmetric_edge_weight = edge_weight.repeat(2)
-    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
-    symmetric_edge_index, symmetric_edge_weight = torch_sparse.coalesce(
+    symmetric_edge_index, symmetric_edge_weight = coalesce(
         symmetric_edge_index,
         symmetric_edge_weight,
         m=n,
@@ -637,14 +633,13 @@ def to_symmetric(edge_index: torch.Tensor, edge_weight: torch.Tensor,
 
 
 def to_symmetric_scipy(adjacency: sp.csr_matrix, is_undirected: bool):
-    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+
     if is_undirected:
         sym_adjacency = (adjacency + adjacency.T).astype(bool)
     else:
         sym_adjacency = adjacency.astype(float)
         sym_adjacency += adjacency.T
 
-    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
     sym_adjacency.tocsr().sort_indices()
 
     return sym_adjacency
@@ -657,17 +652,16 @@ def normalize_row(adj_matrix: sp.spmatrix) -> sp.spmatrix:
 def normalize_symmetric(adj_matrix: sp.spmatrix) -> sp.spmatrix:
 
     D_vec_invsqrt_corr = 1 / np.sqrt(np.sum(adj_matrix, axis=1).A1)
-    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
 
     D_invsqrt_corr = sp.diags(D_vec_invsqrt_corr)
-    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+
     return D_invsqrt_corr @ adj_matrix @ D_invsqrt_corr
 
 
 def sparse_tensor(spmat: sp.spmatrix, grad: bool = False):
     """
 
-    Convert a scipy.sparse matrix to a torch_sparse.SparseTensor.
+    Convert a scipy.sparse matrix to a SparseTensor.
     Parameters
     ----------
     spmat: sp.spmatrix
@@ -676,7 +670,7 @@ def sparse_tensor(spmat: sp.spmatrix, grad: bool = False):
         Whether the resulting tensor should have "requires_grad".
     Returns
     -------
-    sparse_tensor: torch_sparse.SparseTensor
+    sparse_tensor: SparseTensor
         The output sparse tensor.
     """
     if str(spmat.dtype) == "float32":
@@ -691,7 +685,7 @@ def sparse_tensor(spmat: sp.spmatrix, grad: bool = False):
         dtype = torch.uint8
     else:
         dtype = torch.float32
-    return torch_sparse.SparseTensor.from_scipy(spmat).to(dtype).coalesce()
+    return SparseTensor.from_scipy(spmat).to(dtype).coalesce()
 
 
 def accuracy(logits: torch.Tensor, labels: torch.Tensor, split_idx: np.ndarray) -> float:
@@ -770,3 +764,14 @@ def truncatedSVD(data, k=50):
         diag_S = np.diag(S)
 
     return U @ diag_S @ V
+
+
+def get_max_memory_bytes():
+    return 1024 * resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+
+
+def matrix_to_torch(X):
+    if sp.issparse(X):
+        return SparseTensor.from_scipy(X)
+    else:
+        return torch.FloatTensor(X)

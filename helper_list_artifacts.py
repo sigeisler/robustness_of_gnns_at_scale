@@ -6,8 +6,8 @@ import logging
 
 import pandas as pd
 
-from rgnn_at_scale.io import Storage
-from rgnn_at_scale.local import setup_logging
+from rgnn_at_scale.helper.io import Storage
+from rgnn_at_scale.helper.local import setup_logging
 
 
 parser = argparse.ArgumentParser(

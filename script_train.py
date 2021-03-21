@@ -3,7 +3,7 @@ import json
 import logging
 import os
 
-from rgnn_at_scale.local import setup_logging, build_configs_and_run
+from rgnn_at_scale.helper.local import setup_logging, build_configs_and_run
 
 
 parser = argparse.ArgumentParser(
@@ -11,7 +11,7 @@ parser = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter
 )
 parser.add_argument('--config-files', nargs='+', type=str,
-                    default=[os.path.join('seml', 'train', 'cora_and_citeseer.yaml')],
+                    default=[os.path.join('seml', 'train', 'cora.yaml')],
                     help='Config YAML files. The script deduplicates the configs, but does not check them.')
 parser.add_argument('--kwargs', type=json.loads, default='{}', help='Will overwrite the loaded config')
 

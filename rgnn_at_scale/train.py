@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from tqdm.auto import tqdm
-from rgnn_at_scale.utils import accuracy
+from rgnn_at_scale.helper.utils import accuracy
 
 
 def train(model, attr, adj, labels, idx_train, idx_val,

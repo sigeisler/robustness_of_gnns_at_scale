@@ -9,7 +9,7 @@ import numpy as np
 import torch
 import torch_sparse
 from torch_sparse import SparseTensor
-from rgnn_at_scale import utils
+from rgnn_at_scale.helper import utils
 from rgnn_at_scale.models import GCN
 
 """

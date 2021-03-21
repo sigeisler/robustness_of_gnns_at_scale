@@ -2,18 +2,15 @@
 import logging
 
 import math
-import os.path as osp
-from pathlib import Path
-import numba
 import numpy as np
 import scipy.sparse as sp
-import psutil
+from pathlib import Path
 
 from pprgo import utils as ppr_utils
 from pprgo import ppr
 
 
-from rgnn_at_scale.local import setup_logging
+from rgnn_at_scale.helper.local import setup_logging
 from rgnn_at_scale.data import prep_graph, split
 
 setup_logging()

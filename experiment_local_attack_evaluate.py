@@ -15,13 +15,11 @@ from rgnn_at_scale.data import prep_graph, split
 from rgnn_at_scale.attacks import create_attack, SPARSE_ATTACKS
 from rgnn_at_scale.attacks.local_prbcd import LocalPRBCD
 
-from rgnn_at_scale.io import Storage
+from rgnn_at_scale.helper.io import Storage
 from rgnn_at_scale.models import DenseGCN, GCN
 from rgnn_at_scale.train import train
-from rgnn_at_scale.utils import accuracy
-from pprgo import utils as ppr_utils
-from pprgo import ppr
-
+from rgnn_at_scale.helper import utils
+from rgnn_at_scale.helper import ppr_utils as ppr
 
 ex = Experiment()
 seml.setup_logger(ex)
@@ -45,11 +43,11 @@ def config():
     seeds = [0, 1, 5]
     db_collection_attacks = "kdd21_local_attack_citeseer"
     artifact_dir = 'cache'
-    model_storage_type = 'attack_citeseer'
+    model_storage_type = 'attack_cora'
     device = "cpu"
     data_device = 'cpu'
     data_dir = './datasets'
-    dataset = 'citeseer'
+    dataset = 'cora_ml'
     make_undirected = True
     make_unweighted = True
     binary_attr = False
@@ -110,7 +108,7 @@ def run(data_dir: str, dataset: str, db_collection_attacks: str, binary_attr: bo
     else:
         idx_train, idx_val, idx_test = graph[3]['train'], graph[3]['valid'], graph[3]['test']
 
-    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+    logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
 
     storage = Storage(artifact_dir, experiment=ex)
 

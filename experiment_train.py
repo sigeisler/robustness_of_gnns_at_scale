@@ -8,12 +8,12 @@ import seml
 import torch
 
 from rgnn_at_scale.data import prep_graph, split
-from rgnn_at_scale.io import Storage
+from rgnn_at_scale.helper.io import Storage
 from rgnn_at_scale.models import create_model, PPRGoWrapperBase
 from rgnn_at_scale.train import train
-from rgnn_at_scale.utils import accuracy
+from rgnn_at_scale.helper.utils import accuracy
+from rgnn_at_scale.helper import utils
 import torch.nn.functional as F
-from pprgo import utils as ppr_utils
 
 ex = Experiment()
 seml.setup_logger(ex)
@@ -114,7 +114,7 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
     model = create_model(hyperparams).to(device)
 
     logging.info("model")
-    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+    logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
 
     if hasattr(model, 'fit'):
         trace = model.fit(adj, attr,

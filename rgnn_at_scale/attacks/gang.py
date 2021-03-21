@@ -11,7 +11,7 @@ import torch
 import torch.nn.functional as F
 import torch_sparse
 
-from rgnn_at_scale import utils
+from rgnn_at_scale.helper import utils
 from rgnn_at_scale.attacks.prbcd import PRBCD
 from rgnn_at_scale.models import GCN
 

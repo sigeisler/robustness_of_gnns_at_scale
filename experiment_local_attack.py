@@ -8,12 +8,12 @@ import torch
 
 from rgnn_at_scale.data import prep_graph, split
 from rgnn_at_scale.attacks import create_attack, SPARSE_ATTACKS
-from rgnn_at_scale.io import Storage
+from rgnn_at_scale.helper.io import Storage
 from rgnn_at_scale.models import DenseGCN, GCN
 from rgnn_at_scale.train import train
-from rgnn_at_scale.utils import accuracy
-from pprgo import utils as ppr_utils
+from rgnn_at_scale.helper.utils import accuracy
 
+from rgnn_at_scale.helper import utils
 
 ex = Experiment()
 seml.setup_logger(ex)
@@ -104,7 +104,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
     else:
         idx_train, idx_val, idx_test = graph[3]['train'], graph[3]['valid'], graph[3]['test']
 
-    logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+    logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
 
     storage = Storage(artifact_dir, experiment=ex)
 

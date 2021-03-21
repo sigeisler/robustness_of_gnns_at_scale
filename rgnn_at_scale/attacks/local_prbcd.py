@@ -1,25 +1,24 @@
 from collections import defaultdict
-from copy import deepcopy
+from typing import Dict, Optional, Union
+
 import math
 import logging
-from typing import Dict, Optional, Union
-import warnings
 
-import numpy as np
-import scipy.sparse as sp
-from torch.nn import functional as F
 import torch
 import torch_sparse
+import numpy as np
+
+from torch.nn import functional as F
 from torch_sparse import SparseTensor
 from tqdm import tqdm
 
 from rgnn_at_scale.models import MODEL_TYPE, BATCHED_PPR_MODELS
-from rgnn_at_scale.utils import calc_ppr_exact_row, calc_ppr_update_sparse_result, grad_with_checkpoint
-from pprgo import ppr
-from rgnn_at_scale.attacks.prbcd import PRBCD
-from rgnn_at_scale.load_ppr import load_ppr, load_ppr_csr
+from rgnn_at_scale.helper.utils import calc_ppr_update_sparse_result, grad_with_checkpoint
 
-from pprgo import utils as ppr_utils
+from rgnn_at_scale.attacks.prbcd import PRBCD
+from rgnn_at_scale.helper.ppr_load import load_ppr_csr
+from rgnn_at_scale.helper import utils
+from rgnn_at_scale.helper import ppr_utils as ppr
 
 
 class LocalPRBCD():
@@ -47,7 +46,7 @@ class LocalPRBCD():
                  K: int = 20,
                  **kwargs):
 
-        logging.info(f'Memory before loading ppr: {ppr_utils.get_max_memory_bytes() / (1024 ** 3)}')
+        logging.info(f'Memory before loading ppr: {utils.get_max_memory_bytes() / (1024 ** 3)}')
 
         self.device = device
         self.X = X
@@ -91,7 +90,7 @@ class LocalPRBCD():
             self.ppr_recalc_at_end = ppr_recalc_at_end
 
             logging.info(f'self.ppr_matrix is of shape {self.ppr_matrix.shape}')
-            logging.info(f'Memory after loading ppr: {ppr_utils.get_max_memory_bytes() / (1024 ** 3)}')
+            logging.info(f'Memory after loading ppr: {utils.get_max_memory_bytes() / (1024 ** 3)}')
 
         if isinstance(adj, SparseTensor):
             self.adj = adj

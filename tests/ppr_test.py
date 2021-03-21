@@ -6,12 +6,11 @@ from tqdm.auto import tqdm
 
 
 from pprgo.pytorch_utils import matrix_to_torch
-from pprgo.ppr import topk_ppr_matrix
+from rgnn_at_scale.helper.ppr_utils import topk_ppr_matrix
 
 from rgnn_at_scale.data import prep_graph, split
-from rgnn_at_scale.utils import calc_ppr_update, calc_ppr_update_dense, calc_ppr_update_topk_dense,\
-    calc_ppr_update_topk_sparse, calc_ppr_exact_row, calc_A_row
-from rgnn_at_scale.utils import calc_ppr_update_sparse_result
+from rgnn_at_scale.helper.utils import calc_ppr_update, calc_ppr_update_dense, calc_ppr_exact_row, calc_A_row
+from rgnn_at_scale.helper.utils import calc_ppr_update_sparse_result
 
 device = 0 if torch.cuda.is_available() else 'cpu'
 
@@ -136,7 +135,6 @@ class TestPPRUpdate():
             A_sp, alpha, eps, ppr_idx, topk, normalization='row')).to_dense()
 
         ppr_topk[i] = ppr_topk_i
-        ppr_exact = calc_ppr_exact_row(A_dense, alpha=alpha)
 
         ppr_pert_update_topk = calc_ppr_update_dense(ppr=ppr_topk,
                                                      A=A_dense,
@@ -144,21 +142,13 @@ class TestPPRUpdate():
                                                      i=i,
                                                      alpha=alpha)
 
-        ppr_pert_update_exact = calc_ppr_update_dense(ppr=ppr_exact,
-                                                      A=A_dense,
-                                                      p=p,
-                                                      i=i,
-                                                      alpha=alpha)
-
         u = torch.zeros((num_nodes, 1),
                         dtype=torch.float32)
         u[i] = 1
         v = torch.where(A_dense[i] > 0, -p, p)
         A_pert = A_dense + u @ v
         ppr_pert_exact = calc_ppr_exact_row(A_pert, alpha=alpha)
-        A_pert_sp = SparseTensor.from_dense(calc_A_row(A_pert)).to_scipy(layout="csr")
-        ppr_pert_topk = matrix_to_torch(topk_ppr_matrix(
-            A_pert_sp, alpha, eps, ppr_idx, topk, normalization='row')).to_dense()
+
         assert torch.allclose(ppr_pert_update_topk, ppr_pert_exact, atol=1e-02)
 
     def test_simple_example_sparse(self):

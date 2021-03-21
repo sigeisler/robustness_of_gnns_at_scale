@@ -12,10 +12,10 @@ from torch_geometric.utils import degree, remove_isolated_nodes, subgraph, to_ne
 
 from rgnn_at_scale.data import prep_graph, split
 from rgnn_at_scale.attacks import create_attack, SPARSE_ATTACKS
-from rgnn_at_scale.io import Storage
+from rgnn_at_scale.helper.io import Storage
 from rgnn_at_scale.models import DenseGCN, GCN
 from rgnn_at_scale.train import train
-from rgnn_at_scale.utils import accuracy
+from rgnn_at_scale.helper.utils import accuracy
 
 
 ex = Experiment()

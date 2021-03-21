@@ -1,9 +1,9 @@
 from typing import Any, Dict, Union
 
-from rgnn_at_scale.models.gcn import GCN
+from rgnn_at_scale.models.gcn import GCN, DenseGCN
 from rgnn_at_scale.models.rgnn import RGNN
 from rgnn_at_scale.models.rgcn import RGCN
-from rgnn_at_scale.models.pprgo import RobustPPRGoWrapper, PPRGoWrapper, PPRGoDiffEmbWrapper, RobustPPRGoDiffEmbWrapper
+from rgnn_at_scale.models.pprgo import PPRGoWrapperBase, RobustPPRGoWrapper, PPRGoWrapper, PPRGoDiffEmbWrapper, RobustPPRGoDiffEmbWrapper
 
 
 MODEL_TYPE = Union[GCN, RGNN, RGCN, RobustPPRGoWrapper, PPRGoWrapper]
@@ -40,8 +40,10 @@ def create_model(hyperparams: Dict[str, Any]) -> MODEL_TYPE:
 
 
 __all__ = [GCN,
+           DenseGCN,
            RGNN,
            RGCN,
+           PPRGoWrapperBase,
            PPRGoWrapper,
            RobustPPRGoWrapper,
            PPRGoDiffEmbWrapper,
