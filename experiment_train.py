@@ -32,12 +32,17 @@ def config():
         ex.observers.append(seml.create_mongodb_observer(db_collection, overwrite=overwrite))
 
     # default params
-    dataset = 'cora_ml'
+    dataset = 'ogbn-papers100M'
     model_params = {
-        'label': 'Vanilla GCN',
-        'model': 'GCN',
+        'label': 'Vanilla PPRGo Diffusion Embedding',
+        'model': 'PPRGoDiffEmbWrapper',
         'dropout': 0.5,
         'n_filters': 64,
+        'hidden_size': 640,
+        'nlayers': 5,
+        'ppr_normalization': 'row',
+        'topk': 64, 'alpha': 0.1, 'eps': 1e-03,
+        'skip_connection': True,
         'gdc_params': None,
         'svd_params': None,
         'batch_norm': False,
@@ -54,6 +59,7 @@ def config():
     normalize = False
     make_undirected = True
     make_unweighted = True
+    normalize_attr = None
     seed = 0
     artifact_dir = 'cache_debug'
     model_storage_type = 'pretrained'
@@ -65,11 +71,11 @@ def config():
 
 @ex.automain
 def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params: Dict[str, Any], binary_attr: bool,
-        make_undirected: bool, make_unweighted: bool, normalize: bool, seed: int, artifact_dir: str,
+        make_undirected: bool, make_unweighted: bool, normalize: bool, normalize_attr: str, seed: int, artifact_dir: str,
         model_storage_type: str, device: Union[str, int], data_device: Union[str, int], display_steps: int):
     logging.info({
         'dataset': dataset, 'model_params': model_params, 'train_params': train_params, 'binary_attr': binary_attr,
-        'make_undirected': make_undirected, 'make_unweighted': make_unweighted, 'normalize': normalize,
+        'make_undirected': make_undirected, 'make_unweighted': make_unweighted, 'normalize': normalize, 'normalize_attr': normalize_attr,
         'seed': seed, 'artifact_dir': artifact_dir, 'model_storage_type': model_storage_type, 'device': device,
         'display_steps': display_steps
     })
@@ -79,6 +85,7 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
 
     graph = prep_graph(dataset, data_device, dataset_root=data_dir,
                        normalize=normalize,
+                       normalize_attr=normalize_attr,
                        make_undirected=make_undirected,
                        make_unweighted=make_unweighted,
                        binary_attr=binary_attr,
