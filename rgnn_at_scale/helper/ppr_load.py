@@ -60,7 +60,11 @@ def _load_ppr(input_dir, dump_suffix, shape):
     concat_start = datetime.now()
     if shape is None:
         # guess shape
-        shape = (edge_rows.max() + 1, edge_cols.max() + 1)
+        max_row = edge_rows.max() + 1
+        max_col = edge_cols.max() + 1
+        # guess shape is square
+        max_nodes = max(max_row, max_col)
+        shape = (max_nodes, max_nodes)
 
     adj = sp.csr_matrix((edge_vals, (edge_rows, edge_cols)), shape=shape)
     concat_time = datetime.now() - concat_start
@@ -106,14 +110,17 @@ def load_ppr(
         logging.info(f"No cached topk ppr found with key '{dump_suffix}' in directory '{input_dir}'")
         return None
 
+    ppr_idx = None
     if split_desc is not None and idx is not None:
         ppr_idx = np.load(Path(input_dir) / f"{dump_suffix}_idx.npy")
+
+    if idx is not None:
         if len(ppr_idx) != len(idx):
             # the ppr that was precalculated with for the given configuration was calculated for a different set of nodes
             # TODO: this is only a very crude check, to make sure the idx actually matches we'd need to fully compare them, but that's expensive...
             return None
 
-    return _load_ppr(input_dir, dump_suffix, shape)
+    return _load_ppr(input_dir, dump_suffix, shape), ppr_idx
 
 
 def load_ppr_csr(

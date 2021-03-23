@@ -3,8 +3,6 @@ from typing import Any, Dict, Union
 import math
 import logging
 
-from datetime import datetime
-
 import torch
 import torch.nn.functional as F
 
@@ -12,7 +10,6 @@ import numpy as np
 import scipy.sparse as sp
 
 from torch import nn
-from torch.utils.tensorboard import SummaryWriter
 
 from torch_sparse import SparseTensor
 from torch_scatter import scatter
@@ -22,7 +19,6 @@ from rgnn_at_scale.data import RobustPPRDataset
 from rgnn_at_scale.aggregation import ROBUST_MEANS
 from rgnn_at_scale.helper import utils
 from rgnn_at_scale.helper import ppr_utils as ppr
-from rgnn_at_scale.helper.ppr_load import load_ppr
 
 
 class PPRGoMLP(nn.Module):
@@ -316,6 +312,47 @@ class RobustPPRGoEmmbeddingDiffusions(nn.Module):
 
 class PPRGoWrapperBase():
 
+    def __init__(self,
+                 n_features: int,
+                 n_classes: int,
+                 hidden_size: int,
+                 nlayers: int,
+                 dropout: float,
+                 alpha: float,
+                 eps: float,
+                 topk: int,
+                 ppr_normalization: str,
+                 forward_batch_size=128,
+                 batch_norm: bool = False,
+                 skip_connection=False,
+                 mean='soft_k_medoid',
+                 mean_kwargs: Dict[str, Any] = dict(k=32,
+                                                    temperature=1.0,
+                                                    with_weight_correction=True),
+                 dataset=None,
+                 normalize=None,
+                 make_undirected=None,
+                 make_unweighted=None,
+                 **kwargs):
+        self.num_features = n_features
+        self.num_classes = n_classes
+        self.hidden_size = hidden_size
+        self.nlayers = nlayers
+        self.dropout = dropout
+        self.alpha = alpha
+        self.eps = eps
+        self.topk = topk
+        self.ppr_normalization = ppr_normalization
+        self.forward_batch_size = forward_batch_size
+        self.batch_norm = batch_norm
+        self.skip_connection = skip_connection
+        self.mean = mean
+        self.mean_kwargs = mean_kwargs
+        self.dataset = dataset
+        self.normalize = normalize
+        self.make_undirected = make_undirected
+        self.make_unweighted = make_unweighted
+
     def model_forward(self, *args, **kwargs):
         pass
 
@@ -334,6 +371,7 @@ class PPRGoWrapperBase():
 
             return self.model_forward(attr_matrix.to(device), ppr_matrix.to(device))
         else:
+
             # we need to precompute the ppr_score first
 
             if isinstance(adj, SparseTensor):
@@ -346,22 +384,34 @@ class PPRGoWrapperBase():
             if ppr_idx is None:
                 ppr_idx = np.arange(num_nodes)
 
-            # try to read topk test from disk:
-            topk_ppr = load_ppr(input_dir=self.ppr_input_dir,
-                                dataset=self.dataset,
-                                idx=ppr_idx,
-                                alpha=self.alpha,
-                                eps=self.eps,
-                                topk=self.topk,
-                                ppr_normalization=self.ppr_normalization,
-                                split_desc="test",
-                                normalize=self.normalize,
-                                make_undirected=self.make_undirected,
-                                make_unweighted=self.make_unweighted,
-                                shape=(len(ppr_idx), adj.shape[1]))
+            # try to read topk test from storage:
+            topk_ppr = None
+            if self.artifact_dir is not None:
+                # late import as a workaround to avoid circular import issue
+                from rgnn_at_scale.helper.io import Storage
+                storage = Storage(self.artifact_dir)
+                params = dict(dataset=self.dataset,
+                              alpha=self.alpha,
+                              ppr_idx=ppr_idx,
+                              eps=self.eps,
+                              topk=self.topk,
+                              ppr_normalization=self.ppr_normalization,
+                              normalize=self.normalize,
+                              make_undirected=self.make_undirected,
+                              make_unweighted=self.make_unweighted)
+
+                topk_ppr = storage.find_sparse_matrix(self.model_storage_type,
+                                                      params, find_first=True)
+                topk_ppr = topk_ppr[0] if len(topk_ppr) == 1 else None
+
             if topk_ppr is None:
                 topk_ppr = ppr.topk_ppr_matrix(adj, self.alpha, self.eps, ppr_idx,
                                                self.topk,  normalization=self.ppr_normalization)
+
+                # save topk_ppr to disk
+                if self.artifact_dir is not None:
+                    storage.save_sparse_matrix(self.model_storage_type, params,
+                                               topk_ppr, ignore_duplicate=True)
 
             # there are usually to many nodes for a single forward pass, we need to do batched prediction
             data_set = RobustPPRDataset(
@@ -417,9 +467,8 @@ class PPRGoWrapperBase():
             batch_mult_val=4,
             eval_step=1,
             display_step=50,
-            log_dir="runs",
             # for loading ppr from disk
-            ppr_input_dir='/nfs/students/schmidtt/datasets/ppr/papers100M',
+            artifact_dir=None,
             dataset=None,
             normalize=None,
             make_undirected=None,
@@ -427,7 +476,7 @@ class PPRGoWrapperBase():
             **kwargs):
 
         device = next(self.parameters()).device
-        self.ppr_input_dir = ppr_input_dir
+        self.artifact_dir = artifact_dir
         self.dataset = dataset
         self.normalize = normalize
         self.make_undirected = make_undirected
@@ -436,80 +485,61 @@ class PPRGoWrapperBase():
         logging.info("fit start")
         logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
 
-        if hasattr(self, "mean"):
-            mean = self.mean
-            temp = self._mean_kwargs["temperature"]
-            if hasattr(self, "diffuse_on_embedding"):
-                label = "RobustPPRGoDiffEmb"
-            else:
-                label = "RobustPPRGo"
-        else:
-            mean = "None"
-            temp = 0
-
-            if hasattr(self, "diffuse_on_embedding"):
-                label = "VanillaPPRGoDiffEmb"
-            else:
-                label = "VanillaPPRGo"
-
-        hidden_size = self.hidden_size
-        nlayers = self.nlayers
-        alpha = self.alpha
-        eps = self.eps
-        topk = self.topk
-        dropout = self.dropout
-        ppr_normalization = self.ppr_normalization
-        batch_norm = self.mlp.use_batch_norm
-
-        suffix = f"/{label}_alpha{alpha:.0e}_eps{eps:.0e}_topk{topk}_L{nlayers}_H{hidden_size:03d}_D{dropout}_BN{batch_norm}"
-        suffix += f"_T{temp:.0e}_{mean}_LR{lr:.0e}_WD{weight_decay:.0e}_S{use_annealing_scheduler:d}_B{batch_size:03d}"
-        suffix += f"_N{ppr_normalization}"
-        suffix += "_" + str(datetime.now().strftime('%d-%m_%H-%M-%S'))
-        writer = SummaryWriter(log_dir=log_dir + suffix)
-
         if isinstance(adj, SparseTensor):
             adj = adj.to_scipy(layout="csr")
 
-        logging.info(f"tensorboard: {suffix}")
         logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
 
-        # try to read topk train from disk:
-        topk_train = load_ppr(input_dir=ppr_input_dir,
-                              dataset=dataset,
-                              idx=idx_train,
-                              alpha=alpha,
-                              eps=eps,
-                              topk=topk,
-                              ppr_normalization=ppr_normalization,
-                              split_desc="train",
-                              normalize=normalize,
-                              make_undirected=make_undirected,
-                              make_unweighted=make_unweighted,
-                              shape=(len(idx_train), adj.shape[1]))
+        topk_train = None
+        # try to read topk test from storage:
+        if self.artifact_dir is not None:
+            # late import as a workaround to avoid circular import issue
+            from rgnn_at_scale.helper.io import Storage
+            storage = Storage(self.artifact_dir)
+            params = dict(dataset=self.dataset,
+                          alpha=self.alpha,
+                          # ppr_idx=idx_train,
+                          eps=self.eps,
+                          topk=self.topk,
+                          ppr_normalization=self.ppr_normalization,
+                          split_desc="train",
+                          normalize=self.normalize,
+                          make_undirected=self.make_undirected,
+                          make_unweighted=self.make_unweighted)
+
+            topk_train = storage.find_sparse_matrix(self.model_storage_type,
+                                                    params, find_first=True)
+            topk_train = topk_train[0] if len(topk_train) == 1 else None
+
         if topk_train is None:
             # looks like there was no ppr calculated before hand, so we need to calculate it now
             topk_train = ppr.topk_ppr_matrix(adj, self.alpha, self.eps, idx_train,
                                              self.topk,  normalization=self.ppr_normalization)
+            # save topk_ppr to disk
+            if self.artifact_dir is not None:
+                storage.save_sparse_matrix(self.model_storage_type, params,
+                                           topk_train, ignore_duplicate=True)
 
         logging.info("topk_train loaded")
         logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
 
         # try to read topk train from disk:
-        topk_val = load_ppr(input_dir=ppr_input_dir,
-                            dataset=dataset,
-                            idx=idx_val,
-                            alpha=alpha,
-                            eps=eps,
-                            topk=topk,
-                            ppr_normalization=ppr_normalization,
-                            split_desc="val",
-                            normalize=normalize,
-                            make_undirected=make_undirected,
-                            make_unweighted=make_unweighted,
-                            shape=(len(idx_val), adj.shape[1]))
+        topk_val = None
+        if self.artifact_dir is not None:
+            # params["ppr_idx"] = "idx_val"
+            params["split_desc"] = "val"
+
+            topk_val = storage.find_sparse_matrix(self.model_storage_type,
+                                                  params, find_first=True)
+            topk_val = topk_val[0] if len(topk_val) == 1 else None
+
         if topk_val is None:
             topk_val = ppr.topk_ppr_matrix(adj, self.alpha, self.eps, idx_val,
                                            self.topk,  normalization=self.ppr_normalization)
+            # save topk_ppr to disk
+            if self.artifact_dir is not None:
+                storage.save_sparse_matrix(self.model_storage_type, params,
+                                           topk_val, ignore_duplicate=True)
 
         logging.info("topk_val calculated")
         logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
@@ -599,12 +629,6 @@ class PPRGoWrapperBase():
                 trace_train_acc.append(train_acc)
                 trace_val_acc.append(val_acc)
 
-                writer.add_scalar("Loss/train", loss_train, step)
-                writer.add_scalar("Loss/validation", loss_val, step)
-                writer.add_scalar("Accuracy/train", train_acc, step)
-                writer.add_scalar("Accuracy/validation", val_acc, step)
-                writer.add_scalar("Learning Rate", get_lr(optimizer), step)
-
                 if loss_val < best_loss:
                     best_loss = loss_val
                     best_epoch = it
@@ -662,33 +686,13 @@ class PPRGoWrapperBase():
 
 class PPRGoWrapper(PPRGo, PPRGoWrapperBase):
     def __init__(self,
-                 n_features: int,
-                 n_classes: int,
-                 hidden_size: int,
-                 nlayers: int,
-                 dropout: float,
-                 alpha,
-                 eps,
-                 topk,
-                 ppr_normalization,
-                 forward_batch_size=128,
+                 *args,
                  **kwargs):
-        super().__init__(n_features, n_classes, hidden_size, nlayers, dropout, **kwargs)
-        self.num_features = n_features
-        self.num_classes = n_classes
-        self.hidden_size = hidden_size
-        self.nlayers = nlayers
-        self.dropout = dropout
-        self.alpha = alpha
-        self.eps = eps
-        self.topk = topk
-        self.ppr_normalization = ppr_normalization
-        self.forward_batch_size = forward_batch_size
-        self.ppr_input_dir = None
-        self.dataset = None
-        self.normalize = None
-        self.make_undirected = None
-        self.make_unweighted = None
+        PPRGoWrapperBase.__init__(self, *args, **kwargs)
+        PPRGo.__init__(self, self.num_features, self.num_classes,
+                       self.hidden_size, self.nlayers, self.dropout,
+                       batch_norm=self.batch_norm, skip_connection=self.skip_connection,
+                       mean=self.mean, mean_kwargs=self.mean_kwargs)
 
     def forward(self, *args, **kwargs):
         return self.forward_wrapper(*args, **kwargs)
@@ -704,34 +708,13 @@ class PPRGoWrapper(PPRGo, PPRGoWrapperBase):
 
 class PPRGoDiffEmbWrapper(PPRGoEmmbeddingDiffusions, PPRGoWrapperBase):
     def __init__(self,
-                 n_features: int,
-                 n_classes: int,
-                 hidden_size: int,
-                 nlayers: int,
-                 dropout: float,
-                 alpha,
-                 eps,
-                 topk,
-                 ppr_normalization,
-                 forward_batch_size=128,
+                 *args,
                  **kwargs):
-        super().__init__(n_features, n_classes, hidden_size, nlayers, dropout, **kwargs)
-        self.diffuse_on_embedding = True
-        self.num_features = n_features
-        self.num_classes = n_classes
-        self.hidden_size = hidden_size
-        self.nlayers = nlayers
-        self.dropout = dropout
-        self.alpha = alpha
-        self.eps = eps
-        self.topk = topk
-        self.ppr_normalization = ppr_normalization
-        self.forward_batch_size = forward_batch_size
-        self.ppr_input_dir = None
-        self.dataset = None
-        self.normalize = None
-        self.make_undirected = None
-        self.make_unweighted = None
+        PPRGoWrapperBase.__init__(self, *args, **kwargs)
+        PPRGoEmmbeddingDiffusions.__init__(self, self.num_features, self.num_classes,
+                                           self.hidden_size, self.nlayers, self.dropout,
+                                           batch_norm=self.batch_norm, skip_connection=self.skip_connection,
+                                           mean=self.mean, mean_kwargs=self.mean_kwargs)
 
     def forward(self, *args, **kwargs):
         return self.forward_wrapper(*args, **kwargs)
@@ -747,35 +730,13 @@ class PPRGoDiffEmbWrapper(PPRGoEmmbeddingDiffusions, PPRGoWrapperBase):
 
 class RobustPPRGoWrapper(RobustPPRGo, PPRGoWrapperBase):
     def __init__(self,
-                 n_features: int,
-                 n_classes: int,
-                 hidden_size: int,
-                 nlayers: int,
-                 dropout: float,
-                 alpha,
-                 eps,
-                 topk,
-                 ppr_normalization,
-                 forward_batch_size=128,
-                 mean='soft_k_medoid',
+                 *args,
                  **kwargs):
-        super().__init__(n_features, n_classes, hidden_size, nlayers, dropout, mean=mean,  **kwargs)
-        self.mean = mean
-        self.num_features = n_features
-        self.num_classes = n_classes
-        self.hidden_size = hidden_size
-        self.nlayers = nlayers
-        self.dropout = dropout
-        self.alpha = alpha
-        self.eps = eps
-        self.topk = topk
-        self.ppr_normalization = ppr_normalization
-        self.forward_batch_size = forward_batch_size
-        self.ppr_input_dir = None
-        self.dataset = None
-        self.normalize = None
-        self.make_undirected = None
-        self.make_unweighted = None
+        PPRGoWrapperBase.__init__(self, *args, **kwargs)
+        RobustPPRGo.__init__(self, self.num_features, self.num_classes,
+                             self.hidden_size, self.nlayers, self.dropout,
+                             batch_norm=self.batch_norm, skip_connection=self.skip_connection,
+                             mean=self.mean, mean_kwargs=self.mean_kwargs)
 
     def forward(self, *args, **kwargs):
         return self.forward_wrapper(*args, **kwargs)
@@ -785,37 +746,15 @@ class RobustPPRGoWrapper(RobustPPRGo, PPRGoWrapperBase):
 
 
 class RobustPPRGoDiffEmbWrapper(RobustPPRGoEmmbeddingDiffusions, PPRGoWrapperBase):
+
     def __init__(self,
-                 n_features: int,
-                 n_classes: int,
-                 hidden_size: int,
-                 nlayers: int,
-                 dropout: float,
-                 alpha,
-                 eps,
-                 topk,
-                 ppr_normalization,
-                 forward_batch_size=128,
-                 mean='soft_k_medoid',
+                 *args,
                  **kwargs):
-        super().__init__(n_features, n_classes, hidden_size, nlayers, dropout, mean=mean,  **kwargs)
-        self.diffuse_on_embedding = True
-        self.mean = mean
-        self.num_features = n_features
-        self.num_classes = n_classes
-        self.hidden_size = hidden_size
-        self.nlayers = nlayers
-        self.dropout = dropout
-        self.alpha = alpha
-        self.eps = eps
-        self.topk = topk
-        self.ppr_normalization = ppr_normalization
-        self.forward_batch_size = forward_batch_size
-        self.ppr_input_dir = None
-        self.dataset = None
-        self.normalize = None
-        self.make_undirected = None
-        self.make_unweighted = None
+        PPRGoWrapperBase.__init__(self, *args, **kwargs)
+        RobustPPRGoEmmbeddingDiffusions.__init__(self, self.num_features, self.num_classes,
+                                                 self.hidden_size, self.nlayers, self.dropout,
+                                                 batch_norm=self.batch_norm, skip_connection=self.skip_connection,
+                                                 mean=self.mean, mean_kwargs=self.mean_kwargs)
 
     def forward(self, *args, **kwargs):
         return self.forward_wrapper(*args, **kwargs)

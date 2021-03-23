@@ -32,10 +32,10 @@ def config():
         ex.observers.append(seml.create_mongodb_observer(db_collection, overwrite=overwrite))
 
     # default params
-    dataset = 'ogbn-papers100M'
+    dataset = 'ogbn-arxiv'
     model_params = {
         'label': 'Vanilla PPRGo Diffusion Embedding',
-        'model': 'PPRGoDiffEmbWrapper',
+        'model': 'PPRGo',
         'dropout': 0.5,
         'n_filters': 64,
         'hidden_size': 640,

@@ -6,8 +6,8 @@ import numpy as np
 import scipy.sparse as sp
 from pathlib import Path
 
-from pprgo import utils as ppr_utils
-from pprgo import ppr
+from rgnn_at_scale.helper import utils
+from rgnn_at_scale.helper import ppr_utils as ppr
 
 
 from rgnn_at_scale.helper.local import setup_logging
@@ -29,10 +29,10 @@ calc_ppr_for_all = False
 # topk_batch_size = 10240  # int(1e5)
 # dir_name = '_'.join(dataset.split('-'))
 
-dataset = "ogbn-papers100M"  # "ogbn-arxiv"  # "ogbn-papers100M"  # "ogbn-arxiv"
+dataset = "ogbn-arxiv"  # "ogbn-papers100M"  # "ogbn-arxiv"
 device = 0
 dataset_root = "/nfs/students/schmidtt/datasets/"
-output_dir = dataset_root + "ppr/papers100M/"
+output_dir = dataset_root + "ppr/arxiv/"
 binary_attr = False
 normalize = "row"
 make_undirected = False
@@ -43,8 +43,8 @@ dir_name = '_'.join(dataset.split('-'))
 
 # ppr params
 alpha = 0.1
-eps = 1e-7
-topk = 512
+eps = 1e-3
+topk = 64
 ppr_normalization = "row"
 alpha_suffix = int(alpha * 100)
 
@@ -102,7 +102,7 @@ def _save_ppr_topk(topk_batch_size,
         topk_ppr = ppr.topk_ppr_matrix(adj_sp, alpha, eps, batch_idx,
                                        topk,  normalization=ppr_normalization)
         logging.info("calculated topk_ppr")
-        logging.info(ppr_utils.get_max_memory_bytes() / (1024 ** 3))
+        logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
         file_name = f"topk_ppr_{dump_suffix}_{i:08d}.npz"
         nnz += topk_ppr.nnz
         sp.save_npz(output_dir + file_name, topk_ppr)

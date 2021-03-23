@@ -10,7 +10,8 @@ from sacred import Experiment
 from tinydb import Query, TinyDB
 from tinydb_serialization import SerializationMiddleware, Serializer
 import torch
-from torch.sparse import FloatTensor
+from torch_sparse import SparseTensor
+import scipy.sparse as sp
 
 from rgnn_at_scale.models import create_model, MODEL_TYPE
 
@@ -241,8 +242,12 @@ class Storage():
             documents.append(document)
         return documents
 
-    def save_sparse_tensor(self, artifact_type: str, params: Dict[str, Any], sparse_tensor: FloatTensor) -> str:
-        """Saves an artifact (required for PyTorch <=1.5).
+    def save_sparse_matrix(self,
+                           artifact_type: str,
+                           params: Dict[str, Any],
+                           sparse_matrix: sp.csr_matrix,
+                           ignore_duplicate: bool = False) -> str:
+        """Saves a scipy matrix artifact
 
         Parameters
         ----------
@@ -250,48 +255,89 @@ class Storage():
             Identifier of artifact type.
         params : Dict[str, Any]
             parameters identifying the artifacts provenance.
-        sparse_tensor : FloatTensor
+        sparse_matrix : scipy.sparse.csr_matrix
             The actual artifact to be stored.
+        ignore_duplicate : bool
+            If True and another sparse_matrix is found with the same configuration,
+            the new sparse_matrix will not be saved, by default False.
 
         Returns
         -------
         str
             File storage location.
         """
-        artifact = {'edge_idx': sparse_tensor.indices().cpu(),
-                    'edge_weight': sparse_tensor.values().cpu(),
-                    'shape': sparse_tensor.shape}
-        return self.save_artifact(artifact_type, params, artifact)
+        ids = Storage.locked_call(
+            lambda: self._upsert_meta(artifact_type, params),
+            self._get_lock_path(artifact_type),
+            self.lock_timeout,
+        )
+        if len(ids) != 1:
+            if ignore_duplicate:
+                Storage.locked_call(
+                    lambda: self._remove_meta(artifact_type, params),
+                    self._get_lock_path(artifact_type),
+                    self.lock_timeout
+                )
+                return self._build_artifact_path(artifact_type, ids[0])
+            raise RuntimeError(f'The index contains duplicates (artifact_type={artifact_type}, params={params})')
 
-    def load_sparse_tensor(self, artifact_type: str, params: Dict[str, Any]) -> FloatTensor:
-        """Loads an artifact (required for PyTorch <=1.5).
+        try:
+            path = self._build_artifact_path(artifact_type, ids[0]).replace(".pt", ".npz")
+            sp.save_npz(path, sparse_matrix)
+            return path
+        except:  # noqa: E722
+            Storage.locked_call(
+                lambda: self._remove_meta(artifact_type, params),
+                self._get_lock_path(artifact_type),
+                self.lock_timeout
+            )
+            raise
+
+    def find_sparse_matrix(self,
+                           artifact_type: str,
+                           match_condition: Dict[str, Any],
+                           find_first=False,
+                           return_id: bool = False
+                           ) -> List[Union[Tuple[sp.csr_matrix, Dict[str, Any]],
+                                           Tuple[sp.csr_matrix, Dict[str, Any], int]]]:
+        """Find all sparse matrices matching the defined parameters.
 
         Parameters
         ----------
-        artifact_type : str
+        artifact_type: str
             Identifier of artifact type.
-        params : Dict[str, Any]
-            parameters identifying the artifacts provenance.
+        match_condition: Dict[str, Any]
+            Subset of parameters to query artifacts.
+        find_first: bool, optional
+            If True only the first match is returned, by default False.
+        return_id: bool, optional
+            If True also the sparse_tensors id is returned, by default False.
 
         Returns
         -------
-        Union[Dict[str, Any], Tuple[Dict[str, Any], Dict[str, Any]]]
-            The artifact and optionally the params.
-
-        Raises
-        ------
-        RuntimeError
-            In case more than one artifact with identical configuration is found.
+        List[Union[Tuple[sp.csr_matrix, Dict[str, Any]], Tuple[sp.csr_matrix, Dict[str, Any], int]]]
+            List of loaded matrices, their params and optionally the ids.
         """
-        artifact = self.load_artifact(artifact_type, params)
-        if artifact is None:
-            return None
-        else:
-            return torch.sparse.FloatTensor(
-                artifact['edge_idx'],
-                artifact['edge_weight'],
-                tuple(artifact['shape'])
-            ).coalesce()
+        raw_documents = Storage.locked_call(
+            lambda: self._find_meta(artifact_type, match_condition),
+            self._get_lock_path(artifact_type),
+            self.lock_timeout,
+        )
+
+        results = []
+        for document in raw_documents:
+            document_id = document.doc_id
+            document = dict(document)
+            path = self._build_artifact_path(artifact_type, document_id).replace(".pt", ".npz")
+            sparse_matrix = sp.load_npz(path)
+            if return_id:
+                results.append((sparse_matrix, document['params'], document_id))
+            else:
+                results.append((sparse_matrix, document['params']))
+
+            if find_first:
+                return results
+        return results
 
     def save_model(self, artifact_type: str, params: Dict[str, Any], model: MODEL_TYPE) -> str:
         """Saves an artifact.
