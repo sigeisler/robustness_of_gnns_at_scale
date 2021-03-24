@@ -63,8 +63,7 @@ def config():
     seed = 0
     artifact_dir = 'cache_debug'
     model_storage_type = 'pretrained'
-    data_artifact_dir = "/nfs/students/schmidtt/cache"
-    data_storage_type = "ppr"
+    ppr_cache_params = None
     device = 'cpu'
     display_steps = 10
     data_dir = './datasets'
@@ -107,14 +106,13 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
     print("Test set size: ", len(idx_test))
 
     # Collect all hyperparameters of model
-    ppr_cache_params = dict(
-        data_artifact_dir=data_artifact_dir,
-        data_storage_type=data_storage_type,
-        dataset=dataset,
-        normalize=normalize,
-        make_undirected=make_undirected,
-        make_unweighted=make_unweighted,
-    )
+    if ppr_cache_params is not None:
+        ppr_cache_params .update(dict(
+            dataset=dataset,
+            normalize=normalize,
+            make_undirected=make_undirected,
+            make_unweighted=make_unweighted,
+        ))
     hyperparams = dict(model_params)
     hyperparams.update({
         'n_features': n_features,
