@@ -87,7 +87,7 @@ def load_ppr(
     shape=None,
 ):
     if input_dir is None:
-        return None
+        return None, None
     ppr_idx = None
     dump_suffix = f"{dataset}"
     if split_desc is not None:
@@ -108,7 +108,7 @@ def load_ppr(
     # check whether the precalculated ppr exists, return None if it does not.
     if len(glob.glob(str(Path(input_dir) / ("topk_ppr_" + dump_suffix)) + "*")) == 0:
         logging.info(f"No cached topk ppr found with key '{dump_suffix}' in directory '{input_dir}'")
-        return None
+        return None, None
 
     ppr_idx = None
     if split_desc is not None and idx is not None:
@@ -118,7 +118,7 @@ def load_ppr(
         if len(ppr_idx) != len(idx):
             # the ppr that was precalculated with for the given configuration was calculated for a different set of nodes
             # TODO: this is only a very crude check, to make sure the idx actually matches we'd need to fully compare them, but that's expensive...
-            return None
+            return None, ppr_idx
 
     return _load_ppr(input_dir, dump_suffix, shape), ppr_idx
 

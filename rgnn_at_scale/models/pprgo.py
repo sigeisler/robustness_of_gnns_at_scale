@@ -315,25 +315,31 @@ class PPRGoWrapperBase():
     def __init__(self,
                  n_features: int,
                  n_classes: int,
-                 hidden_size: int,
-                 nlayers: int,
-                 dropout: float,
-                 alpha: float,
-                 eps: float,
-                 topk: int,
-                 ppr_normalization: str,
-                 forward_batch_size=128,
+                 hidden_size: int = 512,
+                 nlayers: int = 4,
+                 dropout: float = 0.0,
+                 alpha: float = 0.1,
+                 eps: float = 1e-3,
+                 topk: int = 64,
+                 ppr_normalization: str = "row",
+                 forward_batch_size: int = 128,
                  batch_norm: bool = False,
-                 skip_connection=False,
-                 mean='soft_k_medoid',
+                 skip_connection: bool = False,
+                 mean: str = 'soft_k_medoid',
                  mean_kwargs: Dict[str, Any] = dict(k=32,
                                                     temperature=1.0,
                                                     with_weight_correction=True),
-                 dataset=None,
-                 normalize=None,
-                 make_undirected=None,
-                 make_unweighted=None,
+                 ppr_cache_params: Dict[str, Any] = None,
                  **kwargs):
+        """
+        ppr_cache_params: dict
+            data_artifact_dir : str
+            data_storage_type : str
+            dataset : str
+            normalize : str
+            make_unweighted : bool
+            make_unweighted : bool
+        """
         self.num_features = n_features
         self.num_classes = n_classes
         self.hidden_size = hidden_size
@@ -348,10 +354,7 @@ class PPRGoWrapperBase():
         self.skip_connection = skip_connection
         self.mean = mean
         self.mean_kwargs = mean_kwargs
-        self.dataset = dataset
-        self.normalize = normalize
-        self.make_undirected = make_undirected
-        self.make_unweighted = make_unweighted
+        self.ppr_cache_params = ppr_cache_params
 
     def model_forward(self, *args, **kwargs):
         pass
@@ -386,31 +389,31 @@ class PPRGoWrapperBase():
 
             # try to read topk test from storage:
             topk_ppr = None
-            if self.artifact_dir is not None:
+            if self.ppr_cache_params is not None:
                 # late import as a workaround to avoid circular import issue
                 from rgnn_at_scale.helper.io import Storage
-                storage = Storage(self.artifact_dir)
-                params = dict(dataset=self.dataset,
+                storage = Storage(self.ppr_cache_params["data_artifact_dir"])
+                params = dict(dataset=self.ppr_cache_params["dataset"],
                               alpha=self.alpha,
-                              ppr_idx=ppr_idx,
+                              ppr_idx=list(map(int, ppr_idx)),
                               eps=self.eps,
                               topk=self.topk,
                               ppr_normalization=self.ppr_normalization,
-                              normalize=self.normalize,
-                              make_undirected=self.make_undirected,
-                              make_unweighted=self.make_unweighted)
+                              normalize=self.ppr_cache_params["normalize"],
+                              make_undirected=self.ppr_cache_params["make_undirected"],
+                              make_unweighted=self.ppr_cache_params["make_unweighted"])
 
-                topk_ppr = storage.find_sparse_matrix(self.model_storage_type,
-                                                      params, find_first=True)
-                topk_ppr = topk_ppr[0] if len(topk_ppr) == 1 else None
+                stored_topk_ppr = storage.find_sparse_matrix(self.ppr_cache_params["data_storage_type"],
+                                                             params, find_first=True)
+                topk_ppr, _ = stored_topk_ppr[0] if len(stored_topk_ppr) == 1 else (None, None)
 
             if topk_ppr is None:
                 topk_ppr = ppr.topk_ppr_matrix(adj, self.alpha, self.eps, ppr_idx,
                                                self.topk,  normalization=self.ppr_normalization)
 
                 # save topk_ppr to disk
-                if self.artifact_dir is not None:
-                    storage.save_sparse_matrix(self.model_storage_type, params,
+                if self.ppr_cache_params is not None:
+                    storage.save_sparse_matrix(self.ppr_cache_params["data_storage_type"], params,
                                                topk_ppr, ignore_duplicate=True)
 
             # there are usually to many nodes for a single forward pass, we need to do batched prediction
@@ -468,19 +471,13 @@ class PPRGoWrapperBase():
             eval_step=1,
             display_step=50,
             # for loading ppr from disk
-            artifact_dir=None,
-            dataset=None,
-            normalize=None,
-            make_undirected=None,
-            make_unweighted=None,
-            **kwargs):
-
+            ppr_cache_params: dict = None,
+            ** kwargs):
         device = next(self.parameters()).device
-        self.artifact_dir = artifact_dir
-        self.dataset = dataset
-        self.normalize = normalize
-        self.make_undirected = make_undirected
-        self.make_unweighted = make_unweighted
+
+        if ppr_cache_params is not None:
+            # update ppr_cache_params
+            self.ppr_cache_params = ppr_cache_params
 
         logging.info("fit start")
         logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
@@ -492,32 +489,32 @@ class PPRGoWrapperBase():
 
         topk_train = None
         # try to read topk test from storage:
-        if self.artifact_dir is not None:
+        if self.ppr_cache_params is not None:
             # late import as a workaround to avoid circular import issue
             from rgnn_at_scale.helper.io import Storage
-            storage = Storage(self.artifact_dir)
-            params = dict(dataset=self.dataset,
+            storage = Storage(self.ppr_cache_params["data_artifact_dir"])
+            params = dict(dataset=self.ppr_cache_params["dataset"],
                           alpha=self.alpha,
-                          # ppr_idx=idx_train,
+                          ppr_idx=list(map(int, idx_train)),
                           eps=self.eps,
                           topk=self.topk,
                           ppr_normalization=self.ppr_normalization,
                           split_desc="train",
-                          normalize=self.normalize,
-                          make_undirected=self.make_undirected,
-                          make_unweighted=self.make_unweighted)
+                          normalize=self.ppr_cache_params["normalize"],
+                          make_undirected=self.ppr_cache_params["make_undirected"],
+                          make_unweighted=self.ppr_cache_params["make_unweighted"])
 
-            topk_train = storage.find_sparse_matrix(self.model_storage_type,
-                                                    params, find_first=True)
-            topk_train = topk_train[0] if len(topk_train) == 1 else None
+            stored_topk_train = storage.find_sparse_matrix(self.ppr_cache_params["data_storage_type"],
+                                                           params, find_first=True)
+            topk_train, _ = stored_topk_train[0] if len(stored_topk_train) == 1 else (None, None)
 
         if topk_train is None:
             # looks like there was no ppr calculated before hand, so we need to calculate it now
             topk_train = ppr.topk_ppr_matrix(adj, self.alpha, self.eps, idx_train,
                                              self.topk,  normalization=self.ppr_normalization)
             # save topk_ppr to disk
-            if self.artifact_dir is not None:
-                storage.save_sparse_matrix(self.model_storage_type, params,
+            if self.ppr_cache_params is not None:
+                storage.save_sparse_matrix(self.ppr_cache_params["data_storage_type"], params,
                                            topk_train, ignore_duplicate=True)
 
         logging.info("topk_train loaded")
@@ -525,20 +522,20 @@ class PPRGoWrapperBase():
 
         # try to read topk train from disk:
         topk_val = None
-        if self.artifact_dir is not None:
-            # params["ppr_idx"] = "idx_val"
+        if self.ppr_cache_params is not None:
+            params["ppr_idx"] = list(map(int, idx_val))
             params["split_desc"] = "val"
 
-            topk_val = storage.find_sparse_matrix(self.model_storage_type,
-                                                  params, find_first=True)
-            topk_val = topk_val[0] if len(topk_val) == 1 else None
+            stored_topk_val = storage.find_sparse_matrix(self.ppr_cache_params["data_storage_type"],
+                                                         params, find_first=True)
+            topk_val, _ = stored_topk_val[0] if len(stored_topk_val) == 1 else (None, None)
 
         if topk_val is None:
             topk_val = ppr.topk_ppr_matrix(adj, self.alpha, self.eps, idx_val,
                                            self.topk,  normalization=self.ppr_normalization)
             # save topk_ppr to disk
-            if self.artifact_dir is not None:
-                storage.save_sparse_matrix(self.model_storage_type, params,
+            if self.ppr_cache_params is not None:
+                storage.save_sparse_matrix(self.ppr_cache_params["data_storage_type"], params,
                                            topk_val, ignore_duplicate=True)
 
         logging.info("topk_val calculated")

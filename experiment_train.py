@@ -38,8 +38,8 @@ def config():
         'model': 'PPRGo',
         'dropout': 0.5,
         'n_filters': 64,
-        'hidden_size': 640,
-        'nlayers': 5,
+        'hidden_size': 64,
+        'nlayers': 3,
         'ppr_normalization': 'row',
         'topk': 64, 'alpha': 0.1, 'eps': 1e-03,
         'skip_connection': True,
@@ -53,7 +53,7 @@ def config():
         'lr': 1e-2,
         'weight_decay': 5e-4,
         'patience': 300,
-        'max_epochs': 3000
+        'max_epochs': 2
     }
     binary_attr = False
     normalize = False
@@ -63,7 +63,9 @@ def config():
     seed = 0
     artifact_dir = 'cache_debug'
     model_storage_type = 'pretrained'
-    device = 0
+    data_artifact_dir = "/nfs/students/schmidtt/cache"
+    data_storage_type = "ppr"
+    device = 'cpu'
     display_steps = 10
     data_dir = './datasets'
     data_device = 'cpu'
@@ -72,7 +74,7 @@ def config():
 @ex.automain
 def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params: Dict[str, Any], binary_attr: bool,
         make_undirected: bool, make_unweighted: bool, normalize: bool, normalize_attr: str, seed: int, artifact_dir: str,
-        model_storage_type: str, device: Union[str, int], data_device: Union[str, int], display_steps: int):
+        model_storage_type: str, data_artifact_dir: str, data_storage_type: str, device: Union[str, int], data_device: Union[str, int], display_steps: int):
     logging.info({
         'dataset': dataset, 'model_params': model_params, 'train_params': train_params, 'binary_attr': binary_attr,
         'make_undirected': make_undirected, 'make_unweighted': make_unweighted, 'normalize': normalize, 'normalize_attr': normalize_attr,
@@ -105,10 +107,19 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
     print("Test set size: ", len(idx_test))
 
     # Collect all hyperparameters of model
+    ppr_cache_params = dict(
+        data_artifact_dir=data_artifact_dir,
+        data_storage_type=data_storage_type,
+        dataset=dataset,
+        normalize=normalize,
+        make_undirected=make_undirected,
+        make_unweighted=make_unweighted,
+    )
     hyperparams = dict(model_params)
     hyperparams.update({
         'n_features': n_features,
-        'n_classes': n_classes
+        'n_classes': n_classes,
+        'ppr_cache_params': ppr_cache_params
     })
 
     model = create_model(hyperparams).to(device)
