@@ -310,7 +310,7 @@ class TestSoftWeightedMedoidKNeighborhood():
     def test_disconnected_node_weighted_k2_sparse(self):
         """
         There was a bug in the soft_weighted_medoid_k_neighborhood method where nodes which have
-        no outgoing edges will result in a RuntimeError caused by a size missmatch when trying to do 
+        no outgoing edges will result in a RuntimeError caused by a size missmatch when doing
         the final matrix multuply when using the sparse implementation
         """
 
@@ -507,12 +507,12 @@ class TestSoftWeightedMedoidKNeighborhood():
 
             A_sparse_tensor = SparseTensor.from_dense(A)
 
-            _ = soft_weighted_medoid_k_neighborhood(A_sparse_tensor,
-                                                    x,
-                                                    k=32,
-                                                    temperature=temperature,
-                                                    # forcing sparse implementation
-                                                    threshold_for_dense_if_cpu=0)
+            soft_weighted_medoid_k_neighborhood(A_sparse_tensor,
+                                                x,
+                                                k=32,
+                                                temperature=temperature,
+                                                # forcing sparse implementation
+                                                threshold_for_dense_if_cpu=0)
 
 
 class TestWeightedDimwiseMedian():
