@@ -573,18 +573,14 @@ def prep_cora_citeseer_pubmed(name: str,
     n_vertices, _ = graph.attr_matrix.shape
 
     adj_matrix = graph.adj_matrix.copy()
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        adj_matrix[np.arange(n_vertices), np.arange(n_vertices)] = 1
-        if normalize:
+    if normalize:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            adj_matrix[np.arange(n_vertices), np.arange(n_vertices)] = 1
             deg = sp.diags(np.power(adj_matrix.sum(1).A1, -1 / 2))
             adj_norm = deg @ adj_matrix @ deg
-        else:
-            adj_norm = adj_matrix
-
-    # remove self loops, because standardize no_self_loops=True does't always work
-    adj_norm.setdiag(0)
-    adj_norm.eliminate_zeros()
+    else:
+        adj_norm = adj_matrix
 
     attr = torch.FloatTensor(graph.attr_matrix.toarray()).to(device)
     adj = utils.sparse_tensor(adj_norm.tocoo()).to(device)
