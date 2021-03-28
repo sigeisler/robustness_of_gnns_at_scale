@@ -19,7 +19,7 @@ logging.info("start")
 
 # whether to calculate the ppr score for all nodes (==True)
 # or just for the training, validation and test nodes (==False)
-calc_ppr_for_all = False
+calc_ppr_for_all = True
 
 # dataset = "ogbn-arxiv"  # "ogbn-papers100M"  # "ogbn-arxiv"
 # device = "cpu"
@@ -29,10 +29,10 @@ calc_ppr_for_all = False
 # topk_batch_size = 10240  # int(1e5)
 # dir_name = '_'.join(dataset.split('-'))
 
-dataset = "ogbn-arxiv"  # "ogbn-papers100M"  # "ogbn-arxiv"
+dataset = "ogbn-papers100M"  # "ogbn-papers100M"  # "ogbn-arxiv"
 device = 0
 dataset_root = "/nfs/students/schmidtt/datasets/"
-output_dir = dataset_root + "ppr/arxiv/"
+output_dir = dataset_root + "ppr/papers100M/"
 binary_attr = False
 normalize = "row"
 make_undirected = False
@@ -42,9 +42,9 @@ dir_name = '_'.join(dataset.split('-'))
 
 
 # ppr params
-alpha = 0.1
-eps = 1e-3
-topk = 64
+alpha = 0.01
+eps = 1e-6
+topk = 512
 ppr_normalization = "row"
 alpha_suffix = int(alpha * 100)
 
@@ -137,7 +137,7 @@ def save_ppr_topk(topk_batch_size,
                        normalize,
                        split_desc)
     if calc_ppr_for_all:
-        save_ppr(np.arange(adj.size(0)), "full")
+        save_ppr(np.arange(adj_sp.shape[0]), "full")
     else:
         save_ppr(idx_train, "train")
         save_ppr(idx_val, "val")
