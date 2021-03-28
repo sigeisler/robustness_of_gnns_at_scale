@@ -108,7 +108,8 @@ def run(data_dir: str, dataset: str, db_collection_attacks: str, binary_attr: bo
     else:
         idx_train, idx_val, idx_test = graph[3]['train'], graph[3]['valid'], graph[3]['test']
 
-    logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
+    logging.debug("Memory Usage after loading the dataset:")
+    logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))
 
     storage = Storage(artifact_dir, experiment=ex)
 

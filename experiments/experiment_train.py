@@ -127,8 +127,8 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
 
     model = create_model(hyperparams).to(device)
 
-    logging.info("model")
-    logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
+    logging.debug("Memory Usage after loading the dataset:")
+    logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))
 
     if hasattr(model, 'fit'):
         trace = model.fit(adj, attr,
@@ -141,10 +141,8 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
                           make_undirected=make_undirected,
                           make_unweighted=make_unweighted,
                           **train_params)
-        if trace is None:
-            trace_val, trace_train = None, None
-        else:
-            trace_val, trace_train = trace
+
+        trace_val, trace_train = trace if trace is not None else (None, None)
 
     else:
         trace_val, trace_train = train(model=model, attr=attr, adj=adj, labels=labels, idx_train=idx_train,
@@ -153,22 +151,27 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
     model.eval()
 
     # For really large graphs we don't want to compute predictions for all nodes, just the test nodes is enough.
-    if isinstance(model, PPRGoWrapperBase):
-        with torch.no_grad():
+    # Calculating predictions for a sub-set of nodes is only possible for batched gnns like PPRGo
+    with torch.no_grad():
+        model.eval()
+        if isinstance(model, PPRGoWrapperBase):
             prediction = model(attr, adj, ppr_idx=idx_test)
-        test_accuracy = (prediction.cpu().argmax(1) == labels.cpu()[idx_test]).float().mean().item()
-    else:
-        prediction = model(attr, adj)
-        test_accuracy = accuracy(prediction.cpu(), labels.cpu(), idx_test)
+            test_accuracy = (prediction.cpu().argmax(1) == labels.cpu()[idx_test]).float().mean().item()
+        else:
+            prediction = model(attr, adj)
+            test_accuracy = accuracy(prediction.cpu(), labels.cpu(), idx_test)
 
     logging.info(f'Test accuracy is {test_accuracy} with seed {seed}')
 
     storage = Storage(artifact_dir, experiment=ex)
     params = dict(dataset=dataset,
                   binary_attr=binary_attr,
+                  normalize=normalize,
+                  normalize_attr=normalize_attr,
                   make_undirected=make_undirected,
                   make_unweighted=make_unweighted,
                   seed=seed, **hyperparams)
+
     model_path = storage.save_model(model_storage_type, params, model)
 
     return {

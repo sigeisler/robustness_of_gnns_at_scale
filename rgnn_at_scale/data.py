@@ -626,6 +626,10 @@ def prep_graph(name: str,
         dense attribute tensor, sparse adjacency matrix (normalized) and labels tensor.
     """
     split = None
+
+    logging.debug("Memory Usage before loading the dataset:")
+    logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))
+
     if name in ['cora_ml', 'citeseer', 'pubmed']:
         attr, adj, labels = prep_cora_citeseer_pubmed(name,
                                                       dataset_root,
@@ -634,8 +638,6 @@ def prep_graph(name: str,
                                                       make_undirected,
                                                       make_unweighted)
     elif name.startswith('ogbn'):
-        logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
-
         pyg_dataset = PygNodePropPredDataset(root=dataset_root, name=name)
 
         data = pyg_dataset[0]
@@ -675,26 +677,18 @@ def prep_graph(name: str,
             adj.data = np.ones_like(adj.data)
 
         if make_undirected:
-            logging.info("make undirected")
-            logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
-
             adj = utils.to_symmetric_scipy(adj, is_undirected=make_unweighted)
 
-            logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
-            logging.info("make undirected done")
+            logging.debug("Memory Usage after making the graph undirected:")
+            logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))
 
         if normalize == "row":
-            logging.info("normalize row")
-            logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
             adj = utils.normalize_row(adj)
-            logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
-            logging.info("normalize done")
         elif normalize:
-            logging.info("normalize symmetric")
-            logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
             adj = utils.normalize_symmetric(adj)
-            logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
-            logging.info("normalize done")
+
+        logging.debug("Memory Usage after normalizing the graph")
+        logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))
 
         #adj = torch_sparse.SparseTensor.from_scipy(adj).coalesce()
 
@@ -702,16 +696,12 @@ def prep_graph(name: str,
 
         # optional attribute normalization
         if normalize_attr == 'per_feature':
-            logging.info("normalize per_feature")
-            logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
             if sp.issparse(attr_matrix):
                 scaler = sklearn.preprocessing.StandardScaler(with_mean=False)
             else:
                 scaler = sklearn.preprocessing.StandardScaler()
             attr_matrix = scaler.fit_transform(attr_matrix)
         elif normalize_attr == 'per_node':
-            logging.info("normalize per_node")
-            logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
             if sp.issparse(attr_matrix):
                 attr_norms = sp.linalg.norm(attr_matrix, ord=1, axis=1)
                 attr_invnorms = 1 / np.maximum(attr_norms, 1e-12)
@@ -723,11 +713,10 @@ def prep_graph(name: str,
 
         attr = torch.from_numpy(attr_matrix)
 
-        logging.info("normalize attr done")
-        logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
+        logging.debug("Memory Usage after normalizing graph attributes:")
+        logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))
 
         labels = data.y.squeeze().to(device)
-        logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
 
     if binary_attr:
         # NOTE: do not use this for really large datasets.

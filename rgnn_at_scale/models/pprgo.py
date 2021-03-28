@@ -438,10 +438,10 @@ class PPRGoWrapperBase():
             num_batches = len(data_loader)
             for batch_id, (idx, xbs, _) in enumerate(data_loader):
 
-                logging.info(f"inference batch {batch_id}/{num_batches}")
-                logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
+                logging.debug(f"Memory Usage before inference batch {batch_id}/{num_batches}:")
+                logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))
                 if device.type == "cuda":
-                    logging.info(torch.cuda.max_memory_allocated() / (1024 ** 3))
+                    logging.debug(torch.cuda.max_memory_allocated() / (1024 ** 3))
 
                 xbs = [xb.to(device) for xb in xbs]
                 start = batch_id * self.forward_batch_size
@@ -479,13 +479,8 @@ class PPRGoWrapperBase():
             # update ppr_cache_params
             self.ppr_cache_params = ppr_cache_params
 
-        logging.info("fit start")
-        logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
-
         if isinstance(adj, SparseTensor):
             adj = adj.to_scipy(layout="csr")
-
-        logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
 
         topk_train = None
         # try to read topk test from storage:
@@ -517,8 +512,8 @@ class PPRGoWrapperBase():
                 storage.save_sparse_matrix(self.ppr_cache_params["data_storage_type"], params,
                                            topk_train, ignore_duplicate=True)
 
-        logging.info("topk_train loaded")
-        logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
+        logging.debug(f"Memory Usage after calculating/loading topk ppr for train:")
+        logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))
 
         # try to read topk train from disk:
         topk_val = None
@@ -538,8 +533,8 @@ class PPRGoWrapperBase():
                 storage.save_sparse_matrix(self.ppr_cache_params["data_storage_type"], params,
                                            topk_val, ignore_duplicate=True)
 
-        logging.info("topk_val calculated")
-        logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
+        logging.debug(f"Memory Usage after calculating/loading topk ppr for validation:")
+        logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))
 
         train_set = RobustPPRDataset(attr_matrix_all=attr,
                                      ppr_matrix=topk_train,
@@ -547,17 +542,11 @@ class PPRGoWrapperBase():
                                      labels_all=labels,
                                      allow_cache=False)
 
-        logging.info("train_set initalized")
-        logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
-
         val_set = RobustPPRDataset(attr_matrix_all=attr,
                                    ppr_matrix=topk_val,
                                    indices=idx_val,
                                    labels_all=labels,
                                    allow_cache=False)
-
-        logging.info("val_set initalized")
-        logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
 
         train_loader = torch.utils.data.DataLoader(
             dataset=train_set,
@@ -568,9 +557,6 @@ class PPRGoWrapperBase():
             batch_size=None,
             num_workers=0,
         )
-
-        logging.info("train_loader initalized")
-        logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
 
         trace_train_loss = []
         trace_val_loss = []
@@ -603,10 +589,10 @@ class PPRGoWrapperBase():
             for batch_train_idx, xbs, yb in batch_pbar:
                 xbs, yb = [xb.to(device) for xb in xbs], yb.to(device)
 
-                logging.info("Train batch")
-                logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
+                logging.debug(f"Memory Usage before training batch {step}:")
+                logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))
                 if device.type == "cuda":
-                    logging.info(torch.cuda.max_memory_allocated() / (1024 ** 3))
+                    logging.debug(torch.cuda.max_memory_allocated() / (1024 ** 3))
 
                 loss_train, ncorrect_train = self.__run_batch(xbs, yb, optimizer, train=True)
 
