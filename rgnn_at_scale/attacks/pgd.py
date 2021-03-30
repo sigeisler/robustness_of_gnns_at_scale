@@ -12,6 +12,7 @@ from typing import Union
 import numpy as np
 import torch
 from torch.nn import functional as F
+from torch_sparse import SparseTensor
 
 from rgnn_at_scale.models import DenseGCN
 from rgnn_at_scale.attacks.prbcd import PRBCD
@@ -43,7 +44,7 @@ class PGD(object):
 
     def __init__(self,
                  X: torch.Tensor,
-                 adj: torch.sparse.FloatTensor,
+                 adj: Union[SparseTensor, torch.Tensor],
                  labels: torch.Tensor,
                  idx_attack: np.ndarray,
                  model: DenseGCN,
@@ -52,13 +53,17 @@ class PGD(object):
                  epsilon: float = 1e-5,
                  loss_type: str = 'CE',
                  **kwargs):
-        assert adj.device == X.device, 'The device of the features and adjacency matrix must match'
+        if isinstance(adj, SparseTensor):
+            assert adj.device() == X.device, 'The device of the features and adjacency matrix must match'
+            self.adj = adj.to_dense().to(device)
+        else:
+            assert adj.device == X.device, 'The device of the features and adjacency matrix must match'
+            self.adj = adj.to(device)
+
         self.device = device
         self.X = X.to(device)
-        self.adj = adj.to(device)
-        if self.adj.is_sparse:
-            self.adj = self.adj.to_dense()
         self.labels = labels.to(device)
+
         self.idx_attack = idx_attack
         self.model = model
         self.epochs = epochs
@@ -103,7 +108,7 @@ class PGD(object):
             self.projection(n_perturbations)
 
         self.random_sample(n_perturbations)
-        self.adj_adversary = self.get_modified_adj().detach().to_sparse()
+        self.adj_adversary = SparseTensor.from_dense(self.get_modified_adj().detach())
 
     def random_sample(self, n_perturbations: int):
         K = 20

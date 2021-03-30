@@ -7,6 +7,7 @@ from typing import Optional, Union
 import numpy as np
 import torch
 import torch.nn.functional as F
+from torch_sparse import SparseTensor
 
 from rgnn_at_scale.models import DenseGCN
 from rgnn_at_scale.attacks.prbcd import PRBCD
@@ -30,7 +31,7 @@ class FGSM():
     """
 
     def __init__(self,
-                 adj: torch.sparse.FloatTensor,
+                 adj: Union[SparseTensor, torch.Tensor],
                  X: torch.Tensor,
                  labels: torch.Tensor,
                  idx_attack: np.ndarray,
@@ -40,9 +41,14 @@ class FGSM():
                  loss_type: Optional[str] = None,
                  **kwargs):
         super().__init__()
-        assert adj.device == X.device, 'The device of the features and adjacency matrix must match'
+        if isinstance(adj, SparseTensor):
+            assert adj.device() == X.device, 'The device of the features and adjacency matrix must match'
+            self.original_adj = adj.to_dense().to(device)
+        else:
+            assert adj.device == X.device, 'The device of the features and adjacency matrix must match'
+            self.original_adj = adj.to(device)
+
         self.device = device
-        self.original_adj = adj.to_dense().to(device)
         self.adj = self.original_adj.clone().requires_grad_(True)
         self.X = X.to(device)
         self.labels = labels.to(device)
@@ -99,4 +105,4 @@ class FGSM():
                 self.adj[edge_pert[0][1], edge_pert[0][0]] = new_edge_value
 
         self.attr_adversary = self.X
-        self.adj_adversary = self.adj.to_sparse().detach()
+        self.adj_adversary = SparseTensor.from_dense(self.adj.detach())

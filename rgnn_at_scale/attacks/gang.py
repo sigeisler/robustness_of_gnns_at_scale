@@ -10,6 +10,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import torch_sparse
+from torch_sparse import SparseTensor
 
 from rgnn_at_scale.helper import utils
 from rgnn_at_scale.attacks.prbcd import PRBCD
@@ -21,7 +22,7 @@ FEATURE_MODES = ('symmetric_float', 'binary', 'sparse_pos')
 class GANG():
 
     def __init__(self,
-                 adj: torch.sparse.FloatTensor,
+                 adj: SparseTensor,
                  X: torch.Tensor,
                  labels: torch.Tensor,
                  idx_attack: np.ndarray,
@@ -50,9 +51,12 @@ class GANG():
         for p in self.model.parameters():
             p.requires_grad = False
         self.X = X
-        self.edge_index = adj.indices()
-        self.edge_weight = adj.values()
-        self.n = adj.shape[0]
+
+        edge_index_rows, edge_index_cols, edge_weight = adj.coo()
+        self.edge_index = torch.stack([edge_index_rows, edge_index_cols], dim=0).to(self.device)
+        self.edge_weight = edge_weight.to(self.device)
+
+        self.n = adj.size(0)
         self.d = X.shape[1]
         self.labels_attack = labels[idx_attack].to(self.device)
         self.idx_attack = idx_attack
@@ -110,11 +114,11 @@ class GANG():
         new_features = None
         for i in tqdm(range(node_budget), desc='Adding nodes'):
             next_node = self.n + i + 1
-            new_edge_weight = self.eps * torch.ones(next_node - 1).cuda()
+            new_edge_weight = self.eps * torch.ones(next_node - 1).to(self.device)
             new_edge_idx = torch.stack([torch.arange(next_node - 1),
-                                        (next_node - 1) * torch.ones(next_node - 1).long()]).cuda()
+                                        (next_node - 1) * torch.ones(next_node - 1).long()]).to(self.device)
 
-            next_new_features = self.feature_init_std * torch.randn((1, self.d)).cuda()
+            next_new_features = self.feature_init_std * torch.randn((1, self.d)).to(self.device)
 
             if new_features is not None:
                 new_features = torch.cat([new_features.detach(), next_new_features])
@@ -304,11 +308,12 @@ class GANG():
             edge_index = symmetric_edge_index.detach()
             edge_weight = symmetric_edge_weight.detach()
 
-            torch.cuda.empty_cache()
-            torch.cuda.synchronize()
+            if self.do_synchronize:
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
 
         self.n = self.n + i + 1
-        self.adj_adversary = torch.sparse.FloatTensor(
+        self.adj_adversary = SparseTensor.from_edge_index(
             edge_index, edge_weight, (self.n, self.n)
         ).coalesce().detach()
         if not self.feature_greedy_opt:

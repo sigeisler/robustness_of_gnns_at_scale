@@ -7,6 +7,7 @@ import numpy as np
 import scipy.sparse as sp
 import torch_geometric
 import torch
+from torch_sparse import SparseTensor
 from tqdm import tqdm
 
 from torch_geometric.utils import add_self_loops
@@ -15,15 +16,19 @@ from torch_geometric.utils import add_self_loops
 class DICE(object):
 
     def __init__(self,
-                 adj: torch.Tensor,
+                 adj: Union[SparseTensor, torch.Tensor],
                  X: torch.Tensor,
                  labels: torch.Tensor,
                  device: Union[str, int, torch.device],
                  add_ratio: float = 0.6,  # ratio of the attack budget that is used for edge addition
                  **kwargs):
-        self.n = adj.size()[0]
-        coo_adj = torch_geometric.utils.to_scipy_sparse_matrix(adj.indices(), num_nodes=self.n)
-        self.adj = sp.csr_matrix(coo_adj)
+        if isinstance(adj, SparseTensor):
+            self.n = adj.size(0)
+            self.adj = adj.to_scipy(layout="csr")
+        else:
+            self.n = adj.size()[0]
+            coo_adj = torch_geometric.utils.to_scipy_sparse_matrix(adj.indices(), num_nodes=self.n)
+            self.adj = sp.csr_matrix(coo_adj)
 
         self.labels = labels.cpu()
         self.device = device
@@ -123,9 +128,8 @@ class DICE(object):
         if has_self_loops:
             adj.setdiag(1)  # set diagonal to 0 so that we cannot remove self loops in the perturbations
             edge_indices, edge_attributes = add_self_loops(edge_indices, edge_attributes, num_nodes=self.n)
-        self.adj_adversary = torch.sparse.FloatTensor(
+        self.adj_adversary = SparseTensor.from_edge_index(
             edge_indices, edge_attributes, (self.n, self.n)
-        ).to(self.device).coalesce()
+        ).coalesce().detach().to(self.device)
 
-        coo_adj = torch_geometric.utils.to_scipy_sparse_matrix(self.adj_adversary.indices(), num_nodes=self.n)
-        self.adj = sp.csr_matrix(coo_adj)
+        self.adj = self.adj_adversary.to_scipy(layout="csr")

@@ -6,6 +6,7 @@ import numpy as np
 import torch
 from torch import nn
 import torch_sparse
+from torch_sparse import SparseTensor
 
 from rgnn_at_scale.helper import utils
 from rgnn_at_scale.attacks.prbcd import PRBCD
@@ -17,7 +18,7 @@ class GreedyRBCD(PRBCD):
     """
 
     def __init__(self,
-                 adj: torch.sparse.FloatTensor,
+                 adj: SparseTensor,
                  X: torch.Tensor,
                  labels: torch.Tensor,
                  idx_attack: np.ndarray,
@@ -28,6 +29,10 @@ class GreedyRBCD(PRBCD):
 
         super().__init__(model=model, X=X, adj=adj,
                          labels=labels, idx_attack=idx_attack, eps=eps, **kwargs)
+
+        rows, cols, self.edge_weight = adj.coo()
+        self.edge_index = torch.stack([rows, cols], dim=0)
+
         self.edge_index = self.edge_index.to(self.device)
         self.edge_weight = self.edge_weight.to(self.device)
         self.X = self.X.to(self.device)
@@ -113,9 +118,7 @@ class GreedyRBCD(PRBCD):
             del loss
             del gradient
 
-        self.adj_adversary = torch.sparse.FloatTensor(
-            self.edge_index,
-            self.edge_weight,
-            (self.n, self.n)
+        self.adj_adversary = SparseTensor.from_edge_index(
+            edge_index, edge_weight, (self.n, self.n)
         ).coalesce().detach()
         self.attr_adversary = self.X

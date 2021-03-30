@@ -85,7 +85,8 @@ def run_attacks(attack, epsilons, binary_attr, attr, adj, labels, model, idx_att
         storage.save_artifact(pert_adj_storage_type, {**params, **{'epsilon': epsilon}}, adj_per_eps[-1])
         storage.save_artifact(pert_attr_storage_type, {**params, **{'epsilon': epsilon}}, attr_per_eps[-1])
 
-        del adversary
+    del adversary
+    return adj_per_eps, attr_per_eps
 
 
 def evaluate_global_attack(models_and_hyperparams, labels, epsilons, adj_per_eps, attr_per_eps, seed, device, idx):

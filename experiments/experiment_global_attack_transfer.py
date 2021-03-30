@@ -12,7 +12,8 @@ from rgnn_at_scale.helper.io import Storage
 from rgnn_at_scale.models import DenseGCN, GCN
 from rgnn_at_scale.train import train
 from rgnn_at_scale.helper.utils import accuracy
-from .common import (load_perturbed_data_if_exists, train_surrogate_model, run_attacks, evaluate_global_attack)
+from experiments.common import (load_perturbed_data_if_exists, train_surrogate_model,
+                                run_attacks, evaluate_global_attack)
 
 ex = Experiment()
 seml.setup_logger(ex)
