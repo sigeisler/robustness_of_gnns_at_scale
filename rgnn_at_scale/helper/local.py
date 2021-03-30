@@ -7,6 +7,7 @@ import os
 import json
 import sys
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from pathlib import Path
 
 from sacred import Experiment
 from seml.config import read_config, generate_configs
@@ -67,7 +68,10 @@ def build_configs_and_run(config_files: Sequence[str], executable: Optional[str]
     }
     configs = [configs[i] for i in deduplicate_index.values()]
 
-    module = importlib.import_module(os.path.splitext(os.path.basename(executable))[0])
+    module_path = Path(executable)
+    anchor_path = module_path.parents._parts[:-1]
+    module_name = os.path.splitext(module_path.name)[0]
+    module = importlib.import_module(f".{module_name}", ".".join(anchor_path))
 
     run = None
     for attr in dir(module):

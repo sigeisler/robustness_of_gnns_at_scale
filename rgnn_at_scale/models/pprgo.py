@@ -378,11 +378,9 @@ class PPRGoWrapperBase():
             # we need to precompute the ppr_score first
 
             if isinstance(adj, SparseTensor):
-                num_nodes = adj.size(0)
                 adj = adj.to_scipy(layout="csr")
-            else:
-                # for scipy sparse matrix
-                num_nodes = adj.size
+
+            num_nodes = adj.shape[0]
 
             if ppr_idx is None:
                 ppr_idx = np.arange(num_nodes)

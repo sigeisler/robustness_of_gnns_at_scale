@@ -39,7 +39,7 @@ def config():
 
     # default params
 
-    model_labels = ['Vanilla PPRGo']
+    model_labels = ['Vanilla GCN']
     seeds = [0, 1, 5]
     db_collection_attacks = "kdd21_local_attack_citeseer"
     artifact_dir = 'cache'

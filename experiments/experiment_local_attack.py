@@ -65,10 +65,19 @@ def config():
     binary_attr = False
     seed = 0
     artifact_dir = 'cache_debug'
-    model_storage_type = 'pretrained'
+    model_storage_type = 'victim_cora'
     device = "cpu"
     display_steps = 10
-    model_label = 'Vanilla PPRGo'
+    model_label = 'Vanilla GCN'
+
+    binary_attr = False
+    normalize = False
+    normalize_attr = False
+    make_undirected = True
+    make_unweighted = True
+    seed = 0
+    artifact_dir = 'cache_debug'
+    model_storage_type = 'pretrained'
     make_undirected = True
     make_unweighted = True
     data_dir = './datasets'

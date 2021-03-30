@@ -32,7 +32,7 @@ def config():
         ex.observers.append(seml.create_mongodb_observer(db_collection, overwrite=overwrite))
 
     # default params
-    dataset = 'ogbn-arxiv'
+    dataset = 'cora_ml'
     model_params = {
         'label': 'Vanilla PPRGo Diffusion Embedding',
         'model': 'PPRGo',
@@ -57,13 +57,13 @@ def config():
     }
     binary_attr = False
     normalize = False
+    normalize_attr = False
     make_undirected = True
     make_unweighted = True
-    normalize_attr = None
-    seed = 0
+    seed = 1
     artifact_dir = 'cache_debug'
     model_storage_type = 'pretrained'
-    # ppr_cache_params = None
+    ppr_cache_params = None
     ppr_cache_params = dict(
         data_artifact_dir="/nfs/students/schmidtt/cache",
         data_storage_type="ppr"
@@ -78,6 +78,34 @@ def config():
 def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params: Dict[str, Any], binary_attr: bool,
         make_undirected: bool, make_unweighted: bool, normalize: bool, normalize_attr: str, seed: int, artifact_dir: str,
         model_storage_type: str, ppr_cache_params: Dict[str, str], device: Union[str, int], data_device: Union[str, int], display_steps: int):
+    """
+    Instantiates a SEML experiment executing a training run for a given model configuration.
+    Saves the model to storage and evaluates its accuracy. 
+
+    Parameters
+    ----------
+    data_dir : str, optional
+        Path to data folder that contains the dataset
+    dataset : str
+        Name of the dataset. Either one of: `cora_ml`, `citeseer`, `pubmed` or an ogbn dataset
+    model_params : Dict[str, Any]
+        The hyperparameters of the model to be passed as keyword arguments to the constructor of the model class.
+        This dict must contain the key "label" specificing the model class.
+    train_params : Dict[str, Any]
+
+    device : Union[int, torch.device]
+        `cpu` or GPU id, by default 0
+    normalize : bool, optional
+        Normalize adjacency matrix with symmetric degree normalization (non-scalable implementation!), by default False
+    binary_attr : bool, optional
+        If true the attributes are binarized (!=0), by default False
+
+    Returns
+    -------
+    Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+        dense attribute tensor, sparse adjacency matrix (normalized) and labels tensor.
+    """
+
     logging.info({
         'dataset': dataset, 'model_params': model_params, 'train_params': train_params, 'binary_attr': binary_attr,
         'make_undirected': make_undirected, 'make_unweighted': make_unweighted, 'normalize': normalize, 'normalize_attr': normalize_attr,
@@ -110,8 +138,9 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
     print("Test set size: ", len(idx_test))
 
     # Collect all hyperparameters of model
-    ppr_cache = dict(ppr_cache_params)
+    ppr_cache = None
     if ppr_cache_params is not None:
+        ppr_cache = dict(ppr_cache_params)
         ppr_cache.update(dict(
             dataset=dataset,
             normalize=normalize,
