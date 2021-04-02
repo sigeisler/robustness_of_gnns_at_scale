@@ -15,4 +15,4 @@ squeue -j ${SLURM_JOBID} -O nodelist | tail -n +2
 # Activate your conda environment if necessary
 # conda init bash
 # conda activate robustgnn
-python pre_calc_ppr.py
+python scripts/ppr_calc_batched_ppr.py

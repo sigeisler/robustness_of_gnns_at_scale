@@ -11,14 +11,13 @@ from typing import Union
 
 import numpy as np
 import torch
-from torch.nn import functional as F
 from torch_sparse import SparseTensor
 
 from rgnn_at_scale.models import DenseGCN
-from rgnn_at_scale.attacks.prbcd import PRBCD
+from rgnn_at_scale.attacks.base_attack import DenseAttack
 
 
-class PGD(object):
+class PGD(DenseAttack):
     """L_0 norm Projected Gradient Descent (PGD) attack as proposed in:
     Kaidi Xu, Hongge Chen, Sijia Liu, Pin Yu Chen, Tsui Wei Weng, Mingyi Hong, and Xue Lin.Topology attack and defense
     for graph neural networks: An optimization perspective. IJCAI International Joint Conference on Artificial
@@ -28,8 +27,8 @@ class PGD(object):
     ----------
     X : torch.Tensor
         [n, d] feature matrix.
-    adj : torch.sparse.FloatTensor
-        [n, n] sparse adjacency matrix.
+    adj : Union[SparseTensor, torch.Tensor]
+        [n, n] adjacency matrix.
     labels : torch.Tensor
         Labels vector of shape [n].
     idx_attack : np.ndarray
@@ -43,38 +42,21 @@ class PGD(object):
     """
 
     def __init__(self,
-                 X: torch.Tensor,
                  adj: Union[SparseTensor, torch.Tensor],
+                 X: torch.Tensor,
                  labels: torch.Tensor,
                  idx_attack: np.ndarray,
                  model: DenseGCN,
                  device: Union[str, int, torch.device],
+                 loss_type: str = 'CE',
                  epochs: int = 200,
                  epsilon: float = 1e-5,
-                 loss_type: str = 'CE',
                  **kwargs):
-        if isinstance(adj, SparseTensor):
-            assert adj.device() == X.device, 'The device of the features and adjacency matrix must match'
-            self.adj = adj.to_dense().to(device)
-        else:
-            assert adj.device == X.device, 'The device of the features and adjacency matrix must match'
-            self.adj = adj.to(device)
 
-        self.device = device
-        self.X = X.to(device)
-        self.labels = labels.to(device)
+        super().__init__(adj, X, labels, idx_attack, model, device, loss_type, **kwargs)
 
-        self.idx_attack = idx_attack
-        self.model = model
         self.epochs = epochs
         self.epsilon = epsilon
-        self.loss_type = loss_type
-
-        self.n = self.X.shape[0]
-        self.device = X.device
-
-        self.attr_adversary = self.X  # Only the adjacency matrix will be perturbed
-        self.adj_adversary = None
 
     def attack(self, n_perturbations: int, **kwargs):
         """Perform attack (`n_perturbations` is increasing as it was a greedy attack).
@@ -92,7 +74,7 @@ class PGD(object):
         for t in range(self.epochs):
             modified_adj = self.get_modified_adj()
             logits = self.model(self.X, modified_adj)
-            loss = PRBCD.calculate_loss(self.loss_type, logits[self.idx_attack], self.labels[self.idx_attack])
+            loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
             adj_grad = torch.autograd.grad(loss, self.adj_changes)[0]
 
             if self.loss_type == 'CW':
@@ -124,7 +106,7 @@ class PGD(object):
                     self.adj_changes.data.copy_(torch.tensor(sampled))
                     modified_adj = self.get_modified_adj()
                     logits = self.model(self.X, modified_adj)
-                    loss = PRBCD.calculate_loss(self.loss_type, logits[self.idx_attack], self.labels[self.idx_attack])
+                    loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
                     if best_loss < loss:
                         best_loss = loss
                         best_s = sampled

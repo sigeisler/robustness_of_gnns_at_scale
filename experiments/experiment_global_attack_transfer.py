@@ -34,7 +34,7 @@ def config():
     # default params
     dataset = 'cora_ml'  # Options are 'cora_ml' and 'citeseer' (or with a big GPU 'pubmed')
     data_dir = './datasets'
-    attack = 'PRBCD'
+    attack = 'FGSM'
     attack_params = {}
     epsilons = [0, 0.1, 0.25]
     surrogate_params = {
@@ -44,7 +44,7 @@ def config():
             'lr': 1e-2,
             'weight_decay': 1e-3,  # TODO: 5e-4,
             'patience': 100,
-            'max_epochs': 3000
+            'max_epochs': 50
         }
     }
     binary_attr = False

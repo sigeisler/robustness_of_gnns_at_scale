@@ -86,14 +86,15 @@ def _save_ppr_topk(topk_batch_size,
                    make_undirected,
                    make_unweighted,
                    normalize,
-                   split_desc):
+                   split_desc,
+                   batch_start_idx=0):
     dump_suffix = f"{dataset}_{split_desc}_alpha{alpha_suffix}_eps{eps:.0e}_topk{topk}_pprnorm{ppr_normalization}_norm{normalize}_indirect{make_undirected}_unweighted{make_unweighted}"
     logging.info(dump_suffix)
     num_nodes = len(ppr_idx)
     num_batches = math.ceil(num_nodes / topk_batch_size)
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     nnz = 0
-    for i in range(num_batches):
+    for i in range(batch_start_idx, num_batches):
         logging.info(f"topk for batch {i+1} of {num_batches}")
 
         batch_idx = ppr_idx[(i * topk_batch_size):(i + 1) * topk_batch_size]
@@ -135,7 +136,8 @@ def save_ppr_topk(topk_batch_size,
                        make_undirected,
                        make_unweighted,
                        normalize,
-                       split_desc)
+                       split_desc,
+                       batch_start_idx=1035)
     if calc_ppr_for_all:
         save_ppr(np.arange(adj_sp.shape[0]), "full")
     else:

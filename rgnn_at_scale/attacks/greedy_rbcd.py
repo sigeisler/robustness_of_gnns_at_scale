@@ -1,10 +1,8 @@
 import warnings
 
 from tqdm import tqdm
-from torch.nn import functional as F
 import numpy as np
 import torch
-from torch import nn
 import torch_sparse
 from torch_sparse import SparseTensor
 

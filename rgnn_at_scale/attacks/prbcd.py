@@ -1,3 +1,5 @@
+import logging
+
 from collections import defaultdict
 from copy import deepcopy
 import math
@@ -56,8 +58,8 @@ class PRBCD(object):
             p.requires_grad = False
 
         edge_index_rows, edge_index_cols, edge_weight = adj.coo()
-        self.edge_index = torch.stack([edge_index_rows, edge_index_cols], dim=0).cpu()
-        self.edge_weight = edge_weight.cpu()
+        self.edge_index = torch.stack([edge_index_rows, edge_index_cols], dim=0).to(self.device)
+        self.edge_weight = edge_weight.to(self.device)
         self.n = adj.size(0)
         self.n_possible_edges = self.n * (self.n - 1) // 2
         self.d = X.shape[1]
@@ -107,6 +109,9 @@ class PRBCD(object):
         best_epoch = float('-Inf')
         self.attack_statistics = defaultdict(list)
 
+        mn = self.modified_edge_weight_diff.mean()
+        logging.info(f'modified_edge_weight_diff mean is {mn}')
+
         for epoch in tqdm(range(self.epochs + self.fine_tune_epochs)):
             self.modified_edge_weight_diff.requires_grad = True
             edge_index, edge_weight = self.get_modified_adj()
@@ -148,12 +153,17 @@ class PRBCD(object):
 
                 if epoch < self.epochs - 1:
                     self.resample_search_space(n_perturbations, edge_index, edge_weight, gradient)
+                    mn = self.modified_edge_weight_diff.mean()
+                    t = (self.modified_edge_weight_diff > 0.4).sum()
+                    logging.info(f'modified_edge_weight_diff mean is {mn} of this {t} over 0.4')
                 elif self.with_early_stropping and epoch == self.epochs - 1:
                     print(f'Loading search space of epoch {best_epoch} (accuarcy={best_accuracy}) for fine tuning\n')
                     self.current_search_space = best_search_space.to(self.device)
                     self.modified_edge_index = best_edge_index.to(self.device)
                     self.modified_edge_weight_diff = best_edge_weight_diff.to(self.device)
                     self.modified_edge_weight_diff.requires_grad = True
+                    mn = self.modified_edge_weight_diff.mean()
+                    logging.info(f'modified_edge_weight_diff mean is {mn}')
 
             del logits
             del loss
@@ -185,6 +195,8 @@ class PRBCD(object):
                     sampled = np.random.binomial(1, s)
 
                     if sampled.sum() > n_perturbations:
+                        n_samples = sampled.sum()
+                        logging.info(f'{i}-th sampling: too many samples {n_samples}')
                         continue
                     pos_modified_edge_weight_diff = torch.from_numpy(sampled).to(self.device)
                     self.modified_edge_weight_diff = torch.where(

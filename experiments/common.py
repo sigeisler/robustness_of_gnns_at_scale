@@ -106,7 +106,7 @@ def evaluate_global_attack(models_and_hyperparams, labels, epsilons, adj_per_eps
 
                 try:
                     pred_logits_target = model(attr_perturbed.to(device), adj_perturbed.to(device))
-                    acc_test_target = accuracy(pred_logits_target, labels.to(device), idx)
+                    acc_test_target = accuracy(pred_logits_target.cpu(), labels.cpu(), idx)
                     results.append({
                         'label': hyperparams['label'],
                         'epsilon': eps,

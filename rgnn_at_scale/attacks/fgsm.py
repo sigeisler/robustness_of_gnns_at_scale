@@ -10,10 +10,10 @@ import torch.nn.functional as F
 from torch_sparse import SparseTensor
 
 from rgnn_at_scale.models import DenseGCN
-from rgnn_at_scale.attacks.prbcd import PRBCD
+from rgnn_at_scale.attacks.base_attack import DenseAttack
 
 
-class FGSM():
+class FGSM(DenseAttack):
     """Greedy Fast Gradient Signed Method.
 
     Parameters
@@ -37,28 +37,13 @@ class FGSM():
                  idx_attack: np.ndarray,
                  model: DenseGCN,
                  device: Union[str, int, torch.device],
+                 loss_type: str = 'CE',  # 'CW', 'LeakyCW'  # 'CE', 'MCE', 'Margin'
                  stop_optimizing_if_label_flipped: bool = False,
-                 loss_type: Optional[str] = None,
                  **kwargs):
-        super().__init__()
-        if isinstance(adj, SparseTensor):
-            assert adj.device() == X.device, 'The device of the features and adjacency matrix must match'
-            self.original_adj = adj.to_dense().to(device)
-        else:
-            assert adj.device == X.device, 'The device of the features and adjacency matrix must match'
-            self.original_adj = adj.to(device)
+        super().__init__(adj, X, labels, idx_attack, model, device, loss_type, **kwargs)
 
-        self.device = device
-        self.adj = self.original_adj.clone().requires_grad_(True)
-        self.X = X.to(device)
-        self.labels = labels.to(device)
-        self.idx_attack = idx_attack
-        self.model = deepcopy(model).to(self.device)
+        self.adj_tmp = self.adj.clone().requires_grad_(True)
         self.stop_optimizing_if_label_flipped = stop_optimizing_if_label_flipped
-        self.loss_type = loss_type
-
-        self.attr_adversary = None
-        self.adj_adversary = None
         self.n_perturbations = 0
 
     def attack(self, n_perturbations: int):
@@ -77,10 +62,10 @@ class FGSM():
         self.n_perturbations += n_perturbations
 
         for i in range(n_perturbations):
-            logits = self.model.to(self.device)(self.X, self.adj)
+            logits = self.model.to(self.device)(self.X, self.adj_tmp)
 
             if self.loss_type is not None:
-                loss = PRBCD.calculate_loss(self.loss_type, logits[self.idx_attack], self.labels[self.idx_attack])
+                loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
             else:
                 not_yet_flipped_mask = logits[self.idx_attack].argmax(-1) == self.labels[self.idx_attack]
                 if self.stop_optimizing_if_label_flipped and not_yet_flipped_mask.sum() > 0:
@@ -89,9 +74,9 @@ class FGSM():
                 else:
                     loss = F.cross_entropy(logits[self.idx_attack], self.labels[self.idx_attack])
 
-            gradient = torch.autograd.grad(loss, self.adj)[0]
-            gradient[self.original_adj != self.adj] = 0
-            gradient *= 2 * (0.5 - self.adj)
+            gradient = torch.autograd.grad(loss, self.adj_tmp)[0]
+            gradient[self.adj != self.adj_tmp] = 0
+            gradient *= 2 * (0.5 - self.adj_tmp)
 
             # assert torch.all(gradient.nonzero()[:, 0] < gradient.nonzero()[:, 1]),\
             #     'Only upper half should get nonzero gradient'
@@ -100,9 +85,9 @@ class FGSM():
             edge_pert = (maximum == gradient).nonzero()
 
             with torch.no_grad():
-                new_edge_value = -self.adj[edge_pert[0][0], edge_pert[0][1]] + 1
-                self.adj[edge_pert[0][0], edge_pert[0][1]] = new_edge_value
-                self.adj[edge_pert[0][1], edge_pert[0][0]] = new_edge_value
+                new_edge_value = -self.adj_tmp[edge_pert[0][0], edge_pert[0][1]] + 1
+                self.adj_tmp[edge_pert[0][0], edge_pert[0][1]] = new_edge_value
+                self.adj_tmp[edge_pert[0][1], edge_pert[0][0]] = new_edge_value
 
         self.attr_adversary = self.X
-        self.adj_adversary = SparseTensor.from_dense(self.adj.detach())
+        self.adj_adversary = SparseTensor.from_dense(self.adj_tmp.detach())
