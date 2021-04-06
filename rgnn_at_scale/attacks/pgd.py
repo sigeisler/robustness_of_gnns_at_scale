@@ -126,7 +126,7 @@ class PGD(DenseAttack):
             self.complementary = torch.ones_like(self.adj) - torch.eye(self.n, device=self.device) - 2 * self.adj
 
         m = torch.zeros_like(self.adj)
-        tril_indices = torch.tril_indices(row=self.n - 1, col=self.n - 1, offset=0)
+        tril_indices = torch.tril_indices(row=self.n, col=self.n, offset=-1)
         m[tril_indices[0], tril_indices[1]] = self.adj_changes
         m = m + m.t()
         modified_adj = self.complementary * m + self.adj
