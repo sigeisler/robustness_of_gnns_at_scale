@@ -30,6 +30,7 @@ class Attack(ABC):
             p.requires_grad = False
 
         self.labels = labels.to(device)
+        self.labels_attack = self.labels[self.idx_attack]
         self.X = X.to(device)
         self.adj = adj.to(device)
 
@@ -42,7 +43,8 @@ class Attack(ABC):
 
     def calculate_loss(self, logits, labels):
         if self.loss_type == 'CW':
-            second_best_class = logits.argsort(-1)[:, -2]
+            sorted = logits.argsort(-1)
+            best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
             margin = (
                 logits[np.arange(logits.size(0)), labels]
                 - logits[np.arange(logits.size(0)), best_non_target_class]
@@ -88,6 +90,44 @@ class Attack(ABC):
             loss = F.nll_loss(logits, labels)
         return loss
 
+    @staticmethod
+    def project(n_perturbations: int, values: torch.tensor, eps: float = 0, inplace: bool = False):
+        if not inplace:
+            values = values.clone()
+
+        if torch.clamp(values, 0, 1).sum() > n_perturbations:
+            left = (values - 1).min()
+            right = values.max()
+            miu = Attack.bisection(values, left, right, n_perturbations)
+            values.data.copy_(torch.clamp(
+                values - miu, min=eps, max=1 - eps
+            ))
+        else:
+            values.data.copy_(torch.clamp(
+                values, min=eps, max=1 - eps
+            ))
+        return values
+
+    @staticmethod
+    def bisection(pos_modified_edge_weight_diff, a, b, n_perturbations, epsilon=1e-5, iter_max=1e5):
+        def func(x):
+            return torch.clamp(pos_modified_edge_weight_diff - x, 0, 1).sum() - n_perturbations
+
+        miu = a
+        for i in range(int(iter_max)):
+            miu = (a + b) / 2
+            # Check if middle point is root
+            if (func(miu) == 0.0):
+                break
+            # Decide the side to repeat the steps
+            if (func(miu) * func(a) < 0):
+                b = miu
+            else:
+                a = miu
+            if ((b - a) >= epsilon):
+                break
+        return miu
+
 
 class SparseAttack(Attack):
     def __init__(self,
@@ -109,6 +149,7 @@ class SparseAttack(Attack):
         self.edge_index = torch.stack([edge_index_rows, edge_index_cols], dim=0).to(self.device)
         self.edge_weight = edge_weight.to(self.device)
         self.n = adj.size(0)
+        self.d = X.shape[1]
 
 
 class DenseAttack(Attack):

@@ -1,5 +1,3 @@
-import warnings
-
 from tqdm import tqdm
 import numpy as np
 import torch
@@ -8,7 +6,7 @@ from torch_sparse import SparseTensor
 
 from rgnn_at_scale.helper import utils
 from rgnn_at_scale.attacks.prbcd import PRBCD
-from rgnn_at_scale.models import GCN
+from rgnn_at_scale.models import MODEL_TYPE
 
 
 class GreedyRBCD(PRBCD):
@@ -20,7 +18,7 @@ class GreedyRBCD(PRBCD):
                  X: torch.Tensor,
                  labels: torch.Tensor,
                  idx_attack: np.ndarray,
-                 model: GCN,
+                 model: MODEL_TYPE,
                  epochs: int = 500,
                  eps: float = 1e-7,
                  **kwargs):

@@ -1,9 +1,8 @@
 """TODO: Do better"""
 
-from copy import deepcopy
 import math
 import random
-from typing import Optional, Union, Tuple
+from typing import Union, Tuple
 
 from tqdm.auto import tqdm
 import numpy as np
@@ -13,20 +12,20 @@ import torch_sparse
 from torch_sparse import SparseTensor
 
 from rgnn_at_scale.helper import utils
-from rgnn_at_scale.attacks.prbcd import PRBCD
-from rgnn_at_scale.models import GCN
+from rgnn_at_scale.attacks.base_attack import Attack, SparseAttack
+from rgnn_at_scale.models import MODEL_TYPE
 
 FEATURE_MODES = ('symmetric_float', 'binary', 'sparse_pos')
 
 
-class GANG():
+class GANG(SparseAttack):
 
     def __init__(self,
                  adj: SparseTensor,
                  X: torch.Tensor,
                  labels: torch.Tensor,
                  idx_attack: np.ndarray,
-                 model: GCN,
+                 model: MODEL_TYPE,
                  device: Union[str, int, torch.device],
                  display_step: int = 20,
                  node_budget: int = 500,
@@ -44,22 +43,9 @@ class GANG():
                  edge_with_random_reverse: bool = True,
                  do_synchronize: bool = False,
                  **kwargs):
-        super().__init__()
-        self.device = device
-        self.model = deepcopy(model).to(self.device)
-        self.model.eval()
-        for p in self.model.parameters():
-            p.requires_grad = False
-        self.X = X
 
-        edge_index_rows, edge_index_cols, edge_weight = adj.coo()
-        self.edge_index = torch.stack([edge_index_rows, edge_index_cols], dim=0).to(self.device)
-        self.edge_weight = edge_weight.to(self.device)
+        super().__init__(adj, X, labels, idx_attack, model, device, **kwargs)
 
-        self.n = adj.size(0)
-        self.d = X.shape[1]
-        self.labels_attack = labels[idx_attack].to(self.device)
-        self.idx_attack = idx_attack
         self.display_step = display_step
         self.node_budget = node_budget
         self.edge_budget = edge_budget
@@ -80,7 +66,7 @@ class GANG():
             f'edge budget ({self.edge_budget}) must be dividable by the step size ({self.edge_step_size})'
         self.n_perturbations = 0
 
-    def attack(self, n_perturbations: Optional[int] = None):
+    def attack(self, n_perturbations: int):
         """Perform attack
 
         Parameters
@@ -131,7 +117,7 @@ class GANG():
                 new_features_projected = torch.clamp(F.dropout(new_features, 1 - n_features_avg / self.d),
                                                      0, self.feature_max_abs)
             else:
-                new_features_projected = PRBCD.project(n_features_avg * new_features.size(0), new_features)
+                new_features_projected = Attack.project(n_features_avg * new_features.size(0), new_features)
 
             new_features = new_features_projected
 
@@ -171,12 +157,24 @@ class GANG():
                         # fact three times...)
                         with torch.no_grad():
                             symmetric_edge_index = GANG.fuse_adjacency_matrices(
-                                edge_index, edge_weight, new_edge_idx, new_edge_weight, m=next_node, n=next_node, op='mean'
+                                edge_index,
+                                edge_weight,
+                                new_edge_idx,
+                                new_edge_weight,
+                                m=next_node,
+                                n=next_node,
+                                op='mean'
                             )[0]
 
                         symmetric_edge_weight = checkpoint.checkpoint(
                             lambda new_edge_weight: GANG.fuse_adjacency_matrices(
-                                edge_index, edge_weight, new_edge_idx, new_edge_weight, m=next_node, n=next_node, op='mean'
+                                edge_index,
+                                edge_weight,
+                                new_edge_idx,
+                                new_edge_weight,
+                                m=next_node,
+                                n=next_node,
+                                op='mean'
                             )[1],
                             new_edge_weight
                         )
@@ -246,7 +244,7 @@ class GANG():
                     elif self.feature_mode == 'sparse_pos':
                         new_features_projected = torch.clamp(new_features, 0, self.feature_max_abs)
                     else:
-                        new_features_projected = PRBCD.project(n_features_avg * new_features.size(0), new_features)
+                        new_features_projected = Attack.project(n_features_avg * new_features.size(0), new_features)
 
                     new_features.data.copy_(new_features_projected)
                     combined_features = torch.cat((features, new_features))
@@ -263,7 +261,7 @@ class GANG():
                 elif self.feature_mode == 'sparse_pos':
                     new_features_projected = torch.clamp(new_features, 0, self.feature_max_abs)
                 else:
-                    s = PRBCD.project(n_features_avg * new_features.size(0), new_features.detach())
+                    s = Attack.project(n_features_avg * new_features.size(0), new_features.detach())
                     s[s <= self.eps] = 0
                     s = s.cpu().numpy()
 

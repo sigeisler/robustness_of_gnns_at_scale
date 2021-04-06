@@ -1,8 +1,7 @@
 """Contains a greedy FGSM implementation. In each iteration the edge is flipped, determined by the largest gradient
 towards increasing the loss.
 """
-from copy import deepcopy
-from typing import Optional, Union
+from typing import Union
 
 import numpy as np
 import torch

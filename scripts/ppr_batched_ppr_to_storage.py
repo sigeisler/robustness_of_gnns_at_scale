@@ -37,7 +37,7 @@ eps = 1e-6
 topk = 512
 ppr_normalization = "row"
 for alpha in [0.005, 0.01, 0.05, 0.1, 0.2, 0.25, 0.3]:
-    for split_desc in ["train", "val", "test"]:
+    for split_desc in ["full"]:  # , "train", "val", "test"]:
         logging.info(f"start {alpha} {split_desc}")
         topk_matrix, ppr_idx = load_ppr(input_dir=ppr_input_dir,
                                         dataset=dataset,

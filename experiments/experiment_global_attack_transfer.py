@@ -34,9 +34,9 @@ def config():
     # default params
     dataset = 'cora_ml'  # Options are 'cora_ml' and 'citeseer' (or with a big GPU 'pubmed')
     data_dir = './datasets'
-    attack = 'FGSM'
+    attack = 'PRBCD'
     attack_params = {}
-    epsilons = [0, 0.1, 0.25]
+    epsilons = [0, 0.01]
     surrogate_params = {
         'n_filters': 64,
         'dropout': 0.5,
