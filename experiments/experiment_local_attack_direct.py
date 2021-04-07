@@ -33,19 +33,11 @@ def config():
 
     # default params
     dataset = 'cora_ml'  # Options are 'cora_ml' and 'citeseer' (or with a big GPU 'pubmed')
-    attack = 'LocalPRBCD'
+    attack = 'LocalBatchedPRBCD'
     attack_params = {
         "lr_factor": 0.05,
         "search_space_size": 10000,
         "ppr_recalc_at_end": False,
-        "artifact_dir": 'cache_debug',
-        "model_storage_type": 'nettack',
-        "surrogate_model_params": {
-            "label": 'Linear GCN',
-            "dataset": 'cora_ml',
-            "binary_attr": False,
-            "seed": 0
-        }
     }
     # nodes based on pprgo confidence values:
     # nodes = [1262, 1352, 1275,  365,   10, 1334, 1306, 1252, 1360, 1299,  # best confidence
@@ -62,36 +54,32 @@ def config():
     nodes = [1854, 513, 2383]
 
     epsilons = [0.5, 0.75, 1]
-    binary_attr = False
     seed = 0
-    artifact_dir = 'cache_debug'
-    model_storage_type = 'victim_cora'
-    device = "cpu"
     display_steps = 10
-    model_label = 'Vanilla GCN'
 
+    artifact_dir = 'cache_debug'
+    model_storage_type = 'victim_cora_2'
+    model_label = 'Vanilla PPRGo'
+
+    data_dir = './datasets'
     binary_attr = False
     normalize = False
     normalize_attr = False
     make_undirected = True
     make_unweighted = True
-    seed = 0
-    artifact_dir = 'cache_debug'
-    model_storage_type = 'pretrained'
-    make_undirected = True
-    make_unweighted = True
-    data_dir = './datasets'
+
     data_device = 'cpu'
+    device = "cpu"
 
 
 @ex.automain
 def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any], nodes: str, epsilons: Sequence[float],
-        binary_attr: bool, make_undirected: bool, make_unweighted: bool, seed: int,
+        binary_attr: bool, make_undirected: bool, make_unweighted: bool, seed: int, normalize: bool, normalize_attr: str,
         artifact_dir: str, model_label: str, model_storage_type: str, device: Union[str, int],
         data_device: Union[str, int], display_steps: int):
     logging.info({
         'dataset': dataset, 'attack': attack, 'attack_params': attack_params, 'nodes': nodes, 'epsilons': epsilons,
-        'binary_attr': binary_attr, 'seed': seed,
+        'binary_attr': binary_attr, 'seed': seed, 'normalize': normalize, 'normalize_attr': normalize_attr,
         'artifact_dir': artifact_dir, 'model_label': model_label, 'model_storage_type': model_storage_type,
         'device': device, "data_device": data_device, 'display_steps': display_steps
     })
@@ -103,6 +91,8 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
 
     results = []
     graph = prep_graph(dataset, data_device, dataset_root=data_dir,
+                       normalize=normalize,
+                       normalize_attr=normalize_attr,
                        make_undirected=make_undirected,
                        make_unweighted=make_unweighted,
                        binary_attr=binary_attr,
@@ -120,6 +110,10 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
 
     model_params = dict(dataset=dataset,
                         binary_attr=binary_attr,
+                        normalize=normalize,
+                        normalize_attr=normalize_attr,
+                        make_undirected=make_undirected,
+                        make_unweighted=make_unweighted,
                         seed=seed)
 
     # if epsilons[0] != 0:

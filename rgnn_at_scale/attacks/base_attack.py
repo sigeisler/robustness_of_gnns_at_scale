@@ -2,9 +2,11 @@ from abc import ABC, abstractmethod
 from copy import deepcopy
 from typing import Union
 
-from torch.nn import functional as F
 import numpy as np
+import scipy.sparse as sp
 import torch
+from torch.nn import functional as F
+
 from torch_sparse import SparseTensor
 from rgnn_at_scale.models import MODEL_TYPE, DenseGCN
 
@@ -131,7 +133,7 @@ class Attack(ABC):
 
 class SparseAttack(Attack):
     def __init__(self,
-                 adj: Union[SparseTensor, torch.Tensor],
+                 adj: Union[SparseTensor, torch.Tensor, sp.csr_matrix],
                  X: torch.Tensor,
                  labels: torch.Tensor,
                  idx_attack: np.ndarray,
@@ -140,8 +142,10 @@ class SparseAttack(Attack):
                  loss_type: str = 'CE',  # 'CW', 'LeakyCW'  # 'CE', 'MCE', 'Margin'
                  **kwargs):
 
-        if not isinstance(adj, SparseTensor):
+        if isinstance(adj, torch.Tensor):
             adj = SparseTensor.from_dense(adj)
+        elif isinstance(adj, sp.csr_matrix):
+            adj = SparseTensor.from_scipy(adj)
 
         super().__init__(adj, X, labels, idx_attack, model, device, loss_type, **kwargs)
 
