@@ -1,3 +1,4 @@
+import warnings
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from typing import Union
@@ -8,7 +9,7 @@ import torch
 from torch.nn import functional as F
 
 from torch_sparse import SparseTensor
-from rgnn_at_scale.models import MODEL_TYPE, DenseGCN
+from rgnn_at_scale.models import MODEL_TYPE, DenseGCN, GCN
 from rgnn_at_scale.helper.utils import accuracy
 
 
@@ -23,6 +24,16 @@ class Attack(ABC):
                  device: Union[str, int, torch.device],
                  loss_type: str = 'CE',  # 'CW', 'LeakyCW'  # 'CE', 'MCE', 'Margin'
                  **kwargs):
+
+        # TODO: should this be an assert instead of a warning?
+        if not (isinstance(model, GCN) or isinstance(model, DenseGCN)):
+            warnings.warn("The attack will fail if the gradient w.r.t. the adjacency can't be computed.")
+
+        if isinstance(model, GCN):
+            assert model.gdc_params is None, "GDC doesn't support a gradient w.r.t. the adjacency"
+            assert model.svd_params is None, "GDC doesn't support a gradient w.r.t. the adjacency"
+            assert model.jaccard_params is None, "GDC doesn't support a gradient w.r.t. the adjacency"
+
         self.device = device
         self.idx_attack = idx_attack
         self.loss_type = loss_type
