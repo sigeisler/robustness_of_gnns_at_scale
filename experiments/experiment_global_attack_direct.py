@@ -50,7 +50,7 @@ def config():
     model_storage_type = 'victim_cora_2'
     pert_adj_storage_type = 'evasion_attack_adj'
     pert_attr_storage_type = 'evasion_attack_attr'
-    model_label = "Vanilla GDC"
+    model_label = "RGCN"
 
     device = "cpu"
     data_device = "cpu"
