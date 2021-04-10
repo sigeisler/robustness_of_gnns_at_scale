@@ -76,7 +76,7 @@ class PRBCD(SparseAttack):
             self.lr_factor = 10 * lr_factor
         self.lr_factor *= max(math.log2(self.n_possible_edges / self.search_space_size), 1.)
 
-    def attack(self, n_perturbations, **kwargs):
+    def _attack(self, n_perturbations, **kwargs):
         """Perform attack (`n_perturbations` is increasing as it was a greedy attack).
 
         Parameters
@@ -103,7 +103,7 @@ class PRBCD(SparseAttack):
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
 
-            logits = self.model(data=self.X.to(self.device), adj=(edge_index, edge_weight))
+            logits = self.surrogate_model(data=self.X.to(self.device), adj=(edge_index, edge_weight))
             loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
 
             gradient = utils.grad_with_checkpoint(loss, self.modified_edge_weight_diff)[0]
@@ -118,7 +118,7 @@ class PRBCD(SparseAttack):
                 self.projection(n_perturbations, edge_index, edge_weight)
 
                 edge_index, edge_weight = self.get_modified_adj()
-                logits = self.model(data=self.X.to(self.device), adj=(edge_index, edge_weight))
+                logits = self.surrogate_model(data=self.X.to(self.device), adj=(edge_index, edge_weight))
                 accuracy = (
                     logits.argmax(-1)[self.idx_attack] == self.labels[self.idx_attack]
                 ).float().mean().item()
@@ -188,7 +188,7 @@ class PRBCD(SparseAttack):
                         -pos_modified_edge_weight_diff
                     ).float()
                     edge_index, edge_weight = self.get_modified_adj()
-                    logits = self.model(data=self.X.to(self.device), adj=(edge_index, edge_weight))
+                    logits = self.surrogate_model(data=self.X.to(self.device), adj=(edge_index, edge_weight))
                     accuracy = (
                         logits.argmax(-1)[self.idx_attack] == self.labels[self.idx_attack]
                     ).float().mean().item()
@@ -248,8 +248,8 @@ class PRBCD(SparseAttack):
 
         if (
             not self.modified_edge_weight_diff.requires_grad
-            or not hasattr(self.model, 'do_checkpoint')
-            or not self.model.do_checkpoint
+            or not hasattr(self.surrogate_model, 'do_checkpoint')
+            or not self.surrogate_model.do_checkpoint
         ):
             modified_edge_index, modified_edge_weight = utils.to_symmetric(
                 self.modified_edge_index, self.modified_edge_weight_diff, self.n
