@@ -58,7 +58,7 @@ class PGD(DenseAttack):
         self.epochs = epochs
         self.epsilon = epsilon
 
-    def attack(self, n_perturbations: int, **kwargs):
+    def _attack(self, n_perturbations: int, **kwargs):
         """Perform attack (`n_perturbations` is increasing as it was a greedy attack).
 
         Parameters
@@ -70,10 +70,10 @@ class PGD(DenseAttack):
         self.adj_changes = torch.zeros(int(self.n * (self.n - 1) / 2), dtype=torch.float, device=self.device)
         self.adj_changes.requires_grad = True
 
-        self.model.eval()
+        self.surrogate_model.eval()
         for t in range(self.epochs):
             modified_adj = self.get_modified_adj()
-            logits = self.model(self.X, modified_adj)
+            logits = self.surrogate_model(self.X, modified_adj)
             loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
             adj_grad = torch.autograd.grad(loss, self.adj_changes)[0]
 
@@ -105,7 +105,7 @@ class PGD(DenseAttack):
                         continue
                     self.adj_changes.data.copy_(torch.tensor(sampled))
                     modified_adj = self.get_modified_adj()
-                    logits = self.model(self.X, modified_adj)
+                    logits = self.surrogate_model(self.X, modified_adj)
                     loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
                     if best_loss < loss:
                         best_loss = loss

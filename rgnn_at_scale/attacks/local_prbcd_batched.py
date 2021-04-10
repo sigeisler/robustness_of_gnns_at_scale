@@ -1,21 +1,14 @@
-from collections import defaultdict
-from typing import Dict, Optional, Union, Any
+from typing import Dict, Optional, Any
 
-import math
 import logging
 
 import numpy as np
-import scipy.sparse as sp
-
 import torch
 import torch_sparse
 from torch.nn import functional as F
 from torch_sparse import SparseTensor
 
-from tqdm import tqdm
-
-from rgnn_at_scale.models import MODEL_TYPE, BATCHED_PPR_MODELS
-from rgnn_at_scale.helper.utils import calc_ppr_update_sparse_result, grad_with_checkpoint
+from rgnn_at_scale.helper.utils import calc_ppr_update_sparse_result
 
 from rgnn_at_scale.attacks.local_prbcd import LocalPRBCD
 from rgnn_at_scale.helper import utils
@@ -40,18 +33,18 @@ class LocalBatchedPRBCD(LocalPRBCD):
 
         self.ppr_cache_params = ppr_cache_params
         if self.ppr_cache_params is None:
-            self.ppr_cache_params = self.model.ppr_cache_params
+            self.ppr_cache_params = self.surrogate_model.ppr_cache_params
 
         self.ppr_matrix = None
 
         if self.ppr_cache_params is not None:
             storage = Storage(self.ppr_cache_params["data_artifact_dir"])
             params = dict(dataset=self.ppr_cache_params["dataset"],
-                          alpha=self.model.alpha,
+                          alpha=self.surrogate_model.alpha,
                           ppr_idx=list(map(int, ppr_nodes)),
-                          eps=self.model.eps,
-                          topk=self.model.topk,
-                          ppr_normalization=self.model.ppr_normalization,
+                          eps=self.surrogate_model.eps,
+                          topk=self.surrogate_model.topk,
+                          ppr_normalization=self.surrogate_model.ppr_normalization,
                           normalize=self.ppr_cache_params["normalize"],
                           make_undirected=self.ppr_cache_params["make_undirected"],
                           make_unweighted=self.ppr_cache_params["make_unweighted"])
@@ -64,8 +57,8 @@ class LocalBatchedPRBCD(LocalPRBCD):
         if self.ppr_matrix is None:
 
             sp_adj = self.adj.to_scipy(layout="csr")
-            self.ppr_matrix = ppr.topk_ppr_matrix(sp_adj, self.model.alpha, self.model.eps, ppr_nodes,
-                                                  self.model.topk, normalization=self.model.ppr_normalization)
+            self.ppr_matrix = ppr.topk_ppr_matrix(sp_adj, self.surrogate_model.alpha, self.surrogate_model.eps, ppr_nodes,
+                                                  self.surrogate_model.topk, normalization=self.surrogate_model.ppr_normalization)
             # save topk_ppr to disk
             if self.ppr_cache_params is not None:
                 storage.save_sparse_matrix(self.ppr_cache_params["data_storage_type"], params,
@@ -84,7 +77,7 @@ class LocalBatchedPRBCD(LocalPRBCD):
     def get_logits(self, node_idx: int, perturbed_graph: SparseTensor = None) -> torch.Tensor:
         if perturbed_graph is None:
             perturbed_graph = SparseTensor.from_scipy(self.ppr_matrix[node_idx])
-        return F.log_softmax(self.model.forward(self.X, None, ppr_scores=perturbed_graph), dim=-1)
+        return F.log_softmax(self.surrogate_model.forward(self.X, None, ppr_scores=perturbed_graph), dim=-1)
 
     def get_final_logits(self, node_idx: int, n_perturbations: int):
         if self.ppr_recalc_at_end:
@@ -96,16 +89,16 @@ class LocalBatchedPRBCD(LocalPRBCD):
                                    col=torch.cat((adj.storage.col(), disconnected_nodes)),
                                    value=torch.cat((adj.storage.col(), torch.full_like(disconnected_nodes, 1e-9))))
 
-            self.model.topk = self.model.topk + n_perturbations
-            logits = F.log_softmax(self.model.forward(self.X, adj, ppr_idx=np.array([node_idx])), dim=-1)
-            self.model.topk = self.model.topk - n_perturbations
+            self.surrogate_model.topk = self.surrogate_model.topk + n_perturbations
+            logits = F.log_softmax(self.surrogate_model.forward(self.X, adj, ppr_idx=np.array([node_idx])), dim=-1)
+            self.surrogate_model.topk = self.surrogate_model.topk - n_perturbations
         else:
             perturbed_graph = self.sample_edges(node_idx, n_perturbations)
             logits = self.get_logits(node_idx, perturbed_graph)
 
         return logits
 
-    def get_perturbed_graph(self, node_idx: int, only_update_adj: bool = False) -> SparseTensor:
+    def perturbe_graph(self, node_idx: int, only_update_adj: bool = False) -> SparseTensor:
         if self.attack_labeled_nodes_only:
             current_search_space = torch.tensor(self.idx_attack, device=self.device)[self.current_search_space]
         else:
@@ -120,7 +113,7 @@ class LocalBatchedPRBCD(LocalPRBCD):
             if not isinstance(A_row, SparseTensor):
                 A_row = SparseTensor.from_scipy(A_row)
             perturbed_graph = calc_ppr_update_sparse_result(self.ppr_matrix, A_row,
-                                                            modified_edge_weight_diff, node_idx, self.model.alpha)
+                                                            modified_edge_weight_diff, node_idx, self.surrogate_model.alpha)
             return perturbed_graph
         else:
             v_rows, v_cols, v_vals = modified_edge_weight_diff.coo()

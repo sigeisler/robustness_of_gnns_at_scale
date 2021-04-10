@@ -63,7 +63,7 @@ class GreedyRBCD(PRBCD):
         self.edge_weight = torch.ones_like(self.edge_weight)
         assert self.edge_index.size(1) == self.edge_weight.size(0)
 
-    def attack(self, n_perturbations: int):
+    def _attack(self, n_perturbations: int):
         """Perform attack
 
         Parameters
@@ -96,8 +96,8 @@ class GreedyRBCD(PRBCD):
 
             # print(f'Cuda after sampling: {torch.cuda.memory_summary()}')
 
-            logits = self.model(data=self.X, adj=(edge_index, edge_weight))
-            loss = PRBCD.calculate_loss(self.loss_type, logits[self.idx_attack], self.labels[self.idx_attack])
+            logits = self.surrogate_model(data=self.X, adj=(edge_index, edge_weight))
+            loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
 
             gradient = utils.grad_with_checkpoint(loss, self.modified_edge_weight_diff)[0]
 

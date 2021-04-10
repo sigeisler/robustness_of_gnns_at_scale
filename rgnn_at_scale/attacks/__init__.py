@@ -11,13 +11,14 @@ from .local_prbcd_batched import LocalBatchedPRBCD
 from .pgd import PGD
 from .prbcd import PRBCD
 from .nettack import Nettack
+from .base_attack import Attack
 
 ATTACK_TYPE = Union[DICE, FGSM, GANG, GreedyRBCD, LocalPRBCD, PGD, PRBCD, Nettack, LocalBatchedPRBCD]
 SPARSE_ATTACKS = [GANG.__name__, GreedyRBCD.__name__, PRBCD.__name__, DICE.__name__]
 LOCAL_ATTACKS = [LocalPRBCD.__name__, Nettack.__name__, LocalBatchedPRBCD.__name__]
 
 
-def create_attack(attack: str, binary_attr: bool, attr: torch.Tensor, **kwargs) -> ATTACK_TYPE:
+def create_attack(attack: str, binary_attr: bool, attr: torch.Tensor, **kwargs) -> Attack:
     """Creates the model instance given the hyperparameters.
 
     Parameters

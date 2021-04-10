@@ -66,7 +66,7 @@ class GANG(SparseAttack):
             f'edge budget ({self.edge_budget}) must be dividable by the step size ({self.edge_step_size})'
         self.n_perturbations = 0
 
-    def attack(self, n_perturbations: int):
+    def _attack(self, n_perturbations: int):
         """Perform attack
 
         Parameters
@@ -134,8 +134,8 @@ class GANG(SparseAttack):
                     torch.cuda.synchronize()
 
                 if (
-                    not hasattr(self.model, 'do_checkpoint')
-                    or not self.model.do_checkpoint
+                    not hasattr(self.surrogate_model, 'do_checkpoint')
+                    or not self.surrogate_model.do_checkpoint
                 ):
                     symmetric_edge_index, symmetric_edge_weight = GANG.fuse_adjacency_matrices(
                         edge_index, edge_weight, new_edge_idx, new_edge_weight, m=next_node, n=next_node, op='mean'
@@ -181,7 +181,7 @@ class GANG(SparseAttack):
 
                 combined_features = torch.cat((features, new_features))
 
-                logits = self.model(data=combined_features, adj=(symmetric_edge_index, symmetric_edge_weight))
+                logits = self.surrogate_model(data=combined_features, adj=(symmetric_edge_index, symmetric_edge_weight))
                 not_yet_flipped_mask = logits[self.idx_attack].argmax(-1) == self.labels_attack
                 if self.stop_optimizing_if_label_flipped and not_yet_flipped_mask.sum() > 0:
                     loss = F.cross_entropy(logits[self.idx_attack][not_yet_flipped_mask],
@@ -249,7 +249,8 @@ class GANG(SparseAttack):
                     new_features.data.copy_(new_features_projected)
                     combined_features = torch.cat((features, new_features))
 
-                    logits = self.model(data=combined_features, adj=(symmetric_edge_index, symmetric_edge_weight))
+                    logits = self.surrogate_model(data=combined_features, adj=(
+                        symmetric_edge_index, symmetric_edge_weight))
                     loss = F.cross_entropy(logits[self.idx_attack], self.labels_attack)
 
                     optimizer.zero_grad()
@@ -274,7 +275,7 @@ class GANG(SparseAttack):
                             new_features_projected = torch.tensor(
                                 sampled, dtype=torch.float, device=new_features.device)
                             combined_features = torch.cat((features, new_features_projected))
-                            logits = self.model(
+                            logits = self.surrogate_model(
                                 data=combined_features,
                                 adj=(symmetric_edge_index, symmetric_edge_weight)
                             )
@@ -288,7 +289,7 @@ class GANG(SparseAttack):
                                 best_features = new_features_projected.clone()
                     new_features = best_features
 
-                logits = self.model(
+                logits = self.surrogate_model(
                     data=torch.cat((features, new_features)),
                     adj=(symmetric_edge_index, symmetric_edge_weight)
                 )

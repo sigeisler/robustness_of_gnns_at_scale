@@ -45,7 +45,7 @@ class FGSM(DenseAttack):
         self.stop_optimizing_if_label_flipped = stop_optimizing_if_label_flipped
         self.n_perturbations = 0
 
-    def attack(self, n_perturbations: int):
+    def _attack(self, n_perturbations: int):
         """Perform attack
 
         Parameters
@@ -61,7 +61,7 @@ class FGSM(DenseAttack):
         self.n_perturbations += n_perturbations
 
         for i in range(n_perturbations):
-            logits = self.model.to(self.device)(self.X, self.adj_tmp)
+            logits = self.surrogate_model.to(self.device)(self.X, self.adj_tmp)
 
             if self.loss_type is not None:
                 loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])

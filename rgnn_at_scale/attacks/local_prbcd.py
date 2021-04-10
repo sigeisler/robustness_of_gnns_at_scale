@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Dict, Optional, Union
+from typing import Dict, Union
 
 import math
 import logging
@@ -67,7 +67,7 @@ class LocalPRBCD(SparseAttack):
         self.lr_factor = lr_factor
         self.lr_factor *= max(math.sqrt(self.n / self.search_space_size), 1.)
 
-    def attack(self, node_idx: int, n_perturbations: int):
+    def _attack(self, node_idx: int, n_perturbations: int):
         self.sample_search_space(node_idx, n_perturbations)
         best_margin = float('Inf')
         best_epoch = float('-Inf')
@@ -82,7 +82,7 @@ class LocalPRBCD(SparseAttack):
 
         for epoch in tqdm(range(self.epochs + self.fine_tune_epochs)):
             self.modified_edge_weight_diff.requires_grad = True
-            perturbed_graph = self.get_perturbed_graph(node_idx)
+            perturbed_graph = self.perturbe_graph(node_idx)
 
             if self.do_synchronize:
                 torch.cuda.empty_cache()
@@ -109,7 +109,7 @@ class LocalPRBCD(SparseAttack):
                     n_perturbations, self.modified_edge_weight_diff, self.eps
                 )
 
-                perturbed_graph = self.get_perturbed_graph(node_idx)
+                perturbed_graph = self.perturbe_graph(node_idx)
                 logits = self.get_logits(node_idx, perturbed_graph)
                 classification_statistics = LocalPRBCD.classification_statistics(logits, self.labels[node_idx])
                 if epoch % self.display_step == 0:
@@ -145,14 +145,12 @@ class LocalPRBCD(SparseAttack):
 
         final_logits = self.get_final_logits(node_idx, n_perturbations)
 
-        self.perturbed_edges = self.get_perturbed_edges(node_idx)
-
         return final_logits.detach(), logits_orig.detach()
 
     def get_logits(self, node_idx: int, perturbed_graph: SparseTensor = None) -> torch.Tensor:
         if perturbed_graph is None:
             perturbed_graph = self.adj
-        return self.model(data=self.X.to(self.device), adj=perturbed_graph)[node_idx:node_idx + 1]
+        return self.surrogate_model(data=self.X.to(self.device), adj=perturbed_graph)[node_idx:node_idx + 1]
 
     def get_final_logits(self, node_idx: int, n_perturbations: int):
         perturbed_graph = self.sample_edges(node_idx, n_perturbations)
@@ -166,7 +164,7 @@ class LocalPRBCD(SparseAttack):
         source, target = torch.where(~flip_order_mask, source, target), torch.where(flip_order_mask, source, target)
         return torch.stack((source, target), dim=0)
 
-    def get_perturbed_graph(self, node_idx: int) -> SparseTensor:
+    def perturbe_graph(self, node_idx: int) -> SparseTensor:
 
         if self.attack_labeled_nodes_only:
             current_search_space = torch.tensor(self.idx_attack, device=self.device)[self.current_search_space]
@@ -313,7 +311,7 @@ class LocalPRBCD(SparseAttack):
                         self.modified_edge_weight_diff == 1
                     ].to(self.device)
 
-                    perturbed_graph = self.get_perturbed_graph(node_idx)
+                    perturbed_graph = self.perturbe_graph(node_idx)
                     logits = self.get_logits(node_idx, perturbed_graph)
                     margin = LocalPRBCD.classification_statistics(logits, self.labels[node_idx])['margin']
                     if best_margin > margin:
@@ -323,5 +321,5 @@ class LocalPRBCD(SparseAttack):
             self.modified_edge_weight_diff = best_weights.to(self.device).float()
             self.current_search_space = best_search_space.to(self.device).long()
 
-            perturbed_graph = self.get_perturbed_graph(node_idx)
+            perturbed_graph = self.perturbe_graph(node_idx)
         return perturbed_graph

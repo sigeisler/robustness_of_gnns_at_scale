@@ -9,6 +9,7 @@ from torch.nn import functional as F
 
 from torch_sparse import SparseTensor
 from rgnn_at_scale.models import MODEL_TYPE, DenseGCN
+from rgnn_at_scale.helper.utils import accuracy
 
 
 class Attack(ABC):
@@ -26,10 +27,12 @@ class Attack(ABC):
         self.idx_attack = idx_attack
         self.loss_type = loss_type
 
-        self.model = deepcopy(model).to(self.device)
-        self.model.eval()
-        for p in self.model.parameters():
+        self.surrogate_model = deepcopy(model).to(self.device)
+        self.surrogate_model.eval()
+        for p in self.surrogate_model.parameters():
             p.requires_grad = False
+
+        self.set_eval_model(model)
 
         self.labels = labels.to(device)
         self.labels_attack = self.labels[self.idx_attack]
@@ -37,11 +40,44 @@ class Attack(ABC):
         self.adj = adj.to(device)
 
         self.attr_adversary = self.X
-        self.adj_adversary = None
+        self.adj_adversary = self.adj
 
     @abstractmethod
-    def attack(self, n_perturbations: int, **kwargs):
+    def _attack(self, n_perturbations: int, **kwargs):
         pass
+
+    def attack(self, n_perturbations: int, **kwargs):
+        if n_perturbations > 0:
+            return self._attack(n_perturbations, **kwargs)
+        else:
+            self.attr_adversary = self.X
+            self.adj_adversary = self.adj
+
+    def set_pertubations(self, adj_perturbed, attr_perturbed):
+        self.adj_adversary = adj_perturbed.to(self.device)
+        self.attr_adversary = attr_perturbed.to(self.device)
+
+    def get_pertubations(self):
+        return self.adj_adversary, self.attr_adversary
+
+    def set_eval_model(self, model):
+        self.eval_model = deepcopy(model).to(self.device)
+
+    def evaluate_global(self, eval_idx):
+        with torch.no_grad():
+            self.eval_model.eval()
+            if hasattr(self.eval_model, 'release_cache'):
+                self.eval_model.release_cache()
+
+            pred_logits_target = self.eval_model(self.attr_adversary, self.adj_adversary)
+            acc_test_target = accuracy(pred_logits_target.cpu(), self.labels.cpu(), eval_idx)
+        return pred_logits_target, acc_test_target
+
+    def evaluate_local(self, node_idx: int):
+        with torch.no_grad():
+            initial_logits = self.get_logits(node_idx)
+            logits = self.get_logits(node_idx, self.adj_adversary)
+        return logits, initial_logits
 
     def calculate_loss(self, logits, labels):
         if self.loss_type == 'CW':
