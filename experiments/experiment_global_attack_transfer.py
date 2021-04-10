@@ -34,7 +34,7 @@ def config():
     # default params
     dataset = 'cora_ml'  # Options are 'cora_ml' and 'citeseer' (or with a big GPU 'pubmed')
     data_dir = './datasets'
-    attack = 'PRBCD'
+    attack = 'PGD'
     attack_params = {}
     epsilons = [0, 0.01]
     surrogate_params = {

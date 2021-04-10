@@ -39,18 +39,6 @@ def config():
         "search_space_size": 10000,
         "ppr_recalc_at_end": False,
     }
-    # nodes based on pprgo confidence values:
-    # nodes = [1262, 1352, 1275,  365,   10, 1334, 1306, 1252, 1360, 1299,  # best confidence
-    #          2454, 1795, 1796,  732,  971, 2212,  245, 2365, 2789, 1407,  # worst confidence
-    #          853, 1964,  630,  980,   29, 1193, 2626,  786,  402, 2515,  # random
-    #          1785, 325, 2352,  668,   65, 1169, 2430,  568, 2052, 1796]  # random
-
-    # nodes based on linear gcn confidence values
-    # nodes = [333, 1854, 513,   51, 2383,  890, 1138,  216, 1079,  890,   # random
-    #          1346, 186,  210,  410,  261, 1278, 2746,  113, 2579, 1192,  # random
-    #          2259, 1787, 2802,  264, 1933,  580,  466, 1063,  699, 1159,  # best confidence
-    #          798, 1560, 1822, 2555, 1449, 1879, 2202, 2352, 1796,  929]  # worst confidence
-
     nodes = [1854, 513, 2383]
 
     epsilons = [0.5, 0.75, 1]
@@ -58,8 +46,12 @@ def config():
     display_steps = 10
 
     artifact_dir = 'cache_debug'
+
     model_storage_type = 'victim_cora_2'
-    model_label = 'Vanilla PPRGo'
+    model_label = 'Vanilla GCN'
+
+    surrogate_model_storage_type = 'nettack'
+    surrogate_model_label = 'Linear GCN'
 
     data_dir = './datasets'
     binary_attr = False
@@ -120,29 +112,29 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
         model_params['label'] = model_label
     models_and_hyperparams = storage.find_models(model_storage_type, model_params)
 
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-
     for model, hyperparams in models_and_hyperparams:
         logging.info(model)
         logging.info(hyperparams)
+        model = model.to(device)
+        model.eval()
 
-        try:
-            adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels,
-                                      model=model, idx_attack=idx_test, device=device, **attack_params)
+        adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels,
+                                  model=model, idx_attack=idx_test, device=device, **attack_params)
 
-            for node in nodes:
-                degree = adj[node].sum() + 1
-                for eps in epsilons:
-                    n_perturbations = int((eps * degree).round().item())
-                    if n_perturbations == 0:
-                        continue
+        for node in nodes:
+            degree = adj[node].sum() + 1
+            for eps in epsilons:
+                n_perturbations = int((eps * degree).round().item())
+                if n_perturbations == 0:
+                    continue
 
-                    # In case the model is non-deterministic to get the results either after attacking or after loading
+                # In case the model is non-deterministic to get the results either after attacking or after loading
+                torch.manual_seed(seed)
+                np.random.seed(seed)
 
+                try:
                     adversary.attack(node, n_perturbations)
 
-                    logits, initial_logits = adversary.evaluate_local(node)
                     logging.info(
                         f'Pert. edges for node {node} and budget {n_perturbations}: {adversary.perturbed_edges}')
 
@@ -166,8 +158,8 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                     # if hasattr(adversary, 'attack_statistics'):
                     #     results[-1]['attack_statistics'] = adversary.attack_statistics
 
-        except Exception as e:
-            logging.exception(e)
+                except Exception as e:
+                    logging.exception(e)
 
     assert len(results) > 0
 
