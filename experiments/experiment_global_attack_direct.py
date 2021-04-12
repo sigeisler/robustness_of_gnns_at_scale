@@ -13,8 +13,7 @@ from rgnn_at_scale.helper.io import Storage
 from rgnn_at_scale.models import DenseGCN, GCN
 from rgnn_at_scale.train import train
 from rgnn_at_scale.helper.utils import accuracy
-from experiments.common import (load_perturbed_data_if_exists, train_surrogate_model,
-                                run_attacks, evaluate_global_attack)
+from experiments.common import (prepare_global_attack_experiment, run_global_attack)
 
 ex = Experiment()
 seml.setup_logger(ex)
@@ -50,7 +49,7 @@ def config():
     model_storage_type = 'victim_cora_2'
     pert_adj_storage_type = 'evasion_attack_adj'
     pert_attr_storage_type = 'evasion_attack_attr'
-    model_label = "RGCN"
+    model_label = "Vanilla GCN"
 
     device = "cpu"
     data_device = "cpu"
@@ -76,56 +75,27 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
     assert len(np.unique(epsilons)) == len(epsilons),\
         'argument `epsilons` must be unique (strictly increasing)'
     assert all([eps > 0 for eps in epsilons]), 'all elements in `epsilons` must be greater than 0'
-    assert model_label is not None, "Model label must not be None"
-
-    # To increase consistency between runs
-    torch.manual_seed(seed)
-    np.random.seed(seed)
 
     results = []
-    graph = prep_graph(dataset, data_device, dataset_root=data_dir,
-                       normalize=normalize,
-                       normalize_attr=normalize_attr,
-                       make_undirected=make_undirected,
-                       make_unweighted=make_unweighted,
-                       binary_attr=binary_attr,
-                       return_original_split=dataset.startswith('ogbn'))
+    surrogate_model_label = False
 
-    attr, adj, labels = graph[:3]
-    if len(graph) == 3:
-        idx_train, idx_val, idx_test = split(labels.cpu().numpy())
-    else:
-        idx_train, idx_val, idx_test = graph[3]['train'], graph[3]['valid'], graph[3]['test']
-    n_features = attr.shape[1]
-    n_classes = int(labels.max() + 1)
+    (attr, adj, labels,
+     idx_train,
+     idx_val,
+     idx_test,
+     n_features,
+     n_classes,
+     storage,
+     pert_params,
+     model_params, m) = prepare_global_attack_experiment(data_dir, dataset, attack, attack_params,
+                                                         epsilons, binary_attr, make_undirected,
+                                                         make_unweighted,  normalize, normalize_attr, seed,
+                                                         artifact_dir, pert_adj_storage_type, pert_attr_storage_type,
+                                                         model_label, model_storage_type, device,
+                                                         surrogate_model_label, data_device, ex)
 
-    storage = Storage(artifact_dir, experiment=ex)
-
-    pert_params = dict(dataset=dataset,
-                       binary_attr=binary_attr,
-                       normalize=normalize,
-                       normalize_attr=normalize_attr,
-                       make_undirected=make_undirected,
-                       make_unweighted=make_unweighted,
-                       seed=seed,
-                       attack=attack,
-                       model=model_label,
-                       surrogate_model=False,
-                       attack_params=attack_params)
-
-    model_params = dict(dataset=dataset,
-                        binary_attr=binary_attr,
-                        normalize=normalize,
-                        normalize_attr=normalize_attr,
-                        make_undirected=make_undirected,
-                        make_unweighted=make_unweighted,
-                        label=model_label,
-                        seed=seed)
-
-    if make_undirected:
-        m = adj.nnz() / 2
-    else:
-        m = adj.nnz()
+    if model_label is not None and model_label:
+        model_params['label'] = model_label
 
     models_and_hyperparams = storage.find_models(model_storage_type, model_params)
 
@@ -140,23 +110,8 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
             continue
 
         for epsilon in epsilons:
-            n_perturbations = int(round(epsilon * m))
-
-            pert_adj = storage.load_artifact(pert_adj_storage_type, {**pert_params, **{'epsilon': epsilon}})
-            pert_attr = storage.load_artifact(pert_attr_storage_type, {**pert_params, **{'epsilon': epsilon}})
-
-            if pert_adj is not None and pert_attr is not None:
-                logging.info(
-                    f"Found cached perturbed adjacency and attribute matrix for model '{model_label}' and eps {epsilon}")
-                adversary.set_pertubations(pert_adj, pert_attr)
-            else:
-                logging.info(
-                    f"No cached perturbations found for model '{model_label}' and eps {epsilon}. Execute attack...")
-                adversary.attack(n_perturbations)
-                pert_adj, pert_attr = adversary.get_pertubations()
-
-                storage.save_artifact(pert_adj_storage_type, {**pert_params, **{'epsilon': epsilon}}, pert_adj)
-                storage.save_artifact(pert_attr_storage_type, {**pert_params, **{'epsilon': epsilon}}, pert_attr)
+            run_global_attack(epsilon, m, storage, pert_adj_storage_type, pert_attr_storage_type,
+                              pert_params, adversary, model_label)
 
             logits, accuracy = adversary.evaluate_global(idx_test)
 

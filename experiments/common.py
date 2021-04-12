@@ -1,122 +1,88 @@
-import logging
 from typing import Any, Dict, Sequence, Union
+import logging
 
 import numpy as np
 import torch
+from sacred import Experiment
 
-from rgnn_at_scale.attacks import create_attack, SPARSE_ATTACKS
-from rgnn_at_scale.models import DenseGCN, GCN
-from rgnn_at_scale.train import train
-from rgnn_at_scale.helper.utils import accuracy
-
-
-def load_perturbed_data_if_exists(storage, pert_adj_storage_type, pert_attr_storage_type, params, epsilons):
-    adj_per_eps = []
-    attr_per_eps = []
-    for epsilon in epsilons:
-        if epsilon == 0:
-            continue
-
-        pert_adj = storage.load_artifact(pert_adj_storage_type, {**params, **{'epsilon': epsilon}})
-        pert_attr = storage.load_artifact(pert_attr_storage_type, {**params, **{'epsilon': epsilon}})
-        if pert_adj is None or pert_attr is None:
-            # Due to the greedy fashion we only use the existing adjacency matrices if all do exist
-            adj_per_eps = []
-            attr_per_eps = []
-            break
-
-        adj_per_eps.append(pert_adj)
-        attr_per_eps.append(pert_attr)
-    return adj_per_eps, attr_per_eps
+from rgnn_at_scale.data import prep_graph, split
+from rgnn_at_scale.helper.io import Storage
 
 
-def train_surrogate_model(attack, adj, attr, labels, idx_train, idx_val, idx_test, n_classes, n_features, surrogate_params, display_steps, seed, device):
+def prepare_global_attack_experiment(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
+                                     epsilons: Sequence[float], binary_attr: bool, make_undirected: bool,
+                                     make_unweighted: bool,  normalize: bool, normalize_attr: str, seed: int,
+                                     artifact_dir: str, pert_adj_storage_type: str, pert_attr_storage_type: str,
+                                     model_label: str, model_storage_type: str, device: Union[str, int],
+                                     surrogate_model_label: str, data_device: Union[str, int], ex: Experiment):
+
+    # To increase consistency between runs
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    if attack in SPARSE_ATTACKS:
-        gcn = GCN(n_classes=n_classes, n_features=n_features, **surrogate_params).to(device)
-        adj_surrogate = adj
+    graph = prep_graph(dataset, data_device, dataset_root=data_dir,
+                       normalize=normalize,
+                       normalize_attr=normalize_attr,
+                       make_undirected=make_undirected,
+                       make_unweighted=make_unweighted,
+                       binary_attr=binary_attr,
+                       return_original_split=dataset.startswith('ogbn'))
+
+    attr, adj, labels = graph[:3]
+    if len(graph) == 3:
+        idx_train, idx_val, idx_test = split(labels.cpu().numpy())
     else:
-        gcn = DenseGCN(n_classes=n_classes, n_features=n_features, **surrogate_params).to(device)
-        adj_surrogate = adj.to_dense()
+        idx_train, idx_val, idx_test = graph[3]['train'], graph[3]['valid'], graph[3]['test']
+    n_features = attr.shape[1]
+    n_classes = int(labels.max() + 1)
 
-    train(model=gcn, attr=attr.to(device), adj=adj_surrogate.to(device), labels=labels.to(device),
-          idx_train=idx_train, idx_val=idx_val, display_step=display_steps, **surrogate_params['train_params'])
+    storage = Storage(artifact_dir, experiment=ex)
 
-    if hasattr(gcn, 'release_cache'):
-        gcn.release_cache()
+    pert_params = dict(dataset=dataset,
+                       binary_attr=binary_attr,
+                       normalize=normalize,
+                       normalize_attr=normalize_attr,
+                       make_undirected=make_undirected,
+                       make_unweighted=make_unweighted,
+                       seed=seed,
+                       attack=attack,
+                       model=model_label,
+                       surrogate_model=surrogate_model_label,
+                       attack_params=attack_params)
 
-    with torch.no_grad():
-        gcn.eval()
-        pred_logits_surr = gcn(attr.to(device), adj_surrogate.to(device))
+    model_params = dict(dataset=dataset,
+                        binary_attr=binary_attr,
+                        normalize=normalize,
+                        normalize_attr=normalize_attr,
+                        make_undirected=make_undirected,
+                        make_unweighted=make_unweighted,
+                        label=model_label,
+                        seed=seed)
 
-    logging.info(f'Test accuracy of surrogate: {accuracy(pred_logits_surr, labels.to(device), idx_test)}')
-    del pred_logits_surr
+    if make_undirected:
+        m = adj.nnz() / 2
+    else:
+        m = adj.nnz()
 
-    return gcn
+    return attr, adj, labels, idx_train, idx_val, idx_test, n_features, n_classes, storage, pert_params, model_params, m
 
 
-def run_attacks(attack, epsilons, binary_attr, attr, adj, labels, model, idx_attack, attack_params,
-                params, storage, pert_adj_storage_type, pert_attr_storage_type, seed, device):
-    adj_per_eps = []
-    attr_per_eps = []
+def run_global_attack(epsilon, m, storage, pert_adj_storage_type, pert_attr_storage_type,
+                      pert_params, adversary, model_label):
+    n_perturbations = int(round(epsilon * m))
 
-    adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels,
-                              model=model, idx_attack=idx_attack, device=device, **attack_params)
+    pert_adj = storage.load_artifact(pert_adj_storage_type, {**pert_params, **{'epsilon': epsilon}})
+    pert_attr = storage.load_artifact(pert_attr_storage_type, {**pert_params, **{'epsilon': epsilon}})
 
-    tmp_epsilons = list(epsilons)
-    if tmp_epsilons[0] != 0:
-        tmp_epsilons.insert(0, 0)
-
-    m = adj.nnz() / 2
-    for epsilon in tmp_epsilons[1:]:
-        logging.info(f'Attack via {attack} with budget {epsilon}')
-
-        # To increase consistency between runs
-        torch.manual_seed(seed)
-        np.random.seed(seed)
-
-        n_perturbations = int(round(epsilon * m))
+    if pert_adj is not None and pert_attr is not None:
+        logging.info(
+            f"Found cached perturbed adjacency and attribute matrix for model '{model_label}' and eps {epsilon}")
+        adversary.set_pertubations(pert_adj, pert_attr)
+    else:
+        logging.info(
+            f"No cached perturbations found for model '{model_label}' and eps {epsilon}. Execute attack...")
         adversary.attack(n_perturbations)
-        adj_per_eps.append(adversary.adj_adversary.cpu())
-        attr_per_eps.append(adversary.attr_adversary.cpu())
+        pert_adj, pert_attr = adversary.get_pertubations()
 
-        storage.save_artifact(pert_adj_storage_type, {**params, **{'epsilon': epsilon}}, adj_per_eps[-1])
-        storage.save_artifact(pert_attr_storage_type, {**params, **{'epsilon': epsilon}}, attr_per_eps[-1])
-
-    del adversary
-    return adj_per_eps, attr_per_eps
-
-
-def evaluate_global_attack(models_and_hyperparams, labels, epsilons, adj_per_eps, attr_per_eps, seed, device, idx):
-    results = []
-    with torch.no_grad():
-        for model, hyperparams in models_and_hyperparams:
-            model = model.to(device)
-            model.eval()
-
-            if hasattr(model, 'release_cache'):
-                model.release_cache()
-
-            for eps, adj_perturbed, attr_perturbed in zip(epsilons, adj_per_eps, attr_per_eps):
-                # In case the model is non-deterministic to get the results either after attacking or after loading
-                torch.manual_seed(seed)
-                np.random.seed(seed)
-
-                try:
-                    pred_logits_target = model(attr_perturbed.to(device), adj_perturbed.to(device))
-                    acc_test_target = accuracy(pred_logits_target.cpu(), labels.cpu(), idx)
-                    results.append({
-                        'label': hyperparams['label'],
-                        'epsilon': eps,
-                        'accuracy': acc_test_target
-                    })
-                except Exception as e:
-                    logging.error(f'Failed for {hyperparams["label"]} and epsilon {eps}')
-                    logging.exception(e)
-
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                    torch.cuda.synchronize()
-    return results
+        storage.save_artifact(pert_adj_storage_type, {**pert_params, **{'epsilon': epsilon}}, pert_adj)
+        storage.save_artifact(pert_attr_storage_type, {**pert_params, **{'epsilon': epsilon}}, pert_attr)

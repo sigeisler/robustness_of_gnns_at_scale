@@ -2,9 +2,9 @@ import logging
 import warnings
 from typing import Any, Dict, Sequence, Union
 
-import numpy as np
 from sacred import Experiment
 import seml
+import numpy as np
 import torch
 
 from rgnn_at_scale.data import prep_graph, split
@@ -13,8 +13,7 @@ from rgnn_at_scale.helper.io import Storage
 from rgnn_at_scale.models import DenseGCN, GCN
 from rgnn_at_scale.train import train
 from rgnn_at_scale.helper.utils import accuracy
-from experiments.common import (load_perturbed_data_if_exists, train_surrogate_model,
-                                run_attacks, evaluate_global_attack)
+from experiments.common import (prepare_global_attack_experiment, run_global_attack)
 
 ex = Experiment()
 seml.setup_logger(ex)
@@ -85,49 +84,21 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
     assert surrogate_model_label is not None, "Surrogate model label must not be None"
 
     results = []
-    graph = prep_graph(dataset, data_device, dataset_root=data_dir,
-                       normalize=normalize,
-                       normalize_attr=normalize_attr,
-                       make_undirected=make_undirected,
-                       make_unweighted=make_unweighted,
-                       binary_attr=binary_attr,
-                       return_original_split=dataset.startswith('ogbn'))
 
-    attr, adj, labels = graph[:3]
-    if len(graph) == 3:
-        idx_train, idx_val, idx_test = split(labels.cpu().numpy())
-    else:
-        idx_train, idx_val, idx_test = graph[3]['train'], graph[3]['valid'], graph[3]['test']
-    n_features = attr.shape[1]
-    n_classes = int(labels.max() + 1)
-
-    storage = Storage(artifact_dir, experiment=ex)
-
-    pert_params = dict(dataset=dataset,
-                       binary_attr=binary_attr,
-                       normalize=normalize,
-                       normalize_attr=normalize_attr,
-                       make_undirected=make_undirected,
-                       make_unweighted=make_unweighted,
-                       seed=seed,
-                       attack=attack,
-                       model=model_label,
-                       surrogate_model=surrogate_model_label,
-                       attack_params=attack_params)
-
-    model_params = dict(dataset=dataset,
-                        binary_attr=binary_attr,
-                        normalize=normalize,
-                        normalize_attr=normalize_attr,
-                        make_undirected=make_undirected,
-                        make_unweighted=make_unweighted,
-                        label=model_label,
-                        seed=seed)
-
-    if make_undirected:
-        m = adj.nnz() / 2
-    else:
-        m = adj.nnz()
+    (attr, adj, labels,
+     idx_train,
+     idx_val,
+     idx_test,
+     n_features,
+     n_classes,
+     storage,
+     pert_params,
+     model_params, m) = prepare_global_attack_experiment(data_dir, dataset, attack, attack_params,
+                                                         epsilons, binary_attr, make_undirected,
+                                                         make_unweighted,  normalize, normalize_attr, seed,
+                                                         artifact_dir, pert_adj_storage_type, pert_attr_storage_type,
+                                                         model_label, model_storage_type, device,
+                                                         surrogate_model_label, data_device, ex)
 
     models_and_hyperparams = storage.find_models(model_storage_type, model_params)
 
@@ -149,26 +120,11 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                                       model=surrogate_model, idx_attack=idx_test, device=device, **attack_params)
         except Exception as e:
             logging.exception(e)
-            logging.error(f"Failed to instantiate attack {attack} for model '{model_label}'.")
+            logging.error(f"Failed to instantiate attack {attack} for model '{surrogate_model}'.")
             continue
 
-        n_perturbations = int(round(epsilon * m))
-
-        pert_adj = storage.load_artifact(pert_adj_storage_type, {**pert_params, **{'epsilon': epsilon}})
-        pert_attr = storage.load_artifact(pert_attr_storage_type, {**pert_params, **{'epsilon': epsilon}})
-
-        if pert_adj is not None and pert_attr is not None:
-            logging.info(
-                f"Found cached perturbed adjacency and attribute matrix for model '{model_label}' and eps {epsilon}")
-            adversary.set_pertubations(pert_adj, pert_attr)
-        else:
-            logging.info(
-                f"No cached perturbations found for model '{model_label}' and eps {epsilon}. Execute attack...")
-            adversary.attack(n_perturbations)
-            pert_adj, pert_attr = adversary.get_pertubations()
-
-            storage.save_artifact(pert_adj_storage_type, {**pert_params, **{'epsilon': epsilon}}, pert_adj)
-            storage.save_artifact(pert_attr_storage_type, {**pert_params, **{'epsilon': epsilon}}, pert_attr)
+        run_global_attack(epsilon, m, storage, pert_adj_storage_type, pert_attr_storage_type,
+                          pert_params, adversary, surrogate_model_label)
 
         for model, hyperparams in models_and_hyperparams:
             adversary.set_eval_model(model)
