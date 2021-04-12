@@ -70,8 +70,8 @@ ex = Experiment()
 seml.setup_logger(ex)
 
 
-def _save_ppr_topk(topk_batch_size,
-                   artifact_dir, model_storage_type,
+def _save_ppr_topk(artifact_dir,
+                   model_storage_type,
                    adj_sp,
                    ppr_idx,
                    alpha,
@@ -81,8 +81,7 @@ def _save_ppr_topk(topk_batch_size,
                    make_undirected,
                    make_unweighted,
                    normalize,
-                   split_desc,
-                   batch_start_idx=0):
+                   split_desc):
     dump_suffix = f"{dataset}_{split_desc}_alpha{alpha_suffix}_eps{eps:.0e}_topk{topk}_pprnorm{ppr_normalization}_norm{normalize}_indirect{make_undirected}_unweighted{make_unweighted}"
     logging.info(dump_suffix)
 
