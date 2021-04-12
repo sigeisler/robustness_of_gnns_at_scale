@@ -46,8 +46,6 @@ def prepare_global_attack_experiment(data_dir: str, dataset: str, attack: str, a
         idx_train, idx_val, idx_test = split(labels.cpu().numpy())
     else:
         idx_train, idx_val, idx_test = graph[3]['train'], graph[3]['valid'], graph[3]['test']
-    n_features = attr.shape[1]
-    n_classes = int(labels.max() + 1)
 
     storage = Storage(artifact_dir, experiment=ex)
 
@@ -77,7 +75,7 @@ def prepare_global_attack_experiment(data_dir: str, dataset: str, attack: str, a
     else:
         m = adj.nnz()
 
-    return attr, adj, labels, idx_train, idx_val, idx_test, n_features, n_classes, storage, pert_params, model_params, m
+    return attr, adj, labels, idx_train, idx_val, idx_test,  storage, pert_params, model_params, m
 
 
 def run_global_attack(epsilon, m, storage, pert_adj_storage_type, pert_attr_storage_type,
