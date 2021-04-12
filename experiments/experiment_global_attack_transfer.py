@@ -66,20 +66,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
         make_undirected: bool, make_unweighted: bool,  normalize: bool, normalize_attr: str, seed: int,
         artifact_dir: str, pert_adj_storage_type: str, pert_attr_storage_type: str, model_label: str, model_storage_type: str,
         surrogate_model_storage_type: str, surrogate_model_label: str, device: Union[str, int], data_device: Union[str, int], display_steps: int):
-    logging.info({
-        'dataset': dataset, 'attack': attack, 'attack_params': attack_params, 'epsilons': epsilons,
-        'make_undirected': make_undirected, 'make_unweighted': make_unweighted, 'normalize': normalize,
-        'normalize_attr': normalize_attr, 'binary_attr': binary_attr, 'seed': seed, 'artifact_dir': artifact_dir,
-        'pert_adj_storage_type': pert_adj_storage_type, 'pert_attr_storage_type': pert_attr_storage_type,
-        'model_storage_type': model_storage_type, 'model_label': model_label,
-        'surrogate_model_storage_type': surrogate_model_storage_type, 'surrogate_model_label': surrogate_model_label,
-        'device': device, 'display_steps': display_steps
-    })
 
-    assert sorted(epsilons) == epsilons, 'argument `epsilons` must be a sorted list'
-    assert len(np.unique(epsilons)) == len(epsilons),\
-        'argument `epsilons` must be unique (strictly increasing)'
-    assert all([eps >= 0 for eps in epsilons]), 'all elements in `epsilons` must be greater than 0'
     assert model_label is not None, "Model label must not be None"
     assert surrogate_model_label is not None, "Surrogate model label must not be None"
 
