@@ -1,5 +1,4 @@
 from typing import Union
-
 import torch
 
 from .dice import DICE
@@ -37,7 +36,7 @@ def create_attack(attack: str, binary_attr: bool, attr: torch.Tensor, **kwargs) 
     Union[FGSM, GANG, GreedyRBCD, PRBCD]
         The created instance
     """
-    if not any([attack == attack_model.__name__ for attack_model in ATTACK_TYPE.__args__]):
+    if not any([attack.lower() == attack_model.__name__.lower() for attack_model in ATTACK_TYPE.__args__]):
         raise ValueError(f'The attack {attack} is not in {ATTACK_TYPE.__args__}')
 
     kwargs = dict(kwargs)
