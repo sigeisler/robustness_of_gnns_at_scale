@@ -1,15 +1,12 @@
-import warnings
-
 from tqdm import tqdm
-from torch.nn import functional as F
 import numpy as np
 import torch
-from torch import nn
 import torch_sparse
+from torch_sparse import SparseTensor
 
-from rgnn_at_scale import utils
+from rgnn_at_scale.helper import utils
 from rgnn_at_scale.attacks.prbcd import PRBCD
-from rgnn_at_scale.models import GCN
+from rgnn_at_scale.models import MODEL_TYPE
 
 
 class GreedyRBCD(PRBCD):
@@ -17,17 +14,21 @@ class GreedyRBCD(PRBCD):
     """
 
     def __init__(self,
-                 adj: torch.sparse.FloatTensor,
+                 adj: SparseTensor,
                  X: torch.Tensor,
                  labels: torch.Tensor,
                  idx_attack: np.ndarray,
-                 model: GCN,
+                 model: MODEL_TYPE,
                  epochs: int = 500,
                  eps: float = 1e-7,
                  **kwargs):
 
         super().__init__(model=model, X=X, adj=adj,
                          labels=labels, idx_attack=idx_attack, eps=eps, **kwargs)
+
+        rows, cols, self.edge_weight = adj.coo()
+        self.edge_index = torch.stack([rows, cols], dim=0)
+
         self.edge_index = self.edge_index.to(self.device)
         self.edge_weight = self.edge_weight.to(self.device)
         self.X = self.X.to(self.device)
@@ -62,7 +63,7 @@ class GreedyRBCD(PRBCD):
         self.edge_weight = torch.ones_like(self.edge_weight)
         assert self.edge_index.size(1) == self.edge_weight.size(0)
 
-    def attack(self, n_perturbations: int):
+    def _attack(self, n_perturbations: int):
         """Perform attack
 
         Parameters
@@ -95,7 +96,7 @@ class GreedyRBCD(PRBCD):
 
             # print(f'Cuda after sampling: {torch.cuda.memory_summary()}')
 
-            logits = self.model(data=self.X, adj=(edge_index, edge_weight))
+            logits = self.surrogate_model(data=self.X, adj=(edge_index, edge_weight))
             loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
 
             gradient = utils.grad_with_checkpoint(loss, self.modified_edge_weight_diff)[0]
@@ -113,9 +114,7 @@ class GreedyRBCD(PRBCD):
             del loss
             del gradient
 
-        self.adj_adversary = torch.sparse.FloatTensor(
-            self.edge_index,
-            self.edge_weight,
-            (self.n, self.n)
+        self.adj_adversary = SparseTensor.from_edge_index(
+            edge_index, edge_weight, (self.n, self.n)
         ).coalesce().detach()
         self.attr_adversary = self.X

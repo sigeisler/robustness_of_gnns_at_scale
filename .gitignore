@@ -151,6 +151,10 @@ plots*/
 
 # SEML
 *.out
+seml/train
+seml/smoothing
+seml/attack_evasion_transfer_vs_number_nodes
+seml/attack_evasion_transfer
 
 ##### LATEX #####
 
@@ -438,7 +442,7 @@ TSWLatexianTemp*
 */*DS_Store
 
 # VS CODE
-*/.vscode
+.vscode
 
 # Misc
 *.txt
@@ -450,9 +454,13 @@ datasets/*
 
 # Local
 cache_debug/*
+cache
 extension/*
 kernels/build
 kernels/dist
 kernels/kernels.egg-info
-seml/*/output 
+seml/*
+datasets/*
+train.sh
+runs/
 

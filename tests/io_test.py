@@ -7,7 +7,7 @@ from typing import Any, Dict, Generator, Iterable, List, Tuple
 
 import pytest
 
-from rgnn_at_scale.io import Storage
+from rgnn_at_scale.helper.io import Storage
 
 
 cache_base = 'cache_test'

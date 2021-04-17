@@ -16,7 +16,7 @@ from torch.utils.cpp_extension import load
 import torch_scatter
 import torch_sparse
 
-from rgnn_at_scale.utils import sparse_tensor_to_tuple, tuple_to_sparse_tensor
+from rgnn_at_scale.helper.utils import sparse_tensor_to_tuple, tuple_to_sparse_tensor
 
 try:
     try:
@@ -73,26 +73,21 @@ def chunked_message_and_aggregate(
         def aggregation_function(adj: torch_sparse.SparseTensor, x: torch.Tensor) -> torch.Tensor:
             return torch_sparse.matmul(adj, x, reduce='sum')
 
-    n, _ = x.size()
-    if not adj_t.coo()[-1].requires_grad:
-        return aggregation_function(adj_t, x)
+        if not adj_t.coo()[-1].requires_grad:
+            return aggregation_function(adj_t, x)
 
     edge_weight, *rest = sparse_tensor_to_tuple(adj_t)
 
-    def row_chunked_matmul(
-            lower: int,
-            upper: int,
-            *rest: Tuple[torch.Tensor, ...],
-            is_sorted: bool = True):
+    def row_chunked_matmul(lower: int, upper: int):
 
         def row_chunked_matmul_run(edge_weight: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
             adj = tuple_to_sparse_tensor(edge_weight, *rest)
             return aggregation_function(adj[lower:upper, :], x)
         return row_chunked_matmul_run
 
-    chunker = Chunker(n, n_chunks, True)
+    chunker = Chunker(x.size(0), n_chunks, True)
     new_embeddings = chunker.chunk(
-        lambda lower, upper: row_chunked_matmul(lower, upper, *rest),
+        lambda lower, upper: row_chunked_matmul(lower, upper),
         edge_weight, x
     )
 
@@ -560,7 +555,6 @@ def soft_median(
     p=2,
     temperature=1.0,
     eps=1e-12,
-    do_synchronize: bool = False,
     **kwargs
 ) -> torch.Tensor:
     """Soft Weighted Median.
@@ -592,9 +586,8 @@ def soft_median(
     weight_sums = torch_scatter.scatter_add(edge_weights, row_index)
 
     with torch.no_grad():
-        median_idx = custom_cuda_kernels.dimmedian_idx(
-            x, torch.sparse.FloatTensor(edge_index, edge_weights, (batch_size, n)))
-        median_col_idx = torch.arange(d, device=x.device).view(1, -1).expand(n, d)
+        median_idx = custom_cuda_kernels.dimmedian_idx(x, edge_index, edge_weights, A.nnz(), batch_size)
+        median_col_idx = torch.arange(d, device=x.device).view(1, -1).expand(batch_size, d)
     x_median = x[median_idx, median_col_idx]
 
     distances = torch.norm(x_median[row_index] - x[col_index], dim=1, p=p) / pow(d, 1 / p)

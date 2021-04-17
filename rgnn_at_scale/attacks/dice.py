@@ -7,10 +7,12 @@ import numpy as np
 import scipy.sparse as sp
 import torch_geometric
 import torch
+from torch_sparse import SparseTensor
 from tqdm import tqdm
 from torch_geometric.utils import add_self_loops
 from itertools import chain
 from rgnn_at_scale import utils
+
 
 class DICE(object):
     """DICE Attack
@@ -56,7 +58,7 @@ class DICE(object):
 
         Args:
             adj_symmetric_index(torch.LongTensor) : indices of sparse symmetrical matrix
-                                  
+
 
         Returns:
             dict: Adjacency matrix described as dictionar.
@@ -69,7 +71,8 @@ class DICE(object):
         # * Move tensors to cpu to have faster performance
         adj_symmetric_index = adj_symmetric_index.to("cpu")
         adj_symmetric_weights = adj_symmetric_weights.to("cpu")
-        myAdj = { (source.item(), dest.item()) : weight.item() for (source, dest), weight in zip(adj_symmetric_index.T, adj_symmetric_weights) }
+        myAdj = {(source.item(), dest.item()): weight.item()
+                 for (source, dest), weight in zip(adj_symmetric_index.T, adj_symmetric_weights)}
         return myAdj
 
     def _collect_edges_to_delete(self, delete_budget, labels, adj_dict):

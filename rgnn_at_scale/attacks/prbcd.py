@@ -1,5 +1,6 @@
+import logging
+
 from collections import defaultdict
-from copy import deepcopy
 import math
 from typing import Tuple, Union
 
@@ -8,9 +9,10 @@ from torch.nn import functional as F
 import numpy as np
 import torch
 import torch_sparse
-
-from rgnn_at_scale import utils
-from rgnn_at_scale.models import GCN
+from torch_sparse import SparseTensor
+from rgnn_at_scale.helper import utils
+from rgnn_at_scale.models import MODEL_TYPE
+from rgnn_at_scale.attacks.base_attack import Attack, SparseAttack
 
 """
     Topology Attack and Defense for Graph Neural Networks: An Optimization Perspective
@@ -20,21 +22,22 @@ from rgnn_at_scale.models import GCN
 """
 
 
-class PRBCD(object):
+class PRBCD(SparseAttack):
     """Sampled and hence scalable PGD attack for graph data.
     """
 
     def __init__(self,
-                 adj: torch.sparse.FloatTensor,
+                 adj: SparseTensor,
                  X: torch.Tensor,
                  labels: torch.Tensor,
                  idx_attack: np.ndarray,
-                 model: GCN,
+                 model: MODEL_TYPE,
                  device: Union[str, int, torch.device],
                  loss_type: str = 'CE',  # 'CW', 'LeakyCW'  # 'CE', 'MCE', 'Margin'
                  keep_heuristic: str = 'WeightOnly',  # 'InvWeightGradient' 'Gradient', 'WeightOnly'
                  keep_weight: float = .1,
                  lr_n_perturbations_factor: float = 0.1,
+                 lr_factor: float = 1,
                  display_step: int = 20,
                  epochs: int = 400,
                  fine_tune_epochs: int = 100,
@@ -46,21 +49,9 @@ class PRBCD(object):
                  K: int = 20,
                  **kwargs):
 
-        super().__init__()
-        self.device = device
-        self.X = X
-        self.model = deepcopy(model).to(self.device)
-        self.model.eval()
-        for p in self.model.parameters():
-            p.requires_grad = False
-        self.edge_index = adj.indices().cpu()
-        self.edge_weight = adj.values().cpu()
-        self.n = adj.shape[0]
+        super().__init__(adj, X, labels, idx_attack, model, device, loss_type, **kwargs)
+
         self.n_possible_edges = self.n * (self.n - 1) // 2
-        self.d = X.shape[1]
-        self.labels = labels.to(self.device)
-        self.idx_attack = idx_attack
-        self.loss_type = loss_type
         self.keep_heuristic = keep_heuristic
         self.keep_weight = keep_weight
         self.lr_n_perturbations_factor = lr_n_perturbations_factor
@@ -75,20 +66,17 @@ class PRBCD(object):
         # TODO: Rename
         self.K = K
 
-        self.adj_adversary = None
-        self.attr_adversary = None
-
         self.current_search_space: torch.Tensor = None
         self.modified_edge_index: torch.Tensor = None
         self.modified_edge_weight_diff: torch.Tensor = None
 
         if self.loss_type == 'CW':
-            self.lr_factor = .5
+            self.lr_factor = .5 * lr_factor
         else:
-            self.lr_factor = 10
+            self.lr_factor = 10 * lr_factor
         self.lr_factor *= max(math.log2(self.n_possible_edges / self.search_space_size), 1.)
 
-    def attack(self, n_perturbations, **kwargs):
+    def _attack(self, n_perturbations, **kwargs):
         """Perform attack (`n_perturbations` is increasing as it was a greedy attack).
 
         Parameters
@@ -104,6 +92,9 @@ class PRBCD(object):
         best_epoch = float('-Inf')
         self.attack_statistics = defaultdict(list)
 
+        mn = self.modified_edge_weight_diff.mean()
+        logging.info(f'modified_edge_weight_diff mean is {mn}')
+
         for epoch in tqdm(range(self.epochs + self.fine_tune_epochs)):
             self.modified_edge_weight_diff.requires_grad = True
             edge_index, edge_weight = self.get_modified_adj()
@@ -112,12 +103,8 @@ class PRBCD(object):
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
 
-            logits = self.model(data=self.X.to(self.device), adj=(edge_index, edge_weight))
+            logits = self.surrogate_model(data=self.X.to(self.device), adj=(edge_index, edge_weight))
             loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
-
-            # Todo: do better
-            # entropy = torch.distributions.Bernoulli(self.modified_edge_weight_diff).entropy().mean()
-            # loss += 10 * entropy
 
             gradient = utils.grad_with_checkpoint(loss, self.modified_edge_weight_diff)[0]
 
@@ -131,7 +118,7 @@ class PRBCD(object):
                 self.projection(n_perturbations, edge_index, edge_weight)
 
                 edge_index, edge_weight = self.get_modified_adj()
-                logits = self.model(data=self.X.to(self.device), adj=(edge_index, edge_weight))
+                logits = self.surrogate_model(data=self.X.to(self.device), adj=(edge_index, edge_weight))
                 accuracy = (
                     logits.argmax(-1)[self.idx_attack] == self.labels[self.idx_attack]
                 ).float().mean().item()
@@ -149,24 +136,30 @@ class PRBCD(object):
 
                 if epoch < self.epochs - 1:
                     self.resample_search_space(n_perturbations, edge_index, edge_weight, gradient)
+                    mn = self.modified_edge_weight_diff.mean()
+                    t = (self.modified_edge_weight_diff > 0.4).sum()
+                    logging.info(f'modified_edge_weight_diff mean is {mn} of this {t} over 0.4')
                 elif self.with_early_stropping and epoch == self.epochs - 1:
                     print(f'Loading search space of epoch {best_epoch} (accuarcy={best_accuracy}) for fine tuning\n')
                     self.current_search_space = best_search_space.to(self.device)
                     self.modified_edge_index = best_edge_index.to(self.device)
                     self.modified_edge_weight_diff = best_edge_weight_diff.to(self.device)
                     self.modified_edge_weight_diff.requires_grad = True
+                    mn = self.modified_edge_weight_diff.mean()
+                    logging.info(f'modified_edge_weight_diff mean is {mn}')
 
             del logits
             del loss
             del gradient
 
-        self.current_search_space = best_search_space.to(self.device)
-        self.modified_edge_index = best_edge_index.to(self.device)
-        self.modified_edge_weight_diff = best_edge_weight_diff.to(self.device)
+        if self.with_early_stropping:
+            self.current_search_space = best_search_space.to(self.device)
+            self.modified_edge_index = best_edge_index.to(self.device)
+            self.modified_edge_weight_diff = best_edge_weight_diff.to(self.device)
 
         edge_index = self.sample_edges(n_perturbations)[0]
 
-        self.adj_adversary = torch.sparse.FloatTensor(
+        self.adj_adversary = SparseTensor.from_edge_index(
             edge_index,
             torch.ones_like(edge_index[0], dtype=torch.float32),
             (self.n, self.n)
@@ -178,12 +171,15 @@ class PRBCD(object):
         with torch.no_grad():
             s = self.modified_edge_weight_diff.abs().detach()
             s[s == self.eps] = 0
+            # TODO: Why numpy?
             s = s.cpu().numpy()
             while best_accuracy == float('Inf'):
                 for i in range(self.K):
                     sampled = np.random.binomial(1, s)
 
                     if sampled.sum() > n_perturbations:
+                        n_samples = sampled.sum()
+                        logging.info(f'{i}-th sampling: too many samples {n_samples}')
                         continue
                     pos_modified_edge_weight_diff = torch.from_numpy(sampled).to(self.device)
                     self.modified_edge_weight_diff = torch.where(
@@ -192,7 +188,7 @@ class PRBCD(object):
                         -pos_modified_edge_weight_diff
                     ).float()
                     edge_index, edge_weight = self.get_modified_adj()
-                    logits = self.model(data=self.X.to(self.device), adj=(edge_index, edge_weight))
+                    logits = self.surrogate_model(data=self.X.to(self.device), adj=(edge_index, edge_weight))
                     accuracy = (
                         logits.argmax(-1)[self.idx_attack] == self.labels[self.idx_attack]
                     ).float().mean().item()
@@ -205,50 +201,6 @@ class PRBCD(object):
             edge_index = edge_index[:, is_edge_set]
             edge_weight = edge_weight[is_edge_set]
         return edge_index, edge_weight
-
-    def calculate_loss(self, logits, labels):
-        if self.loss_type == 'CW':
-            second_best_class = logits.argsort(-1)[:, -2]
-            margin = (
-                logits[np.arange(logits.size(0)), labels]
-                - logits[np.arange(logits.size(0)), second_best_class]
-            )
-            loss = -torch.clamp(margin, min=0).mean()
-        elif self.loss_type == 'LCW':
-            sorted = logits.argsort(-1)
-            best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
-            margin = (
-                logits[np.arange(logits.size(0)), labels]
-                - logits[np.arange(logits.size(0)), best_non_target_class]
-            )
-            loss = -F.leaky_relu(margin, negative_slope=0.1).mean()
-        elif self.loss_type == 'tanhCW':
-            sorted = logits.argsort(-1)
-            best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
-            margin = (
-                logits[np.arange(logits.size(0)), labels]
-                - logits[np.arange(logits.size(0)), best_non_target_class]
-            )
-            loss = torch.tanh(-margin).mean()
-        elif self.loss_type == 'MCE':
-            not_flipped = logits.argmax(-1) == labels
-            loss = F.nll_loss(logits[not_flipped], labels[not_flipped])
-        elif self.loss_type == 'WCE':
-            not_flipped = logits.argmax(-1) == labels
-            weighting_not_flipped = not_flipped.sum().item() / not_flipped.shape[0]
-            weighting_flipped = (not_flipped.shape[0] - not_flipped.sum().item()) / not_flipped.shape[0]
-            loss_not_flipped = F.nll_loss(logits[not_flipped], labels[not_flipped])
-            loss_flipped = F.nll_loss(logits[~not_flipped], labels[~not_flipped])
-            loss = (
-                weighting_not_flipped * loss_not_flipped
-                + 0.25 * weighting_flipped * loss_flipped
-            )
-        # TODO: Is it worth trying? CW should be quite similar
-        # elif self.loss_type == 'Margin':
-        #    loss = F.multi_margin_loss(torch.exp(logits), labels)
-        else:
-            loss = F.nll_loss(logits, labels)
-        return loss
 
     def match_search_space_on_edges(
         self,
@@ -272,7 +224,7 @@ class PRBCD(object):
         pos_modified_edge_weight_diff = torch.where(
             does_original_edge_exist, -self.modified_edge_weight_diff, self.modified_edge_weight_diff
         )
-        pos_modified_edge_weight_diff = PRBCD.project(n_perturbations, pos_modified_edge_weight_diff, self.eps)
+        pos_modified_edge_weight_diff = Attack.project(n_perturbations, pos_modified_edge_weight_diff, self.eps)
 
         self.modified_edge_weight_diff = torch.where(
             does_original_edge_exist, -pos_modified_edge_weight_diff, pos_modified_edge_weight_diff
@@ -296,8 +248,8 @@ class PRBCD(object):
 
         if (
             not self.modified_edge_weight_diff.requires_grad
-            or not hasattr(self.model, 'do_checkpoint')
-            or not self.model.do_checkpoint
+            or not hasattr(self.surrogate_model, 'do_checkpoint')
+            or not self.surrogate_model.do_checkpoint
         ):
             modified_edge_index, modified_edge_weight = utils.to_symmetric(
                 self.modified_edge_index, self.modified_edge_weight_diff, self.n
@@ -360,42 +312,6 @@ class PRBCD(object):
         self.modified_edge_weight_diff.data.add_(lr * gradient)
 
         return self.get_modified_adj()
-
-    @staticmethod
-    def project(n_perturbations: int, values: torch.tensor, eps: float = 0, inplace: bool = False):
-        if not inplace:
-            values = values.clone()
-
-        if torch.clamp(values, 0, 1).sum() > n_perturbations:
-            left = (values - 1).min()
-            right = values.max()
-            miu = PRBCD.bisection(values, left, right, n_perturbations)
-            values.data.copy_(torch.clamp(
-                values - miu, min=eps, max=1 - eps
-            ))
-        else:
-            values.data.copy_(torch.clamp(
-                values, min=eps, max=1 - eps
-            ))
-        return values
-
-    @staticmethod
-    def bisection(pos_modified_edge_weight_diff, a, b, n_perturbations, epsilon=1e-5):
-        def func(x):
-            return torch.clamp(pos_modified_edge_weight_diff - x, 0, 1).sum() - n_perturbations
-
-        miu = a
-        while ((b - a) >= epsilon):
-            miu = (a + b) / 2
-            # Check if middle point is root
-            if (func(miu) == 0.0):
-                break
-            # Decide the side to repeat the steps
-            if (func(miu) * func(a) < 0):
-                b = miu
-            else:
-                a = miu
-        return miu
 
     def sample_search_space(self, n_perturbations: int = 0):
         while True:

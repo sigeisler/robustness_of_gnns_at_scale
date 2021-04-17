@@ -1,17 +1,23 @@
 from typing import Union
+import torch
+
 from .dice import DICE
 from .fgsm import FGSM
 from .gang import GANG
 from .greedy_rbcd import GreedyRBCD
+from .local_prbcd import LocalPRBCD
+from .local_prbcd_batched import LocalBatchedPRBCD
 from .pgd import PGD
 from .prbcd import PRBCD
-from .contract_attack import EXPAND_CONTRACT
-import torch
-ATTACK_TYPE = Union[DICE, FGSM, GANG, GreedyRBCD, PGD, PRBCD, EXPAND_CONTRACT]
-SPARSE_ATTACKS = [GANG.__name__, GreedyRBCD.__name__, PRBCD.__name__, DICE.__name__, EXPAND_CONTRACT.__name__]
+from .nettack import Nettack
+from .base_attack import Attack
+
+ATTACK_TYPE = Union[DICE, FGSM, GANG, GreedyRBCD, LocalPRBCD, PGD, PRBCD, Nettack, LocalBatchedPRBCD]
+SPARSE_ATTACKS = [GANG.__name__, GreedyRBCD.__name__, PRBCD.__name__, DICE.__name__]
+LOCAL_ATTACKS = [LocalPRBCD.__name__, Nettack.__name__, LocalBatchedPRBCD.__name__]
 
 
-def create_attack(attack: str, binary_attr: bool, attr: torch.Tensor, **kwargs) -> ATTACK_TYPE:
+def create_attack(attack: str, binary_attr: bool, attr: torch.Tensor, **kwargs) -> Attack:
     """Creates the model instance given the hyperparameters.
 
     Parameters
@@ -50,4 +56,5 @@ def create_attack(attack: str, binary_attr: bool, attr: torch.Tensor, **kwargs) 
     return globals()[attack](**kwargs)
 
 
-__all__ = [FGSM, GANG, GreedyRBCD, PRBCD, create_attack, ATTACK_TYPE, SPARSE_ATTACKS]
+__all__ = [FGSM, GANG, GreedyRBCD, LocalPRBCD, LocalBatchedPRBCD,
+           PRBCD, create_attack, ATTACK_TYPE, SPARSE_ATTACKS, Nettack]

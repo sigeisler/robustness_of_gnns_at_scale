@@ -12,4 +12,4 @@ tinydb==4.2.0
 tinydb-serialization==2.0.0
 torchvision
 tqdm==4.42.1
-ogb
+ogb==1.2.4

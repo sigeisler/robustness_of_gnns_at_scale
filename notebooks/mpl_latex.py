@@ -36,7 +36,10 @@ def dedicated_legend_plot(filename: str,
     handles, labels = ax.get_legend_handles_labels()
     if mod_label is not None:
         labels = [mod_label(l) for l in labels]
-    pylab.figlegend(handles, labels, loc='center', **kwargs)
+    title = None
+    if ax.get_legend().get_title()._text:
+        title = ax.get_legend().get_title()._text
+    pylab.figlegend(handles, labels, loc='center', title=title, **kwargs)
     figLegend.savefig(filepath, dpi=dpi, bbox_inches='tight')
     plt.close()
 
@@ -81,14 +84,14 @@ def figsize(scale: float,
 
 
 def sns_facetsize(
-        tot_width: float = 0.95, ratio_yx_facet: float = 1.6,
+        scale: float = 0.95, ratio_yx: float = 1.6,
         nrows: int = 1, ncols: int = 1,
         textwidth_pt: float = 397.48499) -> Tuple[float, float]:
-    ratio_yx = ratio_yx_facet * nrows / ncols
-    size = figsize(tot_width, ratio_yx, textwidth_pt)
+    ratio_yx = ratio_yx * nrows / ncols
+    size = figsize(scale, ratio_yx, textwidth_pt)
     height_facet = size[1] / nrows
-    ratio_xy_facet = 1 / ratio_yx_facet
-    return height_facet, ratio_xy_facet
+    ratio_xy_facet = 1 / ratio_yx
+    return {'height': height_facet, 'aspect': ratio_xy_facet}
 
 
 pgf_with_latex = {  # setup matplotlib to use latex for output
@@ -176,8 +179,8 @@ def savefig(
         close_fig: bool = True, remove_preview_file_after: float = 10, **kwargs) -> Union[IFrame, None]:
     global is_production
     if not is_production:
-        from IPython import display
-        display.display(fig)
+        # from IPython import display
+        # display.display(fig)
         return
     if fig is None:
         fig = plt.gca().figure

@@ -1,5 +1,6 @@
 """Utils to retrieve/split/... the data.
 """
+import logging
 
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Union, Tuple
@@ -8,12 +9,14 @@ import warnings
 import numpy as np
 from ogb.nodeproppred import PygNodePropPredDataset
 import scipy.sparse as sp
+import sklearn
 from sklearn.model_selection import train_test_split
+
 import torch
-from torch_geometric.utils import add_remaining_self_loops, remove_isolated_nodes
+import torch_sparse
+from torch_geometric.utils import remove_isolated_nodes
 
-from rgnn_at_scale import utils
-
+from rgnn_at_scale.helper import utils
 
 sparse_graph_properties = [
     'adj_matrix', 'attr_matrix', 'labels', 'node_names', 'attr_names', 'class_names', 'metadata'
@@ -539,7 +542,9 @@ def split(labels, n_per_class=20, seed=None):
 def prep_cora_citeseer_pubmed(name: str,
                               dataset_root: str,
                               device: Union[int, torch.device] = 0,
-                              normalize: bool = False) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+                              normalize: bool = False,
+                              make_undirected: bool = True,
+                              make_unweighted: bool = True) -> Tuple[torch.Tensor, torch_sparse.SparseTensor, torch.Tensor]:
     """Prepares and normalizes the desired dataset
 
     Parameters
@@ -559,8 +564,8 @@ def prep_cora_citeseer_pubmed(name: str,
         dense attribute tensor, sparse adjacency matrix (normalized) and labels tensor
     """
     graph = load_dataset(name, dataset_root).standardize(
-        make_unweighted=True,
-        make_undirected=True,
+        make_unweighted=make_unweighted,
+        make_undirected=make_undirected,
         no_self_loops=True,
         select_lcc=True
     )
@@ -568,17 +573,18 @@ def prep_cora_citeseer_pubmed(name: str,
     n_vertices, _ = graph.attr_matrix.shape
 
     adj_matrix = graph.adj_matrix.copy()
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        adj_matrix[np.arange(n_vertices), np.arange(n_vertices)] = 1
-        if normalize:
+    if normalize:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            adj_matrix[np.arange(n_vertices), np.arange(n_vertices)] = 1
             deg = sp.diags(np.power(adj_matrix.sum(1).A1, -1 / 2))
             adj_norm = deg @ adj_matrix @ deg
-        else:
-            adj_norm = adj_matrix
+    else:
+        adj_norm = adj_matrix
 
     attr = torch.FloatTensor(graph.attr_matrix.toarray()).to(device)
     adj = utils.sparse_tensor(adj_norm.tocoo()).to(device)
+
     labels = torch.LongTensor(graph.labels).to(device)
 
     return attr, adj, labels
@@ -587,6 +593,9 @@ def prep_cora_citeseer_pubmed(name: str,
 def prep_graph(name: str,
                device: Union[int, torch.device] = 0,
                normalize: bool = False,
+               normalize_attr: str = "per_feature",
+               make_undirected: bool = True,
+               make_unweighted: bool = True,
                binary_attr: bool = False,
                dataset_root: str = 'datasets',
                return_original_split: bool = False) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -596,14 +605,14 @@ def prep_graph(name: str,
     ----------
     name : str
         Name of the data set. One of: `cora_ml`, `citeseer`, `pubmed`
-    device : Union[int, torch.device], by default "datasets"
+    device : Union[int, torch.device]
         `cpu` or GPU id, by default 0
     normalize : bool, optional
         Normalize adjacency matrix with symmetric degree normalization (non-scalable implementation!), by default False
     binary_attr : bool, optional
         If true the attributes are binarized (!=0), by default False
     dataset_root : str, optional
-        Path where to find/store the dataset.
+        Path where to find/store the dataset, by default "datasets"
     return_original_split: bool, optional
         If true (and the split is available for the choice of dataset) additionally the original split is returned.
 
@@ -613,8 +622,17 @@ def prep_graph(name: str,
         dense attribute tensor, sparse adjacency matrix (normalized) and labels tensor.
     """
     split = None
+
+    logging.debug("Memory Usage before loading the dataset:")
+    logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))
+
     if name in ['cora_ml', 'citeseer', 'pubmed']:
-        attr, adj, labels = prep_cora_citeseer_pubmed(name, dataset_root, device, normalize)
+        attr, adj, labels = prep_cora_citeseer_pubmed(name,
+                                                      dataset_root,
+                                                      device,
+                                                      normalize,
+                                                      make_undirected,
+                                                      make_unweighted)
     elif name.startswith('ogbn'):
         pyg_dataset = PygNodePropPredDataset(root=dataset_root, name=name)
 
@@ -634,19 +652,71 @@ def prep_graph(name: str,
                 test=data.test_mask.nonzero().squeeze()
             )
 
-        edge_index, edge_weight = add_remaining_self_loops(
-            data.edge_index.to(device),
-            torch.ones(data.edge_index.size(1), device=device).float(),
-            num_nodes=num_nodes
-        )
-        edge_index, edge_weight = utils.normalize_adjacency_matrix(edge_index, edge_weight, num_nodes)
-        adj = torch.sparse.FloatTensor(edge_index, edge_weight, (num_nodes, num_nodes)).coalesce()
+        # converting to numpy arrays, so we don't have to handle different
+        # array types (tensor/numpy/list) later on.
+        # Also we need numpy arrays because Numba cant determine type of torch.Tensor
+        split = {k: v.numpy() for k, v in split.items()}
+
+        edge_index = data.edge_index.to(device)
+        if data.edge_attr is None:
+            edge_weight = torch.ones(edge_index.size(1))
+        else:
+            edge_weight = data.edge_attr
+        edge_weight = edge_weight.to(device)
+
+        adj = sp.csr_matrix((edge_weight, edge_index), (num_nodes, num_nodes))
+
         del edge_index
         del edge_weight
-        attr = data.x.to(device)
+
+        if make_unweighted:
+            adj.data = np.ones_like(adj.data)
+
+        if make_undirected:
+            adj = utils.to_symmetric_scipy(adj, is_undirected=make_unweighted)
+
+            logging.debug("Memory Usage after making the graph undirected:")
+            logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))
+
+        if normalize == "row":
+            adj = utils.normalize_row(adj)
+        elif normalize:
+            adj = utils.normalize_symmetric(adj)
+
+        logging.debug("Memory Usage after normalizing the graph")
+        logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))
+
+        #adj = torch_sparse.SparseTensor.from_scipy(adj).coalesce()
+
+        attr_matrix = data.x.to(device).numpy()
+
+        # optional attribute normalization
+        if normalize_attr == 'per_feature':
+            if sp.issparse(attr_matrix):
+                scaler = sklearn.preprocessing.StandardScaler(with_mean=False)
+            else:
+                scaler = sklearn.preprocessing.StandardScaler()
+            attr_matrix = scaler.fit_transform(attr_matrix)
+        elif normalize_attr == 'per_node':
+            if sp.issparse(attr_matrix):
+                attr_norms = sp.linalg.norm(attr_matrix, ord=1, axis=1)
+                attr_invnorms = 1 / np.maximum(attr_norms, 1e-12)
+                attr_matrix = attr_matrix.multiply(attr_invnorms[:, np.newaxis]).tocsr()
+            else:
+                attr_norms = np.linalg.norm(attr_matrix, ord=1, axis=1)
+                attr_invnorms = 1 / np.maximum(attr_norms, 1e-12)
+                attr_matrix = attr_matrix * attr_invnorms[:, np.newaxis]
+
+        attr = torch.from_numpy(attr_matrix)
+
+        logging.debug("Memory Usage after normalizing graph attributes:")
+        logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))
+
         labels = data.y.squeeze().to(device)
 
     if binary_attr:
+        # NOTE: do not use this for really large datasets.
+        # The mask is a **dense** matrix of the same size as the attribute matrix
         attr[attr != 0] = 1
 
     if return_original_split and split is not None:
@@ -655,3 +725,70 @@ def prep_graph(name: str,
     remove_isolated_nodes
 
     return attr, adj, labels
+
+
+class RobustPPRDataset(torch.utils.data.Dataset):
+    def __init__(self, attr_matrix_all, ppr_matrix, indices, labels_all=None, allow_cache=True):
+        """
+        Parameters:
+            attr_matrix_all: torch.Tensor of shape (num_nodes, num_features)
+                Node features / attributes of all nodes in the graph
+            ppr_matrix: scipy.sparse.csr.csr_matrix of shape (num_train_nodes, num_nodes)
+                The personal page rank vectors for all nodes of the training set
+            indices: array-like of shape (num_train_nodes)
+                The ids of the training nodes
+            labels_all: array-like of shape (num_nodes)
+                The class labels for all nodes in the graph
+        """
+        self.attr_matrix_all = attr_matrix_all
+        self.ppr_matrix = ppr_matrix
+        self.indices = indices
+        self.labels_all = torch.tensor(labels_all, dtype=torch.long) if labels_all is not None else None
+        self.allow_cache = allow_cache
+        self.cached = {}
+
+    def __len__(self):
+        return self.indices.shape[0]
+
+    def __getitem__(self, idx):
+        """
+        Parameters:
+            idx: np.ndarray of shape (batch_size)
+                The node indices to retrieve for the batch
+        Returns:
+            A touple (data, labels), where
+                data: touple of
+                    - attr_matrix: torch.SparseTensor of shape (ppr_num_nonzeros, num_features)
+                        The node features of all neighboring nodes of the training nodes in
+                        the graph derived from the Personal Page Rank as specified by idx
+                    - ppr_matrix: torch.SparseTensor of shape (batch_size, ppr_num_nonzeros)
+                        The page rank scores of all neighboring nodes of the training nodes in
+                        the graph derived from the Personal Page Rank as specified by idx
+                label: np.ndarray of shape (batch_size)
+                    The labels of the training nodes
+        """
+        # idx is a list of indices
+        key = idx[0]
+        if key not in self.cached:
+            # shape (batch_size, num_nodes)
+            ppr_matrix = utils.matrix_to_torch(self.ppr_matrix[idx])
+
+            # shape (ppr_num_nonzeros)
+            source_idx, neighbor_idx, ppr_scores = ppr_matrix.coo()
+
+            ppr_matrix = ppr_matrix[:, neighbor_idx.unique()]
+            attr_matrix = self.attr_matrix_all[neighbor_idx.unique()]
+
+            if self.labels_all is None:
+                labels = None
+            else:
+                labels = self.labels_all[self.indices[idx]]
+
+            batch = (self.indices[idx], (attr_matrix, ppr_matrix), labels)
+
+            if self.allow_cache:
+                self.cached[key] = batch
+            else:
+                return batch
+
+        return self.cached[key]

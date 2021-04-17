@@ -13,7 +13,10 @@ std::vector<torch::Tensor> topk_forward_cuda(
 
 at::Tensor dimmedian_idx_forward_cuda(
     torch::Tensor X,
-    torch::Tensor adj,
+    torch::Tensor edge_idx,
+    torch::Tensor edge_weights,
+    const int nnz,
+    const int n_rows,
     const int n_threads = 1024);
 
 
@@ -29,9 +32,12 @@ std::vector<at::Tensor> topk_forward(
 
 at::Tensor dimmedian_idx_forward(
     torch::Tensor X,
-    torch::Tensor adj)
+    torch::Tensor edge_idx,
+    torch::Tensor edge_weights,
+    const int nnz,
+    const int n_rows)
 {
-  return dimmedian_idx_forward_cuda(X, adj);
+  return dimmedian_idx_forward_cuda(X, edge_idx, edge_weights, nnz, n_rows);
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)

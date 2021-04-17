@@ -6,6 +6,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from tqdm.auto import tqdm
+from rgnn_at_scale.helper.utils import accuracy
 
 
 def train(model, attr, adj, labels, idx_train, idx_val,
@@ -59,6 +60,9 @@ def train(model, attr, adj, labels, idx_train, idx_val,
         trace_train.append(loss_train.detach().item())
         trace_val.append(loss_val.detach().item())
 
+        train_acc = accuracy(logits, labels, idx_train)
+        val_acc = accuracy(logits, labels, idx_val)
+
         if loss_val < best_loss:
             best_loss = loss_val
             best_epoch = it
@@ -68,7 +72,8 @@ def train(model, attr, adj, labels, idx_train, idx_val,
                 break
 
         if it % display_step == 0:
-            logging.info(f'\nEpoch {it:4}: loss_train: {loss_train.item():.5f}, loss_val: {loss_val.item():.5f} ')
+            logging.info(
+                f'\nEpoch {it:4}: loss_train: {loss_train.item():.5f}, loss_val: {loss_val.item():.5f}, acc_train: {train_acc:.5f}, acc_val: {val_acc:.5f} ')
 
     # restore the best validation state
     model.load_state_dict(best_state)
