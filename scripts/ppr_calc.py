@@ -36,7 +36,7 @@ make_unweighted = True
 # ppr params
 alpha = 0.01
 eps = 1e-6
-topk = 512
+topk = 256
 ppr_normalization = "row"
 alpha_suffix = int(alpha * 100)
 
@@ -90,6 +90,7 @@ def _save_ppr_topk(artifact_dir,
                   ppr_idx=ppr_idx,
                   eps=eps,
                   topk=topk,
+                  num_nodes=num_nodes,
                   ppr_normalization=ppr_normalization,
                   split_desc=split_desc,
                   normalize=normalize,
