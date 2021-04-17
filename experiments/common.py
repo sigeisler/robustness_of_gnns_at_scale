@@ -9,12 +9,12 @@ from rgnn_at_scale.data import prep_graph, split
 from rgnn_at_scale.helper.io import Storage
 
 
-def prepare_global_attack_experiment(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
-                                     epsilons: Sequence[float], binary_attr: bool, make_undirected: bool,
-                                     make_unweighted: bool,  normalize: bool, normalize_attr: str, seed: int,
-                                     artifact_dir: str, pert_adj_storage_type: str, pert_attr_storage_type: str,
-                                     model_label: str, model_storage_type: str, device: Union[str, int],
-                                     surrogate_model_label: str, data_device: Union[str, int], ex: Experiment):
+def prepare_attack_experiment(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
+                              epsilons: Sequence[float], binary_attr: bool, make_undirected: bool,
+                              make_unweighted: bool,  normalize: bool, normalize_attr: str, seed: int,
+                              artifact_dir: str, pert_adj_storage_type: str, pert_attr_storage_type: str,
+                              model_label: str, model_storage_type: str, device: Union[str, int],
+                              surrogate_model_label: str, data_device: Union[str, int], ex: Experiment):
     logging.info({
         'dataset': dataset, 'attack': attack, 'attack_params': attack_params, 'epsilons': epsilons,
         'make_undirected': make_undirected, 'make_unweighted': make_unweighted, 'normalize': normalize,

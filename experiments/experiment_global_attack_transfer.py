@@ -78,17 +78,17 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
      idx_test,
      storage,
      pert_params,
-     model_params, m) = prepare_global_attack_experiment(data_dir, dataset, attack, attack_params,
-                                                         epsilons, binary_attr, make_undirected,
-                                                         make_unweighted,  normalize, normalize_attr, seed,
-                                                         artifact_dir, pert_adj_storage_type, pert_attr_storage_type,
-                                                         model_label, model_storage_type, device,
-                                                         surrogate_model_label, data_device, ex)
+     model_params, m) = prepare_attack_experiment(data_dir, dataset, attack, attack_params,
+                                                  epsilons, binary_attr, make_undirected,
+                                                  make_unweighted,  normalize, normalize_attr, seed,
+                                                  artifact_dir, pert_adj_storage_type, pert_attr_storage_type,
+                                                  model_label, model_storage_type, device,
+                                                  surrogate_model_label, data_device, ex)
 
     models_and_hyperparams = storage.find_models(model_storage_type, model_params)
 
     model_params["label"] = surrogate_model_label
-    surrogate_models_and_hyperparams = storage.find_models(model_storage_type, model_params)
+    surrogate_models_and_hyperparams = storage.find_models(surrogate_model_storage_type, model_params)
 
     assert len(surrogate_models_and_hyperparams) > 0, "No surrogate model found!"
     if len(surrogate_models_and_hyperparams) > 1:

@@ -84,12 +84,6 @@ class Attack(ABC):
             acc_test_target = accuracy(pred_logits_target.cpu(), self.labels.cpu(), eval_idx)
         return pred_logits_target, acc_test_target
 
-    def evaluate_local(self, node_idx: int):
-        with torch.no_grad():
-            initial_logits = self.get_logits(node_idx)
-            logits = self.get_logits(node_idx, self.adj_adversary)
-        return logits, initial_logits
-
     def calculate_loss(self, logits, labels):
         if self.loss_type == 'CW':
             sorted = logits.argsort(-1)
@@ -201,6 +195,32 @@ class SparseAttack(Attack):
         self.edge_weight = edge_weight.to(self.device)
         self.n = adj.size(0)
         self.d = X.shape[1]
+
+
+class SparseLocalAttack(SparseAttack):
+    @abstractmethod
+    def get_perturbed_edges(self, node_idx: int) -> torch.Tensor:
+        pass
+
+    @abstractmethod
+    def get_logits(self, model: MODEL_TYPE, node_idx: int, perturbed_graph: SparseTensor = None):
+        pass
+
+    def get_surrogate_logits(self, node_idx: int, perturbed_graph: SparseTensor = None) -> torch.Tensor:
+        return self.get_logits(self.surrogate_model, node_idx, perturbed_graph)
+
+    def get_eval_logits(self, node_idx: int, perturbed_graph: SparseTensor = None) -> torch.Tensor:
+        return self.get_logits(self.eval_model, node_idx, perturbed_graph)
+
+    def evaluate_local(self, node_idx: int):
+        with torch.no_grad():
+            self.eval_model.eval()
+            if hasattr(self.eval_model, 'release_cache'):
+                self.eval_model.release_cache()
+
+            initial_logits = self.get_eval_logits(node_idx)
+            logits = self.get_eval_logits(node_idx, self.adj_adversary)
+        return logits, initial_logits
 
 
 class DenseAttack(Attack):

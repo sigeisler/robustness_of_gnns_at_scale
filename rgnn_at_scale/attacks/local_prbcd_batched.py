@@ -10,6 +10,7 @@ from torch_sparse import SparseTensor
 
 from rgnn_at_scale.helper.utils import calc_ppr_update_sparse_result
 
+from rgnn_at_scale.models import MODEL_TYPE
 from rgnn_at_scale.attacks.local_prbcd import LocalPRBCD
 from rgnn_at_scale.helper import utils
 from rgnn_at_scale.helper import ppr_utils as ppr
@@ -74,12 +75,12 @@ class LocalBatchedPRBCD(LocalPRBCD):
         logging.info(f'self.ppr_matrix is of shape {self.ppr_matrix.shape}')
         logging.info(f'Memory after loading ppr: {utils.get_max_memory_bytes() / (1024 ** 3)}')
 
-    def get_logits(self, node_idx: int, perturbed_graph: SparseTensor = None) -> torch.Tensor:
+    def get_logits(self,  model: MODEL_TYPE, node_idx: int, perturbed_graph: SparseTensor = None) -> torch.Tensor:
         if perturbed_graph is None:
             perturbed_graph = SparseTensor.from_scipy(self.ppr_matrix[node_idx])
-        return F.log_softmax(self.surrogate_model.forward(self.X, None, ppr_scores=perturbed_graph), dim=-1)
+        return F.log_softmax(model.forward(self.X, None, ppr_scores=perturbed_graph), dim=-1)
 
-    def get_final_logits(self, node_idx: int, n_perturbations: int):
+    def sample_final_edges(self, node_idx: int, n_perturbations: int):
         if self.ppr_recalc_at_end:
             adj = self.get_updated_vector_or_graph(node_idx, only_update_adj=True)
             # Handle disconnected nodes
@@ -88,15 +89,17 @@ class LocalBatchedPRBCD(LocalPRBCD):
                 adj = SparseTensor(row=torch.cat((adj.storage.row(), disconnected_nodes)),
                                    col=torch.cat((adj.storage.col(), disconnected_nodes)),
                                    value=torch.cat((adj.storage.col(), torch.full_like(disconnected_nodes, 1e-9))))
-
-            self.surrogate_model.topk = self.surrogate_model.topk + n_perturbations
-            logits = F.log_softmax(self.surrogate_model.forward(self.X, adj, ppr_idx=np.array([node_idx])), dim=-1)
-            self.surrogate_model.topk = self.surrogate_model.topk - n_perturbations
+            sp_adj = self.adj.to_scipy(layout="csr")
+            perturbed_graph = ppr.topk_ppr_matrix(sp_adj,
+                                                  self.surrogate_model.alpha + n_perturbations,
+                                                  self.surrogate_model.eps,
+                                                  np.array([node_idx]),
+                                                  self.surrogate_model.topk,
+                                                  normalization=self.surrogate_model.ppr_normalization)
         else:
-            perturbed_graph = self.sample_edges(node_idx, n_perturbations)
-            logits = self.get_logits(node_idx, perturbed_graph)
+            perturbed_graph = self.perturbe_graph(node_idx)
 
-        return logits
+        return perturbed_graph
 
     def perturbe_graph(self, node_idx: int, only_update_adj: bool = False) -> SparseTensor:
         if self.attack_labeled_nodes_only:

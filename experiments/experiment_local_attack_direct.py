@@ -77,44 +77,22 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
         binary_attr: bool, make_undirected: bool, make_unweighted: bool, seed: int, normalize: bool, normalize_attr: str,
         artifact_dir: str, model_label: str, model_storage_type: str, device: Union[str, int],
         data_device: Union[str, int], display_steps: int):
-    logging.info({
-        'dataset': dataset, 'attack': attack, 'attack_params': attack_params, 'nodes': nodes, 'epsilons': epsilons,
-        'binary_attr': binary_attr, 'seed': seed, 'normalize': normalize, 'normalize_attr': normalize_attr,
-        'artifact_dir': artifact_dir, 'model_label': model_label, 'model_storage_type': model_storage_type,
-        'device': device, "data_device": data_device, 'display_steps': display_steps
-    })
-
-    assert sorted(epsilons) == epsilons, 'argument `epsilons` must be a sorted list'
-    assert len(np.unique(epsilons)) == len(epsilons),\
-        'argument `epsilons` must be unique (strictly increasing)'
-    assert all([eps >= 0 for eps in epsilons]), 'all elements in `epsilons` must be greater than 0'
 
     results = []
-    graph = prep_graph(dataset, data_device, dataset_root=data_dir,
-                       normalize=normalize,
-                       normalize_attr=normalize_attr,
-                       make_undirected=make_undirected,
-                       make_unweighted=make_unweighted,
-                       binary_attr=binary_attr,
-                       return_original_split=dataset.startswith('ogbn'))
-    attr, adj, labels = graph[:3]
-    if len(graph) == 3:
-        idx_train, idx_val, idx_test = split(labels.cpu().numpy())
-    else:
-        idx_train, idx_val, idx_test = graph[3]['train'], graph[3]['valid'], graph[3]['test']
+    surrogate_model_label = False
 
-    logging.debug("Memory Usage after loading the dataset:")
-    logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))
-
-    storage = Storage(artifact_dir, experiment=ex)
-
-    model_params = dict(dataset=dataset,
-                        binary_attr=binary_attr,
-                        normalize=normalize,
-                        normalize_attr=normalize_attr,
-                        make_undirected=make_undirected,
-                        make_unweighted=make_unweighted,
-                        seed=seed)
+    (attr, adj, labels,
+     idx_train,
+     idx_val,
+     idx_test,
+     storage,
+     _,
+     model_params, _) = prepare_attack_experiment(data_dir, dataset, attack, attack_params,
+                                                  epsilons, binary_attr, make_undirected,
+                                                  make_unweighted,  normalize, normalize_attr, seed,
+                                                  artifact_dir, pert_adj_storage_type, pert_attr_storage_type,
+                                                  model_label, model_storage_type, device,
+                                                  surrogate_model_label, data_device, ex)
 
     if model_label is not None and model_label:
         model_params['label'] = model_label
@@ -130,44 +108,51 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
         try:
             adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels,
                                       model=model, idx_attack=idx_test, device=device, **attack_params)
-
-            for node in nodes:
-                degree = adj[node].sum() + 1
-                for eps in epsilons:
-                    n_perturbations = int((eps * degree).round().item())
-                    if n_perturbations == 0:
-                        continue
-
-                    # In case the model is non-deterministic to get the results either after attacking or after loading
-
-                    adversary.attack(node, n_perturbations)
-
-                    logits, initial_logits = adversary.evaluate_local(node)
-                    logging.info(
-                        f'Pert. edges for node {node} and budget {n_perturbations}: {adversary.perturbed_edges}')
-
-                    results.append({
-                        'label': hyperparams['label'],
-                        'epsilon': eps,
-                        'n_perturbations': n_perturbations,
-                        'degree': int(degree.item()),
-                        'logits': logits.cpu(),
-                        'initial_logits': initial_logits.cpu(),
-                        'larget': labels[node].item(),
-                        'node_id': node,
-                        'perturbed_edges': adversary.perturbed_edges.cpu().numpy()
-                    })
-                    results[-1].update(adversary.classification_statistics(logits.cpu(), labels[node].long().cpu()))
-                    results[-1].update({
-                        f'initial_{key}': value
-                        for key, value
-                        in adversary.classification_statistics(initial_logits.cpu(), labels[node].long().cpu()).items()
-                    })
-                    # if hasattr(adversary, 'attack_statistics'):
-                    #     results[-1]['attack_statistics'] = adversary.attack_statistics
-
         except Exception as e:
             logging.exception(e)
+            logging.error(f"Failed to instantiate attack {attack} for model '{model}'.")
+            continue
+
+        for node in nodes:
+            degree = adj[node].sum() + 1
+            for eps in epsilons:
+                n_perturbations = int((eps * degree).round().item())
+                if n_perturbations == 0:
+                    continue
+
+                # In case the model is non-deterministic to get the results either after attacking or after loading
+                try:
+                    adversary.attack(node, n_perturbations)
+                    logits, initial_logits = adversary.evaluate_local(node)
+                except Exception as e:
+                    logging.exception(e)
+                    logging.error(
+                        f"Failed to attack model '{model}' using {attack} with eps {eps} at node {node}.")
+                    continue
+
+                logging.info(
+                    f'Pert. edges for node {node} and budget {n_perturbations}: {adversary.perturbed_edges}')
+
+                results.append({
+                    'label': hyperparams['label'],
+                    'epsilon': eps,
+                    'n_perturbations': n_perturbations,
+                    'degree': int(degree.item()),
+                    'logits': logits.cpu(),
+                    'initial_logits': initial_logits.cpu(),
+                    'larget': labels[node].item(),
+                    'node_id': node,
+                    'perturbed_edges': adversary.perturbed_edges.cpu().numpy()
+                })
+
+                results[-1].update(adversary.classification_statistics(logits.cpu(), labels[node].long().cpu()))
+                results[-1].update({
+                    f'initial_{key}': value
+                    for key, value
+                    in adversary.classification_statistics(initial_logits.cpu(), labels[node].long().cpu()).items()
+                })
+                # if hasattr(adversary, 'attack_statistics'):
+                #     results[-1]['attack_statistics'] = adversary.attack_statistics
 
     assert len(results) > 0
 

@@ -7,11 +7,13 @@ from numba import jit
 import scipy.sparse as sp
 import torch
 from torch.nn import functional as F
+from torch.nn import Identity
 
+from rgnn_at_scale.models import MODEL_TYPE
 from rgnn_at_scale.models import BATCHED_PPR_MODELS
 from rgnn_at_scale.helper.utils import sparse_tensor
 from rgnn_at_scale.models import GCN
-from rgnn_at_scale.attacks.base_attack import DenseAttack
+from rgnn_at_scale.attacks.base_attack import SparseLocalAttack
 
 """
 Implementation of the method proposed in the paper:
@@ -25,7 +27,7 @@ Technical University of Munich
 """
 
 
-class Nettack(DenseAttack):
+class Nettack(SparseLocalAttack):
     """Wrapper around the implementation of the method proposed in the paper:
     'Adversarial Attacks on Neural Networks for Graph Data'
     by Daniel Zügner, Amir Akbarnejad and Stephan Günnemann,
@@ -55,16 +57,20 @@ class Nettack(DenseAttack):
                  epsilon: float = 1e-5,
                  **kwargs):
 
-        DenseAttack.__init__(self, adj, X, labels, idx_attack, model, device, **kwargs)
-        # TODO assert model is two layer linear GCN
+        SparseLocalAttack.__init__(self, adj, X, labels, idx_attack, model, device, **kwargs)
+
+        assert len(self.surrogate_model.layers) == 2, "Nettack supports only 2 Layer Linear GCN as surrogate model"
+        assert all([isinstance(module[1], Identity)
+                    for module in self.surrogate_model.layers]), "Nettack only supports Linear GCN as surrogate model"
 
         self.sp_adj = adj.to_scipy(layout="csr")
         self.sp_attr = SparseTensor.from_dense(self.X).to_scipy(layout="csr")
+        self.nettack = None
 
-    def _attack(self, node_idx: int, n_perturbations: int):
+    def _attack(self, n_perturbations: int, node_idx: int, **kwargs):
         self.nettack = OriginalNettack(self.sp_adj,
                                        self.sp_attr,
-                                       self.labels,
+                                       self.labels.detach().numpy(),
                                        self.surrogate_model.layers[0][0].weight.detach().numpy(),
                                        self.surrogate_model.layers[1][0].weight.detach().numpy(),
                                        node_idx,
@@ -77,22 +83,21 @@ class Nettack(DenseAttack):
 
         self.adj_adversary = self.nettack.adj_adversary.to(self.device)
 
-        # with torch.no_grad():
-        #     initial_logits = self.get_logits(node_idx, self.adj)
+    def get_logits(self, model: MODEL_TYPE, node_idx: int, perturbed_graph: SparseTensor = None) -> torch.Tensor:
+        if perturbed_graph is None:
+            perturbed_graph = self.adj
 
-        #     if hasattr(self.model, 'topk'):
-        #         self.model.topk = self.model.topk + n_perturbations
-        #     logits = self.get_logits(node_idx, self.nettack.adj_adversary.to(self.device))
-        #     if hasattr(self.model, 'topk'):
-        #         self.model.topk = self.model.topk - n_perturbations
-
-    def get_logits(self, node_idx: int, updated_vector_or_graph: SparseTensor) -> torch.Tensor:
-        if type(self.model) in BATCHED_PPR_MODELS.__args__:
-            return F.log_softmax(self.model.forward(self.X, updated_vector_or_graph, ppr_idx=np.array([node_idx])), dim=-1)
+        if type(model) in BATCHED_PPR_MODELS.__args__:
+            # prevent caching of ppr matrix
+            model.ppr_cache_params = None
+            return F.log_softmax(model.forward(self.X, perturbed_graph, ppr_idx=np.array([node_idx])), dim=-1)
         else:
-            return self.model(data=self.X.to(self.device), adj=updated_vector_or_graph)[node_idx:node_idx + 1]
+            return model(data=self.X.to(self.device), adj=perturbed_graph)[node_idx:node_idx + 1]
 
     def get_perturbed_edges(self):
+        if self.nettack is None:
+            return torch.tensor([])
+
         return torch.tensor(self.nettack.structure_perturbations)
 
     @ staticmethod

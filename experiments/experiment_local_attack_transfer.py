@@ -1,4 +1,5 @@
 import logging
+import warnings
 from typing import Any, Dict, Sequence, Union
 
 import numpy as np
@@ -48,7 +49,7 @@ def config():
     artifact_dir = 'cache_debug'
 
     model_storage_type = 'victim_cora_2'
-    model_label = 'Vanilla GCN'
+    model_label = 'Vanilla PPRGo'
 
     surrogate_model_storage_type = 'nettack'
     surrogate_model_label = 'Linear GCN'
@@ -68,7 +69,7 @@ def config():
 def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any], nodes: str, epsilons: Sequence[float],
         binary_attr: bool, make_undirected: bool, make_unweighted: bool, seed: int, normalize: bool, normalize_attr: str,
         artifact_dir: str, model_label: str, model_storage_type: str, device: Union[str, int],
-        data_device: Union[str, int], display_steps: int):
+        surrogate_model_storage_type: str, surrogate_model_label: str, data_device: Union[str, int], display_steps: int):
     logging.info({
         'dataset': dataset, 'attack': attack, 'attack_params': attack_params, 'nodes': nodes, 'epsilons': epsilons,
         'binary_attr': binary_attr, 'seed': seed, 'normalize': normalize, 'normalize_attr': normalize_attr,
@@ -112,54 +113,70 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
         model_params['label'] = model_label
     models_and_hyperparams = storage.find_models(model_storage_type, model_params)
 
-    for model, hyperparams in models_and_hyperparams:
-        logging.info(model)
-        logging.info(hyperparams)
-        model = model.to(device)
-        model.eval()
+    model_params["label"] = surrogate_model_label
+    surrogate_models_and_hyperparams = storage.find_models(surrogate_model_storage_type, model_params)
 
-        adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels,
-                                  model=model, idx_attack=idx_test, device=device, **attack_params)
+    assert len(surrogate_models_and_hyperparams) > 0, "No surrogate model found!"
+    if len(surrogate_models_and_hyperparams) > 1:
+        warnings.warn("More than one matching surrogate model found. Choose first one by default.")
 
-        for node in nodes:
-            degree = adj[node].sum() + 1
-            for eps in epsilons:
-                n_perturbations = int((eps * degree).round().item())
-                if n_perturbations == 0:
-                    continue
+    surrogate_model = surrogate_models_and_hyperparams[0][0]
 
-                # In case the model is non-deterministic to get the results either after attacking or after loading
-                torch.manual_seed(seed)
-                np.random.seed(seed)
+    for node in nodes:
+        degree = adj[node].sum() + 1
 
-                try:
-                    adversary.attack(node, n_perturbations)
+        tmp_epsilons = list(epsilons)
+        tmp_epsilons.insert(0, 0)
+        for eps in tmp_epsilons:
+            try:
+                adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels,
+                                          model=surrogate_model, idx_attack=idx_test, device=device, **attack_params)
+            except Exception as e:
+                logging.exception(e)
+                logging.error(f"Failed to instantiate attack {attack} for model '{surrogate_model}'.")
+                continue
 
-                    logging.info(
-                        f'Pert. edges for node {node} and budget {n_perturbations}: {adversary.perturbed_edges}')
+            n_perturbations = int((eps * degree).round().item())
 
-                    results.append({
-                        'label': hyperparams['label'],
-                        'epsilon': eps,
-                        'n_perturbations': n_perturbations,
-                        'degree': int(degree.item()),
-                        'logits': logits.cpu(),
-                        'initial_logits': initial_logits.cpu(),
-                        'larget': labels[node].item(),
-                        'node_id': node,
-                        'perturbed_edges': adversary.perturbed_edges.cpu().numpy()
-                    })
-                    results[-1].update(adversary.classification_statistics(logits.cpu(), labels[node].long().cpu()))
-                    results[-1].update({
-                        f'initial_{key}': value
-                        for key, value
-                        in adversary.classification_statistics(initial_logits.cpu(), labels[node].long().cpu()).items()
-                    })
-                    # if hasattr(adversary, 'attack_statistics'):
-                    #     results[-1]['attack_statistics'] = adversary.attack_statistics
+            # In case the model is non-deterministic to get the results either after attacking or after loading
+            try:
+                adversary.attack(n_perturbations, node_idx=node)
+            except Exception as e:
+                logging.exception(e)
+                logging.error(
+                    f"Failed to attack model '{surrogate_model}' using {attack} with eps {eps} at node {node}.")
+                continue
 
-                except Exception as e:
-                    logging.exception(e)
+            for model, hyperparams in models_and_hyperparams:
+                logging.info(model)
+                logging.info(hyperparams)
+
+                adversary.set_eval_model(model)
+                logits, initial_logits = adversary.evaluate_local(node)
+
+                logging.info(
+                    f'Pert. edges for node {node} and budget {n_perturbations}: {adversary.get_perturbed_edges()}')
+
+                results.append({
+                    'label': hyperparams['label'],
+                    'epsilon': eps,
+                    'n_perturbations': n_perturbations,
+                    'degree': int(degree.item()),
+                    'logits': logits.cpu(),
+                    'initial_logits': initial_logits.cpu(),
+                    'target': labels[node].item(),
+                    'node_id': node,
+                    'perturbed_edges': adversary.get_perturbed_edges().cpu().numpy()
+                })
+
+                results[-1].update(adversary.classification_statistics(logits.cpu(), labels[node].long().cpu()))
+                results[-1].update({
+                    f'initial_{key}': value
+                    for key, value
+                    in adversary.classification_statistics(initial_logits.cpu(), labels[node].long().cpu()).items()
+                })
+                # if hasattr(adversary, 'attack_statistics'):
+                #     results[-1]['attack_statistics'] = adversary.attack_statistics
 
     assert len(results) > 0
 
