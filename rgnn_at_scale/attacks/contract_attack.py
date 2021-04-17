@@ -1,5 +1,4 @@
 import numpy as np
-from numpy.core.function_base import _add_docstring
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
@@ -25,6 +24,9 @@ class EXPAND_CONTRACT():
                  protected=None,
                  **kwargs
                  ):
+
+        raise NotImplementedError("The Contract Attack is not compatible with the rest of the repository anymore!")
+
         assert alpha >= 1.0
         assert m >= 1
         assert adj.device == X.device
