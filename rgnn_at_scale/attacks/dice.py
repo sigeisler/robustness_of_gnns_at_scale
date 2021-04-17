@@ -1,20 +1,21 @@
 """TODO: Do better than this
 """
 import random
-from rgnn_at_scale import utils
 from typing import Union
+
 import numpy as np
-import scipy.sparse as sp
-import torch_geometric
+
 import torch
 from torch_sparse import SparseTensor
+
 from tqdm import tqdm
-from torch_geometric.utils import add_self_loops
-from itertools import chain
-from rgnn_at_scale import utils
+
+from rgnn_at_scale.attacks.base_attack import SparseAttack
+from rgnn_at_scale.models import MODEL_TYPE
+from rgnn_at_scale.helper import utils
 
 
-class DICE(object):
+class DICE(SparseAttack):
     """DICE Attack
 
     Parameters
@@ -31,22 +32,20 @@ class DICE(object):
     """
 
     def __init__(self,
-                 adj: torch.sparse.FloatTensor,
+                 adj: SparseTensor,
                  X: torch.Tensor,
                  labels: torch.Tensor,
+                 idx_attack: np.ndarray,
+                 model: MODEL_TYPE,
                  device: Union[str, int, torch.device],
                  add_ratio: float = 0.6,
                  **kwargs):
-        self.n = adj.size()[0]
+
+        super().__init__(adj, X, labels, idx_attack, model, device, **kwargs)
+
         # Create Symmetric Adjacency Matrix
-        adj_symmetric_index, adj_symmetric_weights = utils.to_symmetric(adj.indices(), adj.values(), self.n)
+        adj_symmetric_index, adj_symmetric_weights = utils.to_symmetric(self.edge_index, self.edge_weight, self.n)
         self.adj_dict = self._to_dict(adj_symmetric_index, adj_symmetric_weights)
-        self.adj = adj
-        self.labels = labels.cpu()
-        self.device = device
-        self.attr_adversary = X.cpu()
-        self.adj_adversary = None
-        # add ratio decides how much of the budget goes to adding edges and the rest goes to deleting
         self.add_ratio = add_ratio
 
     def _is_in_upper_triangle(self, adj_symmetric_index):
@@ -154,16 +153,17 @@ class DICE(object):
         values = [1] * len(indices)
         i = torch.LongTensor(indices)
         v = torch.FloatTensor(values)
-        return torch.sparse.FloatTensor(i.t(), v, torch.Size([self.n, self.n]))
+        return SparseTensor.from_edge_index(edge_index=i.t(),
+                                            edge_attr=v,
+                                            sparse_sizes=torch.Size([self.n, self.n]))
 
-    def attack(self,
-               n_perturbations: int,
-               **kwargs):
-        labels = self.labels
+    def _attack(self,
+                n_perturbations: int,
+                **kwargs):
         add_budget = int(n_perturbations * self.add_ratio)
         delete_budget = n_perturbations - add_budget
         adj_dict = self.adj_dict.copy()
-        to_be_deleted_set = self._collect_edges_to_delete(delete_budget, labels, adj_dict)
-        self._add_edges(labels, add_budget, adj_dict)
+        to_be_deleted_set = self._collect_edges_to_delete(delete_budget, self.labels, adj_dict)
+        self._add_edges(self.labels, add_budget, adj_dict)
         self._delete_edges(to_be_deleted_set, adj_dict)
         self.adj_adversary = self._from_dict_to_sparse(adj_dict)

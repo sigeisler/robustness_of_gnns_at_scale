@@ -13,7 +13,7 @@ from rgnn_at_scale.helper.io import Storage
 from rgnn_at_scale.models import DenseGCN, GCN
 from rgnn_at_scale.train import train
 from rgnn_at_scale.helper.utils import accuracy
-from experiments.common import (prepare_global_attack_experiment, run_global_attack)
+from experiments.common import (prepare_attack_experiment, run_global_attack)
 
 ex = Experiment()
 seml.setup_logger(ex)
@@ -41,7 +41,7 @@ def config():
     normalize_attr = False
     seed = 0
 
-    attack = 'GreedyRBCD'
+    attack = 'DICE'
     attack_params = {}
     epsilons = [0.01]
 

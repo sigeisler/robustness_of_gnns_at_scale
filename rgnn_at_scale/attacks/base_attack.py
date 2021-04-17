@@ -1,7 +1,7 @@
 import warnings
 from abc import ABC, abstractmethod
 from copy import deepcopy
-from typing import Union
+from typing import Union, List
 
 import numpy as np
 import scipy.sparse as sp
@@ -9,7 +9,7 @@ import torch
 from torch.nn import functional as F
 
 from torch_sparse import SparseTensor
-from rgnn_at_scale.models import MODEL_TYPE, DenseGCN, GCN
+from rgnn_at_scale.models import MODEL_TYPE, DenseGCN, GCN, BATCHED_PPR_MODELS
 from rgnn_at_scale.helper.utils import accuracy
 
 
@@ -74,11 +74,15 @@ class Attack(ABC):
     def set_eval_model(self, model):
         self.eval_model = deepcopy(model).to(self.device)
 
-    def evaluate_global(self, eval_idx):
+    def evaluate_global(self, eval_idx: List[int]):
         with torch.no_grad():
             self.eval_model.eval()
             if hasattr(self.eval_model, 'release_cache'):
                 self.eval_model.release_cache()
+
+            if type(self.eval_model) in BATCHED_PPR_MODELS.__args__:
+                # prevent caching of ppr matrix
+                return F.log_softmax(model.forward(self.attr_adversary, self.adj_adversary, ppr_idx=np.array(eval_idx)), dim=-1)
 
             pred_logits_target = self.eval_model(self.attr_adversary, self.adj_adversary)
             acc_test_target = accuracy(pred_logits_target.cpu(), self.labels.cpu(), eval_idx)

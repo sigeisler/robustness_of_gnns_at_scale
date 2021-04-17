@@ -9,8 +9,7 @@ import torch
 from torch.nn import functional as F
 from torch.nn import Identity
 
-from rgnn_at_scale.models import MODEL_TYPE
-from rgnn_at_scale.models import BATCHED_PPR_MODELS
+from rgnn_at_scale.models import MODEL_TYPE, BATCHED_PPR_MODELS
 from rgnn_at_scale.helper.utils import sparse_tensor
 from rgnn_at_scale.models import GCN
 from rgnn_at_scale.attacks.base_attack import SparseLocalAttack
@@ -88,8 +87,6 @@ class Nettack(SparseLocalAttack):
             perturbed_graph = self.adj
 
         if type(model) in BATCHED_PPR_MODELS.__args__:
-            # prevent caching of ppr matrix
-            model.ppr_cache_params = None
             return F.log_softmax(model.forward(self.X, perturbed_graph, ppr_idx=np.array([node_idx])), dim=-1)
         else:
             return model(data=self.X.to(self.device), adj=perturbed_graph)[node_idx:node_idx + 1]

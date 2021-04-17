@@ -359,6 +359,9 @@ class PPRGoWrapperBase():
     def model_forward(self, *args, **kwargs):
         pass
 
+    def release_cache(self):
+        self.ppr_cache_params = None
+
     def forward_wrapper(self,
                         attr: torch.Tensor,
                         adj: Union[SparseTensor, sp.csr_matrix],
