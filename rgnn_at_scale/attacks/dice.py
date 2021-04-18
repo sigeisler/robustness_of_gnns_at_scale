@@ -155,7 +155,7 @@ class DICE(SparseAttack):
         v = torch.FloatTensor(values)
         return SparseTensor.from_edge_index(edge_index=i.t(),
                                             edge_attr=v,
-                                            sparse_sizes=torch.Size([self.n, self.n]))
+                                            sparse_sizes=torch.Size([self.n, self.n])).to(self.device)
 
     def _attack(self,
                 n_perturbations: int,

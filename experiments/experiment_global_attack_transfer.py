@@ -41,8 +41,10 @@ def config():
     normalize_attr = False
     seed = 0
 
-    attack = 'DICE'
-    attack_params = {}
+    attack = 'GANG'
+    attack_params = {
+        "loss_type": "CE"
+    }
     epsilons = [0.01, 0.1, 0.5, 1.0]
 
     artifact_dir = 'cache_debug'
@@ -50,10 +52,10 @@ def config():
     pert_attr_storage_type = 'evasion_attack_attr'
 
     model_storage_type = 'victim_cora_2'
-    model_label = "RGCN"
+    model_label = None
 
-    surrogate_model_storage_type = 'victim_cora_2'
-    surrogate_model_label = "Vanilla GCN"
+    surrogate_model_storage_type = 'surrogate_cora'
+    surrogate_model_label = "Vanilla Dense GCN"
 
     device = "cpu"
     data_device = "cpu"
@@ -67,7 +69,6 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
         artifact_dir: str, pert_adj_storage_type: str, pert_attr_storage_type: str, model_label: str, model_storage_type: str,
         surrogate_model_storage_type: str, surrogate_model_label: str, device: Union[str, int], data_device: Union[str, int], display_steps: int):
 
-    assert model_label is not None, "Model label must not be None"
     assert surrogate_model_label is not None, "Surrogate model label must not be None"
 
     results = []
@@ -90,6 +91,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
     model_params["label"] = surrogate_model_label
     surrogate_models_and_hyperparams = storage.find_models(surrogate_model_storage_type, model_params)
 
+    assert len(models_and_hyperparams) > 0, "No evaluation models found!"
     assert len(surrogate_models_and_hyperparams) > 0, "No surrogate model found!"
     if len(surrogate_models_and_hyperparams) > 1:
         warnings.warn("More than one matching surrogate model found. Choose first one by default.")
@@ -112,11 +114,13 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                           pert_params, adversary, surrogate_model_label)
 
         for model, hyperparams in models_and_hyperparams:
+            current_label = hyperparams["label"]
+            logging.error(f"Evaluate  {attack} for model '{current_label}'.")
             adversary.set_eval_model(model)
             logits, accuracy = adversary.evaluate_global(idx_test)
 
             results.append({
-                'label': model_label,
+                'label': current_label,
                 'epsilon': epsilon,
                 'accuracy': accuracy
             })

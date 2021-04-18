@@ -466,7 +466,7 @@ class DenseGCN(nn.Module):
         adj_norm = deg @ adj_norm @ deg
         return adj_norm
 
-    def forward(self, x: torch.Tensor, adjacency_matrix: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, adjacency_matrix: Union[torch.Tensor, SparseTensor]) -> torch.Tensor:
         """Prediction based on input.
 
         Parameters

@@ -69,6 +69,12 @@ class Attack(ABC):
         self.attr_adversary = attr_perturbed.to(self.device)
 
     def get_pertubations(self):
+        if isinstance(self.adj_adversary, torch.Tensor):
+            self.adj_adversary = SparseTensor.from_dense(self.adj_adversary)
+
+        if isinstance(self.attr_adversary, SparseTensor):
+            self.attr_adversary = self.attr_adversary.to_dense()
+
         return self.adj_adversary, self.attr_adversary
 
     def set_eval_model(self, model):
@@ -81,11 +87,15 @@ class Attack(ABC):
                 self.eval_model.release_cache()
 
             if type(self.eval_model) in BATCHED_PPR_MODELS.__args__:
-                # prevent caching of ppr matrix
-                return F.log_softmax(model.forward(self.attr_adversary, self.adj_adversary, ppr_idx=np.array(eval_idx)), dim=-1)
+                pred_logits_target = self.eval_model.forward(self.attr_adversary,
+                                                             self.adj_adversary,
+                                                             ppr_idx=np.array(eval_idx))
+                acc_test_target = (pred_logits_target.cpu().argmax(
+                    1) == self.labels.cpu()[eval_idx]).float().mean().item()
+            else:
+                pred_logits_target = self.eval_model(self.attr_adversary, self.adj_adversary)
+                acc_test_target = accuracy(pred_logits_target.cpu(), self.labels.cpu(), eval_idx)
 
-            pred_logits_target = self.eval_model(self.attr_adversary, self.adj_adversary)
-            acc_test_target = accuracy(pred_logits_target.cpu(), self.labels.cpu(), eval_idx)
         return pred_logits_target, acc_test_target
 
     def calculate_loss(self, logits, labels):
@@ -242,6 +252,7 @@ class DenseAttack(Attack):
         if isinstance(adj, SparseTensor):
             adj = adj.to_dense()
 
+        assert isinstance(adj,  torch.Tensor)
         super().__init__(adj, X, labels, idx_attack, model, device, loss_type, **kwargs)
 
         self.n = adj.shape[0]

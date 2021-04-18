@@ -67,8 +67,10 @@ def prepare_attack_experiment(data_dir: str, dataset: str, attack: str, attack_p
                         normalize_attr=normalize_attr,
                         make_undirected=make_undirected,
                         make_unweighted=make_unweighted,
-                        label=model_label,
                         seed=seed)
+                        
+    if model_label is not None and model_label:
+        model_params["label"] = model_label
 
     if make_undirected:
         m = adj.nnz() / 2
