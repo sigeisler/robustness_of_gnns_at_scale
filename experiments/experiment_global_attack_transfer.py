@@ -42,9 +42,7 @@ def config():
     seed = 0
 
     attack = 'GANG'
-    attack_params = {
-        "loss_type": "CE"
-    }
+    attack_params = {}
     epsilons = [0.01, 0.1, 0.5, 1.0]
 
     artifact_dir = 'cache_debug'
