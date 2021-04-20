@@ -481,6 +481,8 @@ class DenseGCN(nn.Module):
         torch.Tensor
             The predictions (after applying the softmax)
         """
+        if isinstance(adjacency_matrix, SparseTensor):
+            adjacency_matrix = adjacency_matrix.to_dense()
         adjacency_matrix = DenseGCN.normalize_dense_adjacency_matrix(adjacency_matrix)
         for layer in self.layers:
             x = layer((x, adjacency_matrix))
