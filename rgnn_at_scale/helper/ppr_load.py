@@ -152,7 +152,6 @@ def load_ppr(
 ):
     if input_dir is None:
         return None, None
-    ppr_idx = None
     dump_suffix = f"{dataset}"
     if split_desc is not None:
         dump_suffix += f"_{split_desc}"
