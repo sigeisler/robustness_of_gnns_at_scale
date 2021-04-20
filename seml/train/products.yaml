@@ -12,13 +12,13 @@ slurm:
     gres: gpu:1       # num GPUs
     mem: 32G          # memory
     cpus-per-task: 4  # num cores
-    time: 0-08:00     # max time, D-HH:MM
+    time: 1-00:00     # max time, D-HH:MM
     partition: gpu_large
 
 fixed:
   train_params:
     lr: 1e-2
-    weight_decay: 1e-3
+    weight_decay: 0
     patience: 300
     max_epochs: 3000
   artifact_dir: cache
@@ -53,28 +53,90 @@ gdc:
       label: Vanilla GDC
       model: GCN
       dropout: 0.5
-      n_filters: [256, 256]
       gdc_params:
           alpha: 0.15
           k: 64
           use_cpu: True
       svd_params: None
       jaccard_params: None
+  grid: 
+    model_params:
+      type: parameter_collection
+      params:
+        n_filters: 
+          type: choice
+          options:
+            - [256, 256]
 
-# soft_medoid_gdc_t0_5:
-#   fixed:
-#     model_params:
-#       label: Soft Medoid GDC (T=0.5)
-#       model: RGNN
-#       dropout: 0.5
-#       n_filters: 64
-#       mean: soft_k_medoid
-#       mean_kwargs:
-#           k: 64
-#           temperature: 0.5
-#       gdc_params:
-#           alpha: 0.15
-#           k: 64
-#           use_cpu: False
-#       svd_params: None
-#       jaccard_params: None
+soft_median_gdc_t5_0_k32:
+  fixed:
+    train_params:
+      lr: 1e-2
+      weight_decay: 0
+      patience: 300
+      max_epochs: 500
+    model_params:
+      label: Soft Median GDC (T=5.0)
+      model: RGNN
+      dropout: 0.5
+      mean: soft_median
+      mean_kwargs:
+          temperature: 5
+      gdc_params:
+          alpha: 0.15
+          k: 32
+          use_cpu: True
+      do_checkpoint: True
+      do_normalize_adj_once: True
+      n_chunks: 16
+      svd_params: None
+      jaccard_params: None
+      with_batch_norm: True
+  grid: 
+    model_params:
+      type: parameter_collection
+      params:
+        n_filters: 
+          type: choice
+          options:
+            # - [64, 64]
+            # - [128, 128]
+            - 128
+            # - [128, 64]
+
+soft_median_gdc_t10_0_k32:
+  fixed:
+    train_params:
+      lr: 1e-2
+      weight_decay: 0
+      patience: 300
+      max_epochs: 500
+    model_params:
+      label: Soft Median GDC (T=10.0)
+      model: RGNN
+      dropout: 0.5
+      mean: soft_median
+      mean_kwargs:
+          temperature: 5
+      gdc_params:
+          alpha: 0.15
+          k: 32
+          use_cpu: True
+      do_checkpoint: True
+      do_normalize_adj_once: True
+      n_chunks: 16
+      svd_params: None
+      jaccard_params: None
+      with_batch_norm: True
+  grid: 
+    model_params:
+      type: parameter_collection
+      params:
+        n_filters: 
+          type: choice
+          options:
+            # - [64, 64]
+            # - [128, 128]
+            - 128
+            # - [128, 64]
+

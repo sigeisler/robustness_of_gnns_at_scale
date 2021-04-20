@@ -45,24 +45,24 @@ grid:
       - 1
       - 5
 
-pgd:
-  fixed:
-    binary_attr: False
-    attack: PGD
+# pgd:
+#   fixed:
+#     binary_attr: False
+#     attack: PGD
 
-fgsm:
-  fixed:
-    binary_attr: False
-    attack: FGSM
-  grid: 
-    attack_params:
-      type: parameter_collection
-      params:
-        stop_optimizing_if_label_flipped: 
-          type: choice
-          options:
-            - True
-            - False
+# fgsm:
+#   fixed:
+#     binary_attr: False
+#     attack: FGSM
+#   grid: 
+#     attack_params:
+#       type: parameter_collection
+#       params:
+#         stop_optimizing_if_label_flipped: 
+#           type: choice
+#           options:
+#             - True
+#             - False
 
 greedy_rbcd:
   fixed:

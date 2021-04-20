@@ -61,7 +61,7 @@ greedy_rbcd:
         loss_type: 
           type: choice
           options:
-            - CE
+            # - CE
             - MCE
 
 prbcd:
@@ -71,6 +71,7 @@ prbcd:
       keep_heuristic: WeightOnly
       search_space_size: 20_000_000
       do_synchronize: True
+      lr_factor: 5e4
   grid: 
     attack_params:
       type: parameter_collection
@@ -78,7 +79,7 @@ prbcd:
         loss_type: 
           type: choice
           options:
-            - CE
+            # - CE
             - tanhCW
 
 gang:

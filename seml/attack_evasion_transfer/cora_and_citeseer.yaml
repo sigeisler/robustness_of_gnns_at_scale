@@ -56,7 +56,24 @@ pgd:
           type: choice
           options:
             - CE
+            - CW
             - tanhCW
+
+pgd_mce_and_sce:
+  fixed:
+    binary_attr: False
+    attack: PGD
+    attack_params:
+      epsilon: 2e-5
+  grid: 
+    attack_params:
+      type: parameter_collection
+      params:
+        loss_type: 
+          type: choice
+          options:
+            - SCE
+            - MCE
 
 fgsm:
   fixed:
@@ -71,6 +88,21 @@ fgsm:
           options:
             - True
             - False
+
+fgsm_alternative_losses:
+  fixed:
+    binary_attr: False
+    attack: FGSM
+  grid: 
+    attack_params:
+      type: parameter_collection
+      params:
+        loss_type: 
+          type: choice
+          options:
+            - SCE
+            - CW
+            - tanhCW
 
 greedy_rbcd:
   fixed:
