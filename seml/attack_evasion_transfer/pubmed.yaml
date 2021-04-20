@@ -13,6 +13,7 @@ slurm:
     mem: 16G          # memory
     cpus-per-task: 4  # num cores
     time: 0-08:00     # max time, D-HH:MM
+    partition: gpu_large
 
 fixed:
   epsilons: [0, 0.01, 0.05, 0.1, 0.25]
@@ -22,20 +23,20 @@ fixed:
     train_params:
       lr: 1e-2
       weight_decay: 1e-3
-      patience: 300
+      patience: 100
       max_epochs: 3000
   artifact_dir: cache
   pert_adj_storage_type: evasion_transfer_attack_adj
   pert_attr_storage_type: evasion_transfer_attack_attr
   model_storage_type: pretrained
   device: 0
+  binary_attr: False
 
 grid:
   dataset:
     type: choice
     options:
-      - cora_ml
-      - citeseer
+      - pubmed
 
   seed:
     type: choice
@@ -44,65 +45,24 @@ grid:
       - 1
       - 5
 
-pgd:
-  fixed:
-    binary_attr: False
-    attack: PGD
-  grid: 
-    attack_params:
-      type: parameter_collection
-      params:
-        loss_type: 
-          type: choice
-          options:
-            - CE
-            - CW
-            - tanhCW
+# pgd:
+#   fixed:
+#     binary_attr: False
+#     attack: PGD
 
-pgd_mce_and_sce:
-  fixed:
-    binary_attr: False
-    attack: PGD
-    attack_params:
-      epsilon: 2e-5
-  grid: 
-    attack_params:
-      type: parameter_collection
-      params:
-        loss_type: 
-          type: choice
-          options:
-            - SCE
-            - MCE
-
-fgsm:
-  fixed:
-    binary_attr: False
-    attack: FGSM
-  grid: 
-    attack_params:
-      type: parameter_collection
-      params:
-        stop_optimizing_if_label_flipped: 
-          type: choice
-          options:
-            - True
-            - False
-
-fgsm_alternative_losses:
-  fixed:
-    binary_attr: False
-    attack: FGSM
-  grid: 
-    attack_params:
-      type: parameter_collection
-      params:
-        loss_type: 
-          type: choice
-          options:
-            - SCE
-            - CW
-            - tanhCW
+# fgsm:
+#   fixed:
+#     binary_attr: False
+#     attack: FGSM
+#   grid: 
+#     attack_params:
+#       type: parameter_collection
+#       params:
+#         stop_optimizing_if_label_flipped: 
+#           type: choice
+#           options:
+#             - True
+#             - False
 
 greedy_rbcd:
   fixed:
@@ -124,7 +84,7 @@ prbcd:
     attack: PRBCD
     attack_params:
       keep_heuristic: WeightOnly
-      search_space_size: 1_000_000
+      search_space_size: 2_500_000
       do_synchronize: True
   grid: 
     attack_params:
@@ -142,9 +102,10 @@ gang:
     attack: GANG
     attack_params:
       edge_with_random_reverse: False
-      edge_step_size: 5
-      edge_budget: 10
+      edge_step_size: 25
+      edge_budget: 50
       feature_dedicated_iterations: 5
+      do_synchronize: True
       feature_lr: 5e-1
       feature_greedy_opt: True
       eps: 1e-16

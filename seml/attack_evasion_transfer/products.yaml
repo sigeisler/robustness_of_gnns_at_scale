@@ -1,0 +1,97 @@
+seml:
+  name: rgnn_at_scale_attack_evasion_transfer
+  db_collection: kdd21_rgnn_at_scale_attack_evasion_transfer
+  executable: experiment_attack_evasion_transfer.py
+  conda_environment: rgnn_at_scale
+  project_root_dir: ../..
+  output_dir: seml/attack_evasion_transfer/output
+
+slurm:
+  experiments_per_job: 1
+  sbatch_options:
+    gres: gpu:1       # num GPUs
+    mem: 32G          # memory
+    cpus-per-task: 4  # num cores
+    time: 2-00:00     # max time, D-HH:MM
+    partition: gpu_large
+
+fixed:
+  surrogate_params:
+    n_filters: 64
+    dropout: 0.5
+    do_checkpoint: True
+    n_chunks: 64
+    train_params:
+      lr: 1e-2
+      weight_decay: 1e-3
+      patience: 100
+      max_epochs: 3000
+  artifact_dir: cache
+  pert_adj_storage_type: evasion_transfer_attack_adj
+  pert_attr_storage_type: evasion_transfer_attack_attr
+  model_storage_type: pretrained
+  device: 0
+  binary_attr: False
+
+  dataset: ogbn-products
+
+grid:
+  seed:
+    type: choice
+    options:
+      - 0
+      - 1
+      - 5
+
+  epsilons: 
+    type: choice
+    options:
+    - [0, 0.01]
+    - [0, 0.05]
+    - [0, 0.1]
+    - [0, 0.25]
+
+greedy_rbcd:
+  fixed:
+    attack: GreedyRBCD
+  grid: 
+    attack_params:
+      type: parameter_collection
+      params:
+        loss_type: 
+          type: choice
+          options:
+            # - CE
+            - MCE
+
+prbcd:
+  fixed:
+    attack: PRBCD
+    attack_params:
+      keep_heuristic: WeightOnly
+      search_space_size: 20_000_000
+      do_synchronize: True
+      lr_factor: 5e4
+  grid: 
+    attack_params:
+      type: parameter_collection
+      params:
+        loss_type: 
+          type: choice
+          options:
+            # - CE
+            - tanhCW
+
+gang:
+  fixed:
+    attack: GANG
+    attack_params:
+      edge_with_random_reverse: False
+      edge_step_size: 50_000
+      edge_budget: 50_000
+      do_synchronize: True
+      eps: 1e-16
+
+dice:
+  fixed:
+    attack: DICE
