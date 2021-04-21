@@ -7,6 +7,7 @@ from sacred import Experiment
 
 from rgnn_at_scale.data import prep_graph, split
 from rgnn_at_scale.helper.io import Storage
+from rgnn_at_scale.attacks import create_attack
 
 
 def prepare_attack_experiment(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
@@ -68,7 +69,7 @@ def prepare_attack_experiment(data_dir: str, dataset: str, attack: str, attack_p
                         make_undirected=make_undirected,
                         make_unweighted=make_unweighted,
                         seed=seed)
-                        
+
     if model_label is not None and model_label:
         model_params["label"] = model_label
 
@@ -99,3 +100,32 @@ def run_global_attack(epsilon, m, storage, pert_adj_storage_type, pert_attr_stor
 
         storage.save_artifact(pert_adj_storage_type, {**pert_params, **{'epsilon': epsilon}}, pert_adj)
         storage.save_artifact(pert_attr_storage_type, {**pert_params, **{'epsilon': epsilon}}, pert_attr)
+
+
+def sample_attack_nodes(logits: torch.Tensor, labels: torch.Tensor, topk: int, nodes_idx):
+    assert logits.shape[0] == labels.shape[0]
+    labels = labels.cpu()
+    logits = logits.cpu()
+
+    correctly_classifed = logits.max(-1).indices == labels
+    _, max_confidence_nodes_idx = torch.topk(logits[correctly_classifed].max(-1).values, k=topk)
+    _, min_confidence_nodes_idx = torch.topk(-logits[correctly_classifed].max(-1).values, k=topk)
+
+    rand_nodes_idx = np.arange(correctly_classifed.sum().item())
+    rand_nodes_idx = np.setdiff1d(rand_nodes_idx, max_confidence_nodes_idx)
+    rand_nodes_idx = np.setdiff1d(rand_nodes_idx, min_confidence_nodes_idx)
+    rand_nodes_idx = np.random.choice(rand_nodes_idx, size=(topk), replace=False)
+
+    return (nodes_idx[correctly_classifed][max_confidence_nodes_idx],
+            nodes_idx[correctly_classifed][min_confidence_nodes_idx],
+            nodes_idx[correctly_classifed][rand_nodes_idx])
+
+
+def get_local_attack_nodes(attack, binary_attr, attr, adj, labels, surrogate_model, idx_test, device, attack_params, topk=10):
+    adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels,
+                              model=surrogate_model, idx_attack=idx_test, device=device, **attack_params)
+    logits, acc = adversary.evaluate_global(idx_test)
+    max_confidence_nodes_idx, min_confidence_nodes_idx, rand_nodes_idx = sample_attack_nodes(
+        logits, labels[idx_test], topk, idx_test)
+    tmp_nodes = np.concatenate((max_confidence_nodes_idx, min_confidence_nodes_idx, rand_nodes_idx))
+    return tmp_nodes

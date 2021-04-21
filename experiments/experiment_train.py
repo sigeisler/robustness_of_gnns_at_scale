@@ -35,7 +35,7 @@ def config():
     dataset = 'cora_ml'
     model_params = {
         'label': 'Vanilla PPRGo Diffusion Embedding',
-        'model': 'PPRGo',
+        'model': 'DenseGCN',
         'dropout': 0.5,
         'n_filters': 64,
         'hidden_size': 64,
@@ -115,7 +115,8 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
 
     torch.manual_seed(seed)
     np.random.seed(seed)
-
+    breakpoint()
+    logging.info("there should be a breakpoint here")
     graph = prep_graph(dataset, data_device, dataset_root=data_dir,
                        normalize=normalize,
                        normalize_attr=normalize_attr,

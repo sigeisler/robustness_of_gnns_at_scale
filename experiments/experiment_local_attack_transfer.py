@@ -13,6 +13,7 @@ from rgnn_at_scale.helper.io import Storage
 from rgnn_at_scale.models import DenseGCN, GCN
 from rgnn_at_scale.train import train
 from rgnn_at_scale.helper.utils import accuracy
+from experiments.common import prepare_attack_experiment, get_local_attack_nodes
 
 from rgnn_at_scale.helper import utils
 
@@ -35,26 +36,22 @@ def config():
     # default params
     dataset = 'cora_ml'  # Options are 'cora_ml' and 'citeseer' (or with a big GPU 'pubmed')
     attack = 'Nettack'
-    attack_params = {
-        "lr_factor": 0.05,
-        "search_space_size": 10000,
-        "ppr_recalc_at_end": False,
-    }
-    nodes = [1854, 513, 2383]
+    attack_params = {}
+    nodes = None  # [1854, 513, 2383]
 
     epsilons = [0.5, 0.75, 1]
     seed = 0
     display_steps = 10
 
-    artifact_dir = 'cache_debug'
+    artifact_dir = "/nfs/students/schmidtt/cache/cache"
 
-    model_storage_type = 'victim_cora_2'
-    model_label = 'Vanilla PPRGo'
+    model_storage_type = 'victim_cora'
+    model_label = None
 
-    surrogate_model_storage_type = 'nettack'
+    surrogate_model_storage_type = "surrogate_cora"
     surrogate_model_label = 'Linear GCN'
 
-    data_dir = './datasets'
+    data_dir = "/nfs/students/schmidtt/datasets/"
     binary_attr = False
     normalize = False
     normalize_attr = False
@@ -70,47 +67,27 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
         binary_attr: bool, make_undirected: bool, make_unweighted: bool, seed: int, normalize: bool, normalize_attr: str,
         artifact_dir: str, model_label: str, model_storage_type: str, device: Union[str, int],
         surrogate_model_storage_type: str, surrogate_model_label: str, data_device: Union[str, int], display_steps: int):
-    logging.info({
-        'dataset': dataset, 'attack': attack, 'attack_params': attack_params, 'nodes': nodes, 'epsilons': epsilons,
-        'binary_attr': binary_attr, 'seed': seed, 'normalize': normalize, 'normalize_attr': normalize_attr,
-        'artifact_dir': artifact_dir, 'model_label': model_label, 'model_storage_type': model_storage_type,
-        'device': device, "data_device": data_device, 'display_steps': display_steps
-    })
 
     assert sorted(epsilons) == epsilons, 'argument `epsilons` must be a sorted list'
     assert len(np.unique(epsilons)) == len(epsilons),\
         'argument `epsilons` must be unique (strictly increasing)'
     assert all([eps >= 0 for eps in epsilons]), 'all elements in `epsilons` must be greater than 0'
 
-    results = []
-    graph = prep_graph(dataset, data_device, dataset_root=data_dir,
-                       normalize=normalize,
-                       normalize_attr=normalize_attr,
-                       make_undirected=make_undirected,
-                       make_unweighted=make_unweighted,
-                       binary_attr=binary_attr,
-                       return_original_split=dataset.startswith('ogbn'))
-    attr, adj, labels = graph[:3]
-    if len(graph) == 3:
-        idx_train, idx_val, idx_test = split(labels.cpu().numpy())
-    else:
-        idx_train, idx_val, idx_test = graph[3]['train'], graph[3]['valid'], graph[3]['test']
-
-    logging.debug("Memory Usage after loading the dataset:")
-    logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))
+    (attr, adj, labels,
+     idx_train,
+     idx_val,
+     idx_test,
+     storage,
+     _,
+     model_params, _) = prepare_attack_experiment(data_dir, dataset, attack, attack_params,
+                                                  epsilons, binary_attr, make_undirected,
+                                                  make_unweighted,  normalize, normalize_attr, seed,
+                                                  artifact_dir, None, None,
+                                                  model_label, model_storage_type, device,
+                                                  surrogate_model_label, data_device, ex)
 
     storage = Storage(artifact_dir, experiment=ex)
 
-    model_params = dict(dataset=dataset,
-                        binary_attr=binary_attr,
-                        normalize=normalize,
-                        normalize_attr=normalize_attr,
-                        make_undirected=make_undirected,
-                        make_unweighted=make_unweighted,
-                        seed=seed)
-
-    if model_label is not None and model_label:
-        model_params['label'] = model_label
     models_and_hyperparams = storage.find_models(model_storage_type, model_params)
 
     model_params["label"] = surrogate_model_label
@@ -122,7 +99,13 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
 
     surrogate_model = surrogate_models_and_hyperparams[0][0]
 
-    for node in nodes:
+    tmp_nodes = np.array(nodes)
+    if nodes is None:
+        tmp_nodes = get_local_attack_nodes(attack, binary_attr, attr, adj, labels,
+                                           surrogate_model, idx_test, device, attack_params, topk=10)
+
+    tmp_nodes = [int(i) for i in tmp_nodes]
+    for node in tmp_nodes:
         degree = adj[node].sum() + 1
 
         tmp_epsilons = list(epsilons)
@@ -155,7 +138,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                 logits, initial_logits = adversary.evaluate_local(node)
 
                 logging.info(
-                    f'Pert. edges for node {node} and budget {n_perturbations}: {adversary.get_perturbed_edges()}')
+                    f'Pert. edges for node {node} and budget {n_perturbations}: {adversary.get_perturbed_edges(node)}')
 
                 results.append({
                     'label': hyperparams['label'],
@@ -166,7 +149,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                     'initial_logits': initial_logits.cpu(),
                     'target': labels[node].item(),
                     'node_id': node,
-                    'perturbed_edges': adversary.get_perturbed_edges().cpu().numpy()
+                    'perturbed_edges': adversary.get_perturbed_edges(node).cpu().numpy()
                 })
 
                 results[-1].update(adversary.classification_statistics(logits.cpu(), labels[node].long().cpu()))

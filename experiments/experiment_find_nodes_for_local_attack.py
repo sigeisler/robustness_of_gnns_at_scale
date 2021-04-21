@@ -14,6 +14,7 @@ from rgnn_at_scale.helper.io import Storage
 from rgnn_at_scale.models import DenseGCN, GCN
 from rgnn_at_scale.train import train
 from rgnn_at_scale.helper.utils import accuracy
+from experiments.common import sample_attack_nodes
 
 
 ex = Experiment()
@@ -33,49 +34,61 @@ def config():
         ex.observers.append(seml.create_mongodb_observer(db_collection, overwrite=overwrite))
 
     # default params
-    dataset = 'citeseer'  # Options are 'cora_ml' and 'citeseer' (or with a big GPU 'pubmed')
+    dataset = 'cora_ml'  # Options are 'cora_ml' and 'citeseer' (or with a big GPU 'pubmed')
     seed = 0
     artifact_dir = 'cache'
-    model_storage_type = 'nettack_citeseer'
-    binary_attr = False
-    device = "cpu"
+    model_storage_type = 'victim_cora'
     model_label = 'Vanilla PPRGo'
+
+    topk = 10
+
+    device = "cpu"
+    data_device = 'cpu'
+
+    data_dir = './datasets'
+    binary_attr = False
+    normalize = False
+    normalize_attr = False
     make_undirected = True
     make_unweighted = True
-    data_dir = './datasets'
-    data_device = 'cpu'
-    topk = 10
 
 
 @ex.automain
-def run(data_dir: str, dataset: str, binary_attr: bool, make_undirected: bool, make_unweighted: bool, seed: int,
-        artifact_dir: str, model_label: str, model_storage_type: str, device: Union[str, int], topk: int,
-        data_device: Union[str, int]):
-    logging.info({
-        'dataset': dataset, 'binary_attr': binary_attr, 'seed': seed, 'device': device,
-        'artifact_dir': artifact_dir, 'model_label': model_label, 'model_storage_type': model_storage_type
-    })
+def run(data_dir: str, dataset: str, binary_attr: bool, make_undirected: bool, make_unweighted: bool, normalize: bool,
+        normalize_attr: str, seed: int, artifact_dir: str, model_label: str, model_storage_type: str, topk: int,
+        device: Union[str, int], data_device: Union[str, int]):
 
     results = []
+    # To increase consistency between runs
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+
     graph = prep_graph(dataset, data_device, dataset_root=data_dir,
+                       normalize=normalize,
+                       normalize_attr=normalize_attr,
                        make_undirected=make_undirected,
                        make_unweighted=make_unweighted,
                        binary_attr=binary_attr,
                        return_original_split=dataset.startswith('ogbn'))
+
     attr, adj, labels = graph[:3]
     if len(graph) == 3:
         idx_train, idx_val, idx_test = split(labels.cpu().numpy())
     else:
         idx_train, idx_val, idx_test = graph[3]['train'], graph[3]['valid'], graph[3]['test']
 
-    storage = Storage(artifact_dir, experiment=ex)
-
     model_params = dict(dataset=dataset,
                         binary_attr=binary_attr,
+                        normalize=normalize,
+                        normalize_attr=normalize_attr,
+                        make_undirected=make_undirected,
+                        make_unweighted=make_unweighted,
                         seed=seed)
 
     if model_label is not None and model_label:
-        model_params['label'] = model_label
+        model_params["label"] = model_label
+
+    storage = Storage(artifact_dir, experiment=ex)
     models_and_hyperparams = storage.find_models(model_storage_type, model_params)
 
     for model, hyperparams in models_and_hyperparams:
@@ -90,17 +103,14 @@ def run(data_dir: str, dataset: str, binary_attr: bool, make_undirected: bool, m
                 if model.do_omit_softmax:
                     log_prob = F.log_softmax(log_prob)
 
-        labels = labels.cpu()
-        correctly_classifed = log_prob.max(-1).indices == labels[idx_test]
-        _, max_confidence_nodes_idx = torch.topk(log_prob[correctly_classifed].max(-1).values, k=topk)
-        _, min_confidence_nodes_idx = torch.topk(-log_prob[correctly_classifed].max(-1).values, k=topk)
-        rand_nodes_idx = torch.randint(correctly_classifed.sum(), (1, topk * 3))
+        max_confidence_nodes_idx, min_confidence_nodes_idx, rand_nodes_idx = sample_attack_nodes(log_prob, labels[idx_test], topk, idx_test)
+        
         results.append({
             'hyperparams': hyperparams,
             'log_prob': log_prob.cpu(),
-            'max_confidence_nodes_idx': idx_test[correctly_classifed][max_confidence_nodes_idx],
-            'min_confidence_nodes_idx': idx_test[correctly_classifed][min_confidence_nodes_idx],
-            'rand_confidence_nodes_idx': idx_test[correctly_classifed][rand_nodes_idx].flatten()
+            'max_confidence_nodes_idx': max_confidence_nodes_idx,
+            'min_confidence_nodes_idx': min_confidence_nodes_idx,
+            'rand_confidence_nodes_idx': rand_nodes_idx
         })
 
     return {

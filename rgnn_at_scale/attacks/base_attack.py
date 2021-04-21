@@ -90,11 +90,10 @@ class Attack(ABC):
                 pred_logits_target = self.eval_model.forward(self.attr_adversary,
                                                              self.adj_adversary,
                                                              ppr_idx=np.array(eval_idx))
-                acc_test_target = (pred_logits_target.cpu().argmax(
-                    1) == self.labels.cpu()[eval_idx]).float().mean().item()
             else:
-                pred_logits_target = self.eval_model(self.attr_adversary, self.adj_adversary)
-                acc_test_target = accuracy(pred_logits_target.cpu(), self.labels.cpu(), eval_idx)
+                pred_logits_target = self.eval_model(self.attr_adversary, self.adj_adversary)[eval_idx]
+
+            acc_test_target = accuracy(pred_logits_target.cpu(), self.labels.cpu()[eval_idx], np.arange(pred_logits_target.shape[0]))
 
         return pred_logits_target, acc_test_target
 
