@@ -115,7 +115,7 @@ class PRBCD(SparseAttack):
             with torch.no_grad():
                 self.modified_edge_weight_diff.requires_grad = False
                 edge_weight = self.update_edge_weights(n_perturbations, epoch, gradient)[1]
-                self.projection(n_perturbations, edge_index, edge_weight)
+                probability_mass, probability_mass_projected = self.projection(n_perturbations, edge_index, edge_weight)
 
                 edge_index, edge_weight = self.get_modified_adj()
                 logits = self.surrogate_model(data=self.X.to(self.device), adj=(edge_index, edge_weight))
@@ -132,21 +132,19 @@ class PRBCD(SparseAttack):
                     best_edge_index = self.modified_edge_index.clone().cpu()
                     best_edge_weight_diff = self.modified_edge_weight_diff.detach().clone().cpu()
 
-                self._append_attack_statistics(loss.item(), accuracy)
+                self._append_attack_statistics(loss.item(), accuracy, probability_mass, probability_mass_projected)
 
                 if epoch < self.epochs - 1:
                     self.resample_search_space(n_perturbations, edge_index, edge_weight, gradient)
                     mn = self.modified_edge_weight_diff.mean()
                     t = (self.modified_edge_weight_diff > 0.4).sum()
-                    logging.info(f'modified_edge_weight_diff mean is {mn} of this {t} over 0.4')
+                    #logging.info(f'modified_edge_weight_diff mean is {mn} of this {t} over 0.4')
                 elif self.with_early_stropping and epoch == self.epochs - 1:
                     print(f'Loading search space of epoch {best_epoch} (accuarcy={best_accuracy}) for fine tuning\n')
                     self.current_search_space = best_search_space.to(self.device)
                     self.modified_edge_index = best_edge_index.to(self.device)
                     self.modified_edge_weight_diff = best_edge_weight_diff.to(self.device)
                     self.modified_edge_weight_diff.requires_grad = True
-                    mn = self.modified_edge_weight_diff.mean()
-                    logging.info(f'modified_edge_weight_diff mean is {mn}')
 
             del logits
             del loss
@@ -171,17 +169,19 @@ class PRBCD(SparseAttack):
         with torch.no_grad():
             s = self.modified_edge_weight_diff.abs().detach()
             s[s == self.eps] = 0
-            # TODO: Why numpy?
-            s = s.cpu().numpy()
             while best_accuracy == float('Inf'):
                 for i in range(self.K):
-                    sampled = np.random.binomial(1, s)
+                    if best_accuracy == float('Inf'):
+                        sampled = torch.zeros_like(s)
+                        sampled[torch.topk(s, n_perturbations).indices] = 1
+                    else:
+                        sampled = torch.bernoulli(s).float()
 
                     if sampled.sum() > n_perturbations:
                         n_samples = sampled.sum()
                         logging.info(f'{i}-th sampling: too many samples {n_samples}')
                         continue
-                    pos_modified_edge_weight_diff = torch.from_numpy(sampled).to(self.device)
+                    pos_modified_edge_weight_diff = sampled
                     self.modified_edge_weight_diff = torch.where(
                         self.modified_edge_weight_diff > 0,
                         pos_modified_edge_weight_diff,
@@ -218,17 +218,21 @@ class PRBCD(SparseAttack):
         #     assert weight == 1, f'For edge ({source}, {dest}) the weight is not 1, it is {weight}'
         return does_original_edge_exist, is_in_search_space
 
-    def projection(self, n_perturbations: int, edge_index: torch.Tensor, edge_weight: torch.Tensor) -> torch.Tensor:
+    def projection(self, n_perturbations: int, edge_index: torch.Tensor, edge_weight: torch.Tensor) -> float:
         does_original_edge_exist, is_in_search_space = self.match_search_space_on_edges(edge_index, edge_weight)
 
         pos_modified_edge_weight_diff = torch.where(
             does_original_edge_exist, -self.modified_edge_weight_diff, self.modified_edge_weight_diff
         )
+        probability_mass = pos_modified_edge_weight_diff.sum().item()
+
         pos_modified_edge_weight_diff = Attack.project(n_perturbations, pos_modified_edge_weight_diff, self.eps)
 
         self.modified_edge_weight_diff = torch.where(
             does_original_edge_exist, -pos_modified_edge_weight_diff, pos_modified_edge_weight_diff
         )
+
+        return probability_mass, pos_modified_edge_weight_diff.sum().item()
 
     def handle_zeros_and_ones(self):
         # Handling edge case to detect an unchanged edge via its value 1
@@ -307,7 +311,7 @@ class PRBCD(SparseAttack):
         return edge_index, edge_weight
 
     def update_edge_weights(self, n_perturbations: int, epoch: int, gradient: torch.Tensor):
-        lr_factor = max(1., n_perturbations / self.n / 2 / self.lr_n_perturbations_factor) * self.lr_factor
+        lr_factor = n_perturbations / self.n / 2 / self.lr_n_perturbations_factor * self.lr_factor
         lr = lr_factor / np.sqrt(max(0, epoch - self.epochs) + 1)
         self.modified_edge_weight_diff.data.add_(lr * gradient)
 
@@ -392,8 +396,10 @@ class PRBCD(SparseAttack):
         )
         return torch.stack((row_idx, col_idx))
 
-    def _append_attack_statistics(self, loss, accuracy):
+    def _append_attack_statistics(self, loss: float, accuracy: float, 
+                                  probability_mass: float, probability_mass_projected: float):
         self.attack_statistics['loss'].append(loss)
         self.attack_statistics['accuracy'].append(accuracy)
         self.attack_statistics['nonzero_weights'].append((self.modified_edge_weight_diff.abs() > self.eps).sum().item())
-        self.attack_statistics['expected_perturbations'].append(self.modified_edge_weight_diff.sum().item())
+        self.attack_statistics['probability_mass'].append(probability_mass)
+        self.attack_statistics['probability_mass_projected'].append(probability_mass_projected)

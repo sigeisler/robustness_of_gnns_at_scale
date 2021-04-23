@@ -287,8 +287,6 @@ class LocalPRBCD(SparseLocalAttack):
 
             s = self.modified_edge_weight_diff.abs().detach()
             s[s == self.eps] = 0
-            # TODO: Why numpy?
-            #s = s.cpu().numpy()
             while best_margin == float('Inf'):
                 for i in range(self.K):
                     if best_margin == float('Inf'):

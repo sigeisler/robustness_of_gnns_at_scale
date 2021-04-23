@@ -125,23 +125,6 @@ class Attack(ABC):
         elif self.loss_type == 'MCE':
             not_flipped = logits.argmax(-1) == labels
             loss = F.nll_loss(logits[not_flipped], labels[not_flipped])
-        elif self.loss_type == 'WCE':
-            not_flipped = logits.argmax(-1) == labels
-            weighting_not_flipped = not_flipped.sum().item() / not_flipped.shape[0]
-            weighting_flipped = (not_flipped.shape[0] - not_flipped.sum().item()) / not_flipped.shape[0]
-            loss_not_flipped = F.nll_loss(logits[not_flipped], labels[not_flipped])
-            loss_flipped = F.nll_loss(logits[~not_flipped], labels[~not_flipped])
-            loss = (
-                weighting_not_flipped * loss_not_flipped
-                + 0.25 * weighting_flipped * loss_flipped
-            )
-        elif self.loss_type == 'SCE':
-            sorted = logits.argsort(-1)
-            best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
-            loss = -F.nll_loss(logits, best_non_target_class)
-        # TODO: Is it worth trying? CW should be quite similar
-        # elif self.loss_type == 'Margin':
-        #    loss = F.multi_margin_loss(torch.exp(logits), labels)
         else:
             loss = F.nll_loss(logits, labels)
         return loss
@@ -180,7 +163,7 @@ class Attack(ABC):
                 b = miu
             else:
                 a = miu
-            if ((b - a) >= epsilon):
+            if ((b - a) <= epsilon):
                 break
         return miu
 
