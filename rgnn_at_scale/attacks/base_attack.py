@@ -125,6 +125,10 @@ class Attack(ABC):
         elif self.loss_type == 'MCE':
             not_flipped = logits.argmax(-1) == labels
             loss = F.nll_loss(logits[not_flipped], labels[not_flipped])
+        elif self.loss_type == 'SCE':
+            sorted = logits.argsort(-1)
+            best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
+            loss = -F.nll_loss(logits, best_non_target_class)
         else:
             loss = F.nll_loss(logits, labels)
         return loss
