@@ -110,7 +110,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
         degree = adj[node].sum() + 1
 
         tmp_epsilons = list(epsilons)
-        tmp_epsilons.insert(0, 0)
+        #tmp_epsilons.insert(0, 0)
         for eps in tmp_epsilons:
             try:
                 adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels,
@@ -134,8 +134,6 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
             for model, hyperparams in models_and_hyperparams:
                 try:
                     eval_model_label = hyperparams['label']
-                    logging.info(model)
-                    logging.info(hyperparams)
 
                     adversary.set_eval_model(model)
                     logits, initial_logits = adversary.evaluate_local(node)

@@ -27,6 +27,8 @@ class LocalBatchedPRBCD(LocalPRBCD):
 
         super().__init__(**kwargs)
 
+        assert type(self.surrogate_model) in BATCHED_PPR_MODELS.__args__, "LocalBatchedPRBCD Attack only supports PPRGo models"
+
         if self.attack_labeled_nodes_only:
             ppr_nodes = self.idx_attack
         else:
@@ -75,10 +77,14 @@ class LocalBatchedPRBCD(LocalPRBCD):
         logging.info(f'self.ppr_matrix is of shape {self.ppr_matrix.shape}')
         logging.info(f'Memory after loading ppr: {utils.get_max_memory_bytes() / (1024 ** 3)}')
 
-    def get_logits(self,  model: MODEL_TYPE, node_idx: int, perturbed_graph: SparseTensor = None) -> torch.Tensor:
+    def get_logits(self, model: MODEL_TYPE, node_idx: int, perturbed_graph: SparseTensor = None) -> torch.Tensor:
         if perturbed_graph is None:
             perturbed_graph = SparseTensor.from_scipy(self.ppr_matrix[node_idx])
-        return F.log_softmax(model.forward(self.X, None, ppr_scores=perturbed_graph), dim=-1)
+
+        if type(model) in BATCHED_PPR_MODELS.__args__:
+            return F.log_softmax(model.forward(self.X, None, ppr_scores=perturbed_graph), dim=-1)
+        else:
+            return model(data=self.X.to(self.device), adj=perturbed_graph)[node_idx:node_idx + 1]
 
     def sample_final_edges(self, node_idx: int, n_perturbations: int):
         if self.ppr_recalc_at_end:
