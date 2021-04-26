@@ -110,13 +110,11 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
         'dataset': dataset, 'model_params': model_params, 'train_params': train_params, 'binary_attr': binary_attr,
         'make_undirected': make_undirected, 'make_unweighted': make_unweighted, 'normalize': normalize, 'normalize_attr': normalize_attr,
         'seed': seed, 'artifact_dir': artifact_dir, 'model_storage_type': model_storage_type, 'ppr_cache_params': ppr_cache_params,
-        'device': device, 'display_steps': display_steps
+        'device': device, 'display_steps': display_steps, 'data_device': data_device
     })
 
     torch.manual_seed(seed)
     np.random.seed(seed)
-    breakpoint()
-    logging.info("there should be a breakpoint here")
     graph = prep_graph(dataset, data_device, dataset_root=data_dir,
                        normalize=normalize,
                        normalize_attr=normalize_attr,

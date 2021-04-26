@@ -95,11 +95,8 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
         warnings.warn("More than one matching surrogate model found. Choose first one by default.")
 
     surrogate_model = surrogate_models_and_hyperparams[0][0]
-
-    tmp_epsilons = list(epsilons)
-    tmp_epsilons.insert(0, 0)
-
-    for epsilon in tmp_epsilons:
+    
+    for epsilon in epsilons:
         try:
             adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels,
                                       model=surrogate_model, idx_attack=idx_test, device=device, **attack_params)
