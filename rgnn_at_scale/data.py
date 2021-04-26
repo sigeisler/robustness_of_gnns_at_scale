@@ -14,9 +14,11 @@ from sklearn.model_selection import train_test_split
 
 import torch
 import torch_sparse
+from torch_sparse import SparseTensor
 from torch_geometric.utils import remove_isolated_nodes
 
 from rgnn_at_scale.helper import utils
+from rgnn_at_scale.helper import ppr_utils as ppr
 
 sparse_graph_properties = [
     'adj_matrix', 'attr_matrix', 'labels', 'node_names', 'attr_names', 'class_names', 'metadata'
@@ -544,7 +546,7 @@ def prep_cora_citeseer_pubmed(name: str,
                               device: Union[int, torch.device] = 0,
                               normalize: bool = False,
                               make_undirected: bool = True,
-                              make_unweighted: bool = True) -> Tuple[torch.Tensor, torch_sparse.SparseTensor, torch.Tensor]:
+                              make_unweighted: bool = True) -> Tuple[torch.Tensor, SparseTensor, torch.Tensor]:
     """Prepares and normalizes the desired dataset
 
     Parameters
@@ -792,3 +794,83 @@ class RobustPPRDataset(torch.utils.data.Dataset):
                 return batch
 
         return self.cached[key]
+
+
+INT_TYPES = (int, np.integer)
+
+
+class CachedPPRMatrix:
+    def __init__(self,
+                 adj: SparseTensor,
+                 ppr_cache_params: Dict[str, Any],
+                 alpha: float,
+                 eps: float,
+                 topk: int,
+                 ppr_normalization: str,
+                 use_train_val_ppr: bool = True):
+
+        self.adj = adj.to_scipy(layout="csr")
+        self.ppr_cache_params = ppr_cache_params
+        self.alpha = alpha
+        self.eps = eps
+        self.topk = topk
+        self.ppr_normalization = ppr_normalization
+
+        n = self.adj.shape[0]
+        self.shape = (n, n)
+
+        self.storage_params = dict(dataset=self.ppr_cache_params["dataset"],
+                                   alpha=self.alpha,
+                                   eps=self.eps,
+                                   topk=self.topk,
+                                   split_desc="attack",
+                                   ppr_normalization=self.ppr_normalization,
+                                   normalize=self.ppr_cache_params["normalize"],
+                                   make_undirected=self.ppr_cache_params["make_undirected"],
+                                   make_unweighted=self.ppr_cache_params["make_unweighted"])
+
+        if self.ppr_cache_params is not None:
+            # late import to avoid circular import issue
+            from rgnn_at_scale.helper.io import Storage
+            self.storage = Storage(self.ppr_cache_params["data_artifact_dir"])
+
+            stored_topk_ppr = self.storage.find_sparse_matrix(self.ppr_cache_params["data_storage_type"],
+                                                              self.storage_params, find_first=True)
+
+            self.ppr, _ = stored_topk_ppr[0] if len(stored_topk_ppr) == 1 else (None, None)
+
+        if self.ppr is None:
+            self.ppr = sp.csr_matrix(self.shape, dtype=self.adj.dtype)
+
+        self.cached_rows = np.array([])
+
+    def load_from_storage(self):
+        pass
+
+    def save_to_storage(self):
+        pass
+
+    def _calc_ppr(self, rows: np.ndarray):
+        if len(rows) > 0:
+            ppr_scores = ppr.topk_ppr_matrix(self.adj, self.alpha, self.eps, rows,
+                                             self.topk, normalization=self.ppr_normalization)
+            self.ppr[rows] = ppr_scores
+            # make sure cached rows stays unique
+            self.cached_rows = np.union1d(self.cached_rows, rows)
+
+    def _get_uncached(self, row):
+
+        if isinstance(row, INT_TYPES):
+            rows = np.array([row])
+        else:
+            rows = np.array(row)
+
+        rows = np.setdiff1d(np.unique(rows), self.cached_rows, assume_unique=True)
+
+        return rows
+
+    def __getitem__(self, key):
+        row, col = self.ppr._validate_indices(key)
+        uncached_rows = self._get_uncached(row)
+        self._calc_ppr(uncached_rows)
+        return self.ppr[key]

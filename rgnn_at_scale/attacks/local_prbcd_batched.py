@@ -10,11 +10,12 @@ from torch_sparse import SparseTensor
 
 from rgnn_at_scale.helper.utils import calc_ppr_update_sparse_result
 
-from rgnn_at_scale.models import MODEL_TYPE
+from rgnn_at_scale.models import MODEL_TYPE, BATCHED_PPR_MODELS
 from rgnn_at_scale.attacks.local_prbcd import LocalPRBCD
 from rgnn_at_scale.helper import utils
 from rgnn_at_scale.helper import ppr_utils as ppr
 from rgnn_at_scale.helper.io import Storage
+from rgnn_at_scale.data import CachedPPRMatrix
 
 
 class LocalBatchedPRBCD(LocalPRBCD):
@@ -29,50 +30,27 @@ class LocalBatchedPRBCD(LocalPRBCD):
 
         assert type(self.surrogate_model) in BATCHED_PPR_MODELS.__args__, "LocalBatchedPRBCD Attack only supports PPRGo models"
 
-        if self.attack_labeled_nodes_only:
-            ppr_nodes = self.idx_attack
-        else:
-            ppr_nodes = np.arange(self.n)
+        # if self.attack_labeled_nodes_only:
+        #     ppr_nodes = self.idx_attack
+        # else:
+        #     ppr_nodes = np.arange(self.n)
 
         self.ppr_cache_params = ppr_cache_params
         if self.ppr_cache_params is None:
             self.ppr_cache_params = self.surrogate_model.ppr_cache_params
 
-        self.ppr_matrix = None
-
-        if self.ppr_cache_params is not None:
-            storage = Storage(self.ppr_cache_params["data_artifact_dir"])
-            params = dict(dataset=self.ppr_cache_params["dataset"],
-                          alpha=self.surrogate_model.alpha,
-                          ppr_idx=list(map(int, ppr_nodes)),
-                          eps=self.surrogate_model.eps,
-                          topk=self.surrogate_model.topk,
-                          ppr_normalization=self.surrogate_model.ppr_normalization,
-                          normalize=self.ppr_cache_params["normalize"],
-                          make_undirected=self.ppr_cache_params["make_undirected"],
-                          make_unweighted=self.ppr_cache_params["make_unweighted"])
-
-            stored_topk_ppr = storage.find_sparse_matrix(self.ppr_cache_params["data_storage_type"],
-                                                         params, find_first=True)
-
-            self.ppr_matrix, _ = stored_topk_ppr[0] if len(stored_topk_ppr) == 1 else (None, None)
-
-        if self.ppr_matrix is None:
-
-            sp_adj = self.adj.to_scipy(layout="csr")
-            self.ppr_matrix = ppr.topk_ppr_matrix(sp_adj, self.surrogate_model.alpha, self.surrogate_model.eps, ppr_nodes,
-                                                  self.surrogate_model.topk, normalization=self.surrogate_model.ppr_normalization)
-            # save topk_ppr to disk
-            if self.ppr_cache_params is not None:
-                storage.save_sparse_matrix(self.ppr_cache_params["data_storage_type"], params,
-                                           self.ppr_matrix, ignore_duplicate=True)
-
-        if self.attack_labeled_nodes_only:
-            relabeled_row = torch.from_numpy(ppr_nodes)[self.ppr_matrix.storage.row()]
-            self.ppr_matrix = SparseTensor(row=relabeled_row, col=self.ppr_matrix.storage.col(),
-                                           value=self.ppr_matrix.storage.value(), sparse_sizes=(self.n, self.n))
+        # if self.attack_labeled_nodes_only:
+        #     relabeled_row = torch.from_numpy(ppr_nodes)[self.ppr_matrix.storage.row()]
+        #     self.ppr_matrix = SparseTensor(row=relabeled_row, col=self.ppr_matrix.storage.col(),
+        #                                    value=self.ppr_matrix.storage.value(), sparse_sizes=(self.n, self.n))
 
         self.ppr_recalc_at_end = ppr_recalc_at_end
+        self.ppr_matrix = CachedPPRMatrix(self.adj,
+                                          self.ppr_cache_params,
+                                          self.surrogate_model.alpha,
+                                          self.surrogate_model.eps,
+                                          self.surrogate_model.topk,
+                                          self.surrogate_model.ppr_normalization)
 
         logging.info(f'self.ppr_matrix is of shape {self.ppr_matrix.shape}')
         logging.info(f'Memory after loading ppr: {utils.get_max_memory_bytes() / (1024 ** 3)}')
