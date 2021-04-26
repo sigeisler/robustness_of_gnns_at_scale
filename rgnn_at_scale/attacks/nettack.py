@@ -69,9 +69,9 @@ class Nettack(SparseLocalAttack):
     def _attack(self, n_perturbations: int, node_idx: int, **kwargs):
         self.nettack = OriginalNettack(self.sp_adj,
                                        self.sp_attr,
-                                       self.labels.detach().numpy(),
-                                       self.surrogate_model.layers[0][0].weight.detach().numpy(),
-                                       self.surrogate_model.layers[1][0].weight.detach().numpy(),
+                                       self.labels.detach().cpu().numpy(),
+                                       self.surrogate_model.layers[0][0].weight.detach().cpu().numpy(),
+                                       self.surrogate_model.layers[1][0].weight.detach().cpu().numpy(),
                                        node_idx,
                                        verbose=True)
         self.nettack.reset()
