@@ -161,11 +161,11 @@ class LocalPRBCD(SparseLocalAttack):
     def calc_perturbed_edges(self, node_idx: int) -> torch.Tensor:
         source = torch.full_like(self.current_search_space, node_idx).cpu()
         target = self.current_search_space.cpu()
-        flip_order_mask = source > target
-        source, target = torch.where(~flip_order_mask, source, target), torch.where(flip_order_mask, source, target)
+        #flip_order_mask = source > target
+        #source, target = torch.where(~flip_order_mask, source, target), torch.where(flip_order_mask, source, target)
         return torch.stack((source, target), dim=0)
 
-    def get_perturbed_edges(self, node_idx: int) -> torch.Tensor:
+    def get_perturbed_edges(self) -> torch.Tensor:
         if not hasattr(self, "perturbed_edges"):
             return torch.tensor([])
         return self.perturbed_edges
