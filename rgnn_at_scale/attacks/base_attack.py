@@ -93,7 +93,8 @@ class Attack(ABC):
             else:
                 pred_logits_target = self.eval_model(self.attr_adversary, self.adj_adversary)[eval_idx]
 
-            acc_test_target = accuracy(pred_logits_target.cpu(), self.labels.cpu()[eval_idx], np.arange(pred_logits_target.shape[0]))
+            acc_test_target = accuracy(pred_logits_target.cpu(), self.labels.cpu()[
+                                       eval_idx], np.arange(pred_logits_target.shape[0]))
 
         return pred_logits_target, acc_test_target
 
@@ -212,7 +213,7 @@ class SparseAttack(Attack):
 
 class SparseLocalAttack(SparseAttack):
     @abstractmethod
-    def get_perturbed_edges(self, node_idx: int) -> torch.Tensor:
+    def get_perturbed_edges(self) -> torch.Tensor:
         pass
 
     @abstractmethod

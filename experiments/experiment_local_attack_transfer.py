@@ -49,7 +49,7 @@ def config():
     model_label = None
 
     surrogate_model_storage_type = "surrogate_cora"
-    surrogate_model_label = 'Linear GCN'
+    surrogate_model_label = 'Linear GCN'  # 'Vanilla GCN'
 
     data_dir = "/nfs/students/schmidtt/datasets/"
     binary_attr = False
@@ -72,6 +72,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
     assert len(np.unique(epsilons)) == len(epsilons),\
         'argument `epsilons` must be unique (strictly increasing)'
     assert all([eps >= 0 for eps in epsilons]), 'all elements in `epsilons` must be greater than 0'
+    results = []
 
     (attr, adj, labels,
      idx_train,
@@ -131,33 +132,40 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                 continue
 
             for model, hyperparams in models_and_hyperparams:
-                logging.info(model)
-                logging.info(hyperparams)
+                try:
+                    eval_model_label = hyperparams['label']
+                    logging.info(model)
+                    logging.info(hyperparams)
 
-                adversary.set_eval_model(model)
-                logits, initial_logits = adversary.evaluate_local(node)
+                    adversary.set_eval_model(model)
+                    logits, initial_logits = adversary.evaluate_local(node)
 
-                logging.info(
-                    f'Pert. edges for node {node} and budget {n_perturbations}: {adversary.get_perturbed_edges(node)}')
+                    logging.info(
+                        f'Evaluated model {eval_model_label} using {attack} with pert. edges for node {node} and budget {n_perturbations}: {adversary.get_perturbed_edges()}')
 
-                results.append({
-                    'label': hyperparams['label'],
-                    'epsilon': eps,
-                    'n_perturbations': n_perturbations,
-                    'degree': int(degree.item()),
-                    'logits': logits.cpu(),
-                    'initial_logits': initial_logits.cpu(),
-                    'target': labels[node].item(),
-                    'node_id': node,
-                    'perturbed_edges': adversary.get_perturbed_edges(node).cpu().numpy()
-                })
+                    results.append({
+                        'label': eval_model_label,
+                        'epsilon': eps,
+                        'n_perturbations': n_perturbations,
+                        'degree': int(degree.item()),
+                        'logits': logits.cpu(),
+                        'initial_logits': initial_logits.cpu(),
+                        'target': labels[node].item(),
+                        'node_id': node,
+                        'perturbed_edges': adversary.get_perturbed_edges().cpu().numpy()
+                    })
 
-                results[-1].update(adversary.classification_statistics(logits.cpu(), labels[node].long().cpu()))
-                results[-1].update({
-                    f'initial_{key}': value
-                    for key, value
-                    in adversary.classification_statistics(initial_logits.cpu(), labels[node].long().cpu()).items()
-                })
+                    results[-1].update(adversary.classification_statistics(logits.cpu(), labels[node].long().cpu()))
+                    results[-1].update({
+                        f'initial_{key}': value
+                        for key, value
+                        in adversary.classification_statistics(initial_logits.cpu(), labels[node].long().cpu()).items()
+                    })
+                except Exception as e:
+                    logging.exception(e)
+                    logging.error(
+                        f"Failed to evaluate model '{eval_model_label}' using {attack} with eps {eps} at node {node}.")
+                    continue
                 # if hasattr(adversary, 'attack_statistics'):
                 #     results[-1]['attack_statistics'] = adversary.attack_statistics
 

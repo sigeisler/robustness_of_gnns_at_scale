@@ -8,12 +8,13 @@ import numpy as np
 import scipy.sparse as sp
 
 import torch
+from torch.nn import functional as F
 import torch_sparse
 from torch_sparse import SparseTensor
 
 from tqdm import tqdm
 
-from rgnn_at_scale.models import MODEL_TYPE
+from rgnn_at_scale.models import MODEL_TYPE, BATCHED_PPR_MODELS
 from rgnn_at_scale.helper.utils import grad_with_checkpoint
 
 from rgnn_at_scale.attacks.base_attack import Attack, SparseLocalAttack
@@ -44,8 +45,6 @@ class LocalPRBCD(SparseLocalAttack):
                  **kwargs):
 
         super().__init__(adj, X, labels, idx_attack, model, device, loss_type, **kwargs)
-
-        logging.info(f'Memory before loading ppr: {utils.get_max_memory_bytes() / (1024 ** 3)}')
 
         self.n_possible_edges = self.n * (self.n - 1) // 2
         self.attack_labeled_nodes_only = attack_labeled_nodes_only
@@ -144,22 +143,32 @@ class LocalPRBCD(SparseLocalAttack):
             self.modified_edge_weight_diff = best_edge_weight_diff.to(self.device)
 
         self.adj_adversary = self.sample_final_edges(node_idx, n_perturbations)
+        self.perturbed_edges = self.calc_perturbed_edges(node_idx)
 
     def get_logits(self, model: MODEL_TYPE, node_idx: int, perturbed_graph: SparseTensor = None):
         if perturbed_graph is None:
             perturbed_graph = self.adj
-        return model(data=self.X.to(self.device), adj=perturbed_graph)[node_idx:node_idx + 1]
+
+        if type(model) in BATCHED_PPR_MODELS.__args__:
+            return F.log_softmax(model.forward(self.X, perturbed_graph, ppr_idx=np.array([node_idx])), dim=-1)
+        else:
+            return model(data=self.X.to(self.device), adj=perturbed_graph)[node_idx:node_idx + 1]
 
     def sample_final_edges(self, node_idx: int, n_perturbations: int):
         perturbed_graph = self.sample_edges(node_idx, n_perturbations)
         return perturbed_graph
 
-    def get_perturbed_edges(self, node_idx: int) -> torch.Tensor:
+    def calc_perturbed_edges(self, node_idx: int) -> torch.Tensor:
         source = torch.full_like(self.current_search_space, node_idx).cpu()
         target = self.current_search_space.cpu()
         flip_order_mask = source > target
         source, target = torch.where(~flip_order_mask, source, target), torch.where(flip_order_mask, source, target)
         return torch.stack((source, target), dim=0)
+
+    def get_perturbed_edges(self, node_idx: int) -> torch.Tensor:
+        if not hasattr(self, "perturbed_edges"):
+            return torch.tensor([])
+        return self.perturbed_edges
 
     def perturbe_graph(self, node_idx: int) -> SparseTensor:
 
