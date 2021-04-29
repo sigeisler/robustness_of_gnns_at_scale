@@ -3,15 +3,15 @@
 
 from datetime import datetime
 import os
-from typing import Any, Callable, Dict, List, Optional, Union, Tuple
+from typing import Any, Callable, Dict, List, Optional, Union, Tuple, Iterable, Mapping
 
 from filelock import SoftFileLock
 from sacred import Experiment
 from tinydb import Query, TinyDB
 from tinydb_serialization import SerializationMiddleware, Serializer
 import torch
-from torch_sparse import SparseTensor
 import scipy.sparse as sp
+import numpy as np
 
 from rgnn_at_scale.models import create_model, MODEL_TYPE
 
@@ -87,6 +87,11 @@ class Storage():
         serialization.register_serializer(DateTimeSerializer(), 'DateTime')
         return TinyDB(self._get_index_path(table), storage=serialization)
 
+    def _update_meta(self, table: str, doc_ids: Iterable[int], fields: Union[Mapping, Callable[[Mapping], None]]):
+        table = self._get_db(table)
+        doc_id = table.update(fields=fields, doc_ids=doc_ids)
+        return doc_id
+
     def _upsert_meta(self, table: str, params: Dict[str, Any], experiment_id: Optional[int] = None) -> List[int]:
         meta = {} if self.experiment is None else {'commit': self.experiment.mainfile.commit,
                                                    'is_dirty': self.experiment.mainfile.is_dirty,
@@ -100,8 +105,13 @@ class Storage():
         doc_id = table.upsert(data, Query().params == params)
         return doc_id
 
-    def _remove_meta(self, table: str, params: Dict[str, Any], experiment_id: Optional[int] = None) -> List[int]:
-        return self._get_db(table).remove(Query().params == params)
+    def _remove_meta(self, table: str, params: Dict[str, Any] = None, doc_ids: Optional[Iterable[int]] = None,
+                     sexperiment_id: Optional[int] = None) -> List[int]:
+        query = None
+        if params is not None:
+            query = Query().params == params
+        return self._get_db(table).remove(cond=query,
+                                          doc_ids=doc_ids)
 
     def _find_meta_by_exact_params(self, table: str, params: Dict[str, Any],
                                    experiment_id: Optional[int] = None) -> List[Dict[str, Any]]:
@@ -266,24 +276,35 @@ class Storage():
         str
             File storage location.
         """
+        ppr_idx = None
+        if "ppr_idx" in params.keys():
+            ppr_idx = np.array(params["ppr_idx"])
+            params["ppr_idx"] = hash(frozenset(params["ppr_idx"]))
+
+        if ignore_duplicate:
+            # check there's no entry with the exact same config already present
+            ids = Storage.locked_call(
+                lambda: self._find_meta_by_exact_params(artifact_type, params),
+                self._get_lock_path(artifact_type),
+                self.lock_timeout
+            )
+            if len(ids) > 0:
+                return self._build_artifact_path(artifact_type, ids[0].doc_id).replace(".pt", ".npz")
+
         ids = Storage.locked_call(
             lambda: self._upsert_meta(artifact_type, params),
             self._get_lock_path(artifact_type),
             self.lock_timeout,
         )
         if len(ids) != 1:
-            if ignore_duplicate:
-                Storage.locked_call(
-                    lambda: self._remove_meta(artifact_type, params),
-                    self._get_lock_path(artifact_type),
-                    self.lock_timeout
-                )
-                return self._build_artifact_path(artifact_type, ids[0])
             raise RuntimeError(f'The index contains duplicates (artifact_type={artifact_type}, params={params})')
 
         try:
             path = self._build_artifact_path(artifact_type, ids[0]).replace(".pt", ".npz")
             sp.save_npz(path, sparse_matrix)
+            if ppr_idx is not None:
+                ppr_path = path.replace(".npz", "idx.npy")
+                np.save(ppr_path, ppr_idx)
             return path
         except:  # noqa: E722
             Storage.locked_call(
@@ -297,7 +318,8 @@ class Storage():
                            artifact_type: str,
                            match_condition: Dict[str, Any],
                            find_first=False,
-                           return_id: bool = False
+                           return_id: bool = False,
+                           return_documents_only=False
                            ) -> List[Union[Tuple[sp.csr_matrix, Dict[str, Any]],
                                            Tuple[sp.csr_matrix, Dict[str, Any], int]]]:
         """Find all sparse matrices matching the defined parameters.
@@ -318,18 +340,33 @@ class Storage():
         List[Union[Tuple[sp.csr_matrix, Dict[str, Any]], Tuple[sp.csr_matrix, Dict[str, Any], int]]]
             List of loaded matrices, their params and optionally the ids.
         """
+
+        if "ppr_idx" in match_condition.keys() and not isinstance(match_condition["ppr_idx"], int):
+            match_condition["ppr_idx"] = hash(frozenset(match_condition["ppr_idx"]))
+
         raw_documents = Storage.locked_call(
             lambda: self._find_meta(artifact_type, match_condition),
             self._get_lock_path(artifact_type),
             self.lock_timeout,
         )
-
+        if return_documents_only:
+            for document in raw_documents:
+                if "ppr_idx" in document['params'].keys() and isinstance(document['params']["ppr_idx"], int):
+                    path = self._build_artifact_path(artifact_type, document.doc_id).replace(".pt", ".npz")
+                    ppr_path = path.replace(".npz", "idx.npy")
+                    document['params']["ppr_idx"] = np.load(ppr_path)
+            return raw_documents
         results = []
         for document in raw_documents:
             document_id = document.doc_id
             document = dict(document)
             path = self._build_artifact_path(artifact_type, document_id).replace(".pt", ".npz")
             sparse_matrix = sp.load_npz(path)
+
+            if "ppr_idx" in document['params'].keys() and isinstance(document['params']["ppr_idx"], int):
+                ppr_path = path.replace(".npz", "idx.npy")
+                document['params']["ppr_idx"] = np.load(ppr_path)
+
             if return_id:
                 results.append((sparse_matrix, document['params'], document_id))
             else:
@@ -338,6 +375,101 @@ class Storage():
             if find_first:
                 return results
         return results
+
+    def hash_sparse_matrix(self,
+                           artifact_type: str,
+                           match_condition: Dict[str, Any]
+                           ) -> List[Union[Tuple[sp.csr_matrix, Dict[str, Any]],
+                                           Tuple[sp.csr_matrix, Dict[str, Any], int]]]:
+        """Find all sparse matrices matching the defined parameters.
+
+        Parameters
+        ----------
+        artifact_type: str
+            Identifier of artifact type.
+        match_condition: Dict[str, Any]
+            Subset of parameters to query artifacts.
+        Returns
+        -------
+        List[Union[Tuple[sp.csr_matrix, Dict[str, Any]], Tuple[sp.csr_matrix, Dict[str, Any], int]]]
+            List of loaded matrices, their params and optionally the ids.
+        """
+
+        raw_documents = Storage.locked_call(
+            lambda: self._find_meta(artifact_type, match_condition),
+            self._get_lock_path(artifact_type),
+            self.lock_timeout,
+        )
+
+        for document in raw_documents:
+            document_id = document.doc_id
+            document = dict(document)
+            if "ppr_idx" in document['params'].keys() and not isinstance(document['params']["ppr_idx"], int):
+
+                path = self._build_artifact_path(artifact_type, document_id).replace(".pt", ".npz")
+                ppr_path = path.replace(".npz", "idx.npy")
+                ppr_idx = np.array(document['params']["ppr_idx"])
+
+                document['params']["ppr_idx"] = hash(frozenset(ppr_idx))
+                ids = Storage.locked_call(
+                    lambda: self._update_meta(artifact_type, doc_ids=[document_id], fields=document),
+                    self._get_lock_path(artifact_type),
+                    self.lock_timeout,
+                )
+                np.save(ppr_path, ppr_idx)
+
+        return raw_documents
+
+    def remove_sparse_matrices(self,
+                               artifact_type: str,
+                               match_condition: Dict[str, Any]
+                               ) -> List[Union[Tuple[sp.csr_matrix, Dict[str, Any]],
+                                               Tuple[sp.csr_matrix, Dict[str, Any], int]]]:
+        """Find all sparse matrices matching the defined parameters.
+
+        Parameters
+        ----------
+        artifact_type: str
+            Identifier of artifact type.
+        match_condition: Dict[str, Any]
+            Subset of parameters to query artifacts.
+
+        Returns
+        -------
+        List[Union[Tuple[sp.csr_matrix, Dict[str, Any]], Tuple[sp.csr_matrix, Dict[str, Any], int]]]
+            List of loaded matrices, their params and optionally the ids.
+        """
+
+        # if "ppr_idx" in match_condition.keys() and not isinstance(match_condition["ppr_idx"], int):
+        #     match_condition["ppr_idx"] = hash(frozenset(match_condition["ppr_idx"]))
+
+        raw_documents = Storage.locked_call(
+            lambda: self._find_meta(artifact_type, match_condition),
+            self._get_lock_path(artifact_type),
+            self.lock_timeout,
+        )
+
+        doc_ids = [document.doc_id for document in raw_documents]
+        removed_docs = Storage.locked_call(
+            lambda: self._remove_meta(artifact_type, doc_ids=doc_ids),
+            self._get_lock_path(artifact_type),
+            self.lock_timeout,
+        )
+
+        for document in raw_documents:
+            document_id = document.doc_id
+            document = dict(document)
+            path = self._build_artifact_path(artifact_type, document_id).replace(".pt", ".npz")
+            try:
+                os.remove(path)
+
+                if "ppr_idx" in document['params'].keys() and isinstance(document['params']["ppr_idx"], int):
+                    ppr_path = path.replace(".npz", "idx.npy")
+                    os.remove(ppr_path)
+            except OSError:
+                pass
+
+        return removed_docs
 
     def save_model(self, artifact_type: str, params: Dict[str, Any], model: MODEL_TYPE) -> str:
         """Saves an artifact.

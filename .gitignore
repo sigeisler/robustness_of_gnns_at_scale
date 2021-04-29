@@ -453,6 +453,8 @@ cache/*
 datasets/*
 
 # Local
+cache_debug
+data
 cache_debug/*
 cache
 extension/*

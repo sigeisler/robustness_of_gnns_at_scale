@@ -108,6 +108,9 @@ def sample_attack_nodes(logits: torch.Tensor, labels: torch.Tensor, topk: int, n
     logits = logits.cpu()
 
     correctly_classifed = logits.max(-1).indices == labels
+    acc = correctly_classifed.sum().item() / float(labels.shape[0])
+    logging.info(f"Sample Attack Nodes for model with accuracy {acc:.4}")
+
     _, max_confidence_nodes_idx = torch.topk(logits[correctly_classifed].max(-1).values, k=topk)
     _, min_confidence_nodes_idx = torch.topk(-logits[correctly_classifed].max(-1).values, k=topk)
 
@@ -122,8 +125,12 @@ def sample_attack_nodes(logits: torch.Tensor, labels: torch.Tensor, topk: int, n
 
 
 def get_local_attack_nodes(attack, binary_attr, attr, adj, labels, surrogate_model, idx_test, device, attack_params, topk=10):
-    adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels,
-                              model=surrogate_model, idx_attack=idx_test, device=device, **attack_params)
+    if isinstance(attack, str):
+        adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels,
+                                  model=surrogate_model, idx_attack=idx_test, device=device, **attack_params)
+    else:
+        adversary = attack
+
     logits, acc = adversary.evaluate_global(idx_test)
     max_confidence_nodes_idx, min_confidence_nodes_idx, rand_nodes_idx = sample_attack_nodes(
         logits, labels[idx_test], topk, idx_test)
