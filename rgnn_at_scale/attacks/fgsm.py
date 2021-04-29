@@ -30,16 +30,10 @@ class FGSM(DenseAttack):
     """
 
     def __init__(self,
-                 adj: Union[SparseTensor, torch.Tensor],
-                 X: torch.Tensor,
-                 labels: torch.Tensor,
-                 idx_attack: np.ndarray,
-                 model: DenseGCN,
-                 device: Union[str, int, torch.device],
-                 loss_type: str = 'CE',  # 'CW', 'LeakyCW'  # 'CE', 'MCE', 'Margin'
+                 *args,
                  stop_optimizing_if_label_flipped: bool = False,
                  **kwargs):
-        super().__init__(adj, X, labels, idx_attack, model, device, loss_type, **kwargs)
+        super().__init__(*args, **kwargs)
 
         self.adj_tmp = self.adj.clone().requires_grad_(True)
         self.stop_optimizing_if_label_flipped = stop_optimizing_if_label_flipped

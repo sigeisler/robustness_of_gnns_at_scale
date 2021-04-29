@@ -35,22 +35,23 @@ def config():
     # default params
     dataset = 'cora_ml'  # Options are 'cora_ml' and 'citeseer' (or with a big GPU 'pubmed')
     attack = 'LocalBatchedPRBCD'
-    attack_params = {"epochs":  100}
+    attack_params = {}
     nodes = None  # [1854, 513, 2383]
+    nodes_topk = 3
 
     epsilons = [0.5, 0.75, 1]
     seed = 0
     display_steps = 10
 
-    artifact_dir = "/nfs/students/schmidtt/cache/cache"
-    model_storage_type = 'victim_cora'
-    model_label = 'Vanilla PPRGo'
+    artifact_dir = "cache"
+    model_storage_type = 'victim_papers_100M'
+    model_label = 'Vanilla PPRGo Diffusion Embedding'
 
-    data_dir = './datasets'
+    data_dir = './data'
     binary_attr = False
-    normalize = False
+    normalize = "row"
     normalize_attr = False
-    make_undirected = True
+    make_undirected = False
     make_unweighted = True
 
     data_device = 'cpu'
@@ -58,7 +59,7 @@ def config():
 
 
 @ex.automain
-def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any], nodes: str, epsilons: Sequence[float],
+def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any], nodes: str, nodes_topk: int, epsilons: Sequence[float],
         binary_attr: bool, make_undirected: bool, make_unweighted: bool, seed: int, normalize: bool, normalize_attr: str,
         artifact_dir: str, model_label: str, model_storage_type: str, device: Union[str, int],
         data_device: Union[str, int], display_steps: int):
@@ -88,7 +89,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
 
         try:
             adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels,
-                                      model=model, idx_attack=idx_test, device=device, **attack_params)
+                                      model=model, idx_attack=idx_test, device=device, data_device=data_device, **attack_params)
         except Exception as e:
             logging.exception(e)
             logging.error(f"Failed to instantiate attack {attack} for model '{model_label}'.")
@@ -96,8 +97,8 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
 
         tmp_nodes = np.array(nodes)
         if nodes is None:
-            tmp_nodes = get_local_attack_nodes(attack, binary_attr, attr, adj, labels,
-                                               model, idx_test, device, attack_params, topk=10)
+            tmp_nodes = get_local_attack_nodes(adversary, binary_attr, attr, adj, labels,
+                                               model, idx_test, device, attack_params, topk=nodes_topk)
         tmp_nodes = [int(i) for i in tmp_nodes]
 
         for node in tmp_nodes:
@@ -141,7 +142,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                 })
                 # if hasattr(adversary, 'attack_statistics'):
                 #     results[-1]['attack_statistics'] = adversary.attack_statistics
-
+        del adversary
     assert len(results) > 0
 
     return {

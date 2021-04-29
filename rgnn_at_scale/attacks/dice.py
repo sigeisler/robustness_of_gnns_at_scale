@@ -32,16 +32,11 @@ class DICE(SparseAttack):
     """
 
     def __init__(self,
-                 adj: SparseTensor,
-                 X: torch.Tensor,
-                 labels: torch.Tensor,
-                 idx_attack: np.ndarray,
-                 model: MODEL_TYPE,
-                 device: Union[str, int, torch.device],
+                 *args,
                  add_ratio: float = 0.6,
                  **kwargs):
 
-        super().__init__(adj, X, labels, idx_attack, model, device, **kwargs)
+        super().__init__(*args, **kwargs)
 
         # Create Symmetric Adjacency Matrix
         adj_symmetric_index, adj_symmetric_weights = utils.to_symmetric(self.edge_index, self.edge_weight, self.n)

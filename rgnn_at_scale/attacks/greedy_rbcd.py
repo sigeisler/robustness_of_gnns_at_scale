@@ -14,19 +14,13 @@ class GreedyRBCD(PRBCD):
     """
 
     def __init__(self,
-                 adj: SparseTensor,
-                 X: torch.Tensor,
-                 labels: torch.Tensor,
-                 idx_attack: np.ndarray,
-                 model: MODEL_TYPE,
+                 *args,
                  epochs: int = 500,
-                 eps: float = 1e-7,
                  **kwargs):
 
-        super().__init__(model=model, X=X, adj=adj,
-                         labels=labels, idx_attack=idx_attack, eps=eps, **kwargs)
+        super().__init__(*args, **kwargs)
 
-        rows, cols, self.edge_weight = adj.coo()
+        rows, cols, self.edge_weight = self.adj.coo()
         self.edge_index = torch.stack([rows, cols], dim=0)
 
         self.edge_index = self.edge_index.to(self.device)

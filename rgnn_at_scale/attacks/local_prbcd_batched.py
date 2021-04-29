@@ -21,12 +21,13 @@ from rgnn_at_scale.data import CachedPPRMatrix
 class LocalBatchedPRBCD(LocalPRBCD):
 
     def __init__(self,
+                 *args,
                  ppr_matrix: Optional[SparseTensor] = None,
                  ppr_recalc_at_end: bool = False,
                  ppr_cache_params: Dict[str, Any] = None,
                  **kwargs):
 
-        super().__init__(**kwargs)
+        super().__init__(*args, **kwargs)
 
         assert type(self.surrogate_model) in BATCHED_PPR_MODELS.__args__, "LocalBatchedPRBCD Attack only supports PPRGo models"
 
@@ -62,7 +63,7 @@ class LocalBatchedPRBCD(LocalPRBCD):
         if type(model) in BATCHED_PPR_MODELS.__args__:
             return F.log_softmax(model.forward(self.X, None, ppr_scores=perturbed_graph), dim=-1)
         else:
-            return model(data=self.X.to(self.device), adj=perturbed_graph)[node_idx:node_idx + 1]
+            return model(data=self.X.to(self.device), adj=perturbed_graph.to(self.device))[node_idx:node_idx + 1]
 
     def sample_final_edges(self, node_idx: int, n_perturbations: int):
         if self.ppr_recalc_at_end:
@@ -127,3 +128,6 @@ class LocalBatchedPRBCD(LocalPRBCD):
             updated_adj = SparseTensor.from_edge_index(A_idx, A_weights, (self.n, self.n))
 
             return updated_adj.to_symmetric('max')
+
+    def __del__(self):
+        del self.ppr_matrix

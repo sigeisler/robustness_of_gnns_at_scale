@@ -22,6 +22,7 @@ class Attack(ABC):
                  idx_attack: np.ndarray,
                  model: MODEL_TYPE,
                  device: Union[str, int, torch.device],
+                 data_device: Union[str, int, torch.device],
                  loss_type: str = 'CE',  # 'CW', 'LeakyCW'  # 'CE', 'MCE', 'Margin'
                  **kwargs):
 
@@ -35,6 +36,7 @@ class Attack(ABC):
             assert model.jaccard_params is None, "GDC doesn't support a gradient w.r.t. the adjacency"
 
         self.device = device
+        self.data_device = device
         self.idx_attack = idx_attack
         self.loss_type = loss_type
 
@@ -45,10 +47,10 @@ class Attack(ABC):
 
         self.set_eval_model(model)
 
-        self.labels = labels.to(device)
+        self.labels = labels.to(self.data_device)
         self.labels_attack = self.labels[self.idx_attack]
-        self.X = X.to(device)
-        self.adj = adj.to(device)
+        self.X = X.to(self.data_device)
+        self.adj = adj.to(self.data_device)
 
         self.attr_adversary = self.X
         self.adj_adversary = self.adj
@@ -65,8 +67,8 @@ class Attack(ABC):
             self.adj_adversary = self.adj
 
     def set_pertubations(self, adj_perturbed, attr_perturbed):
-        self.adj_adversary = adj_perturbed.to(self.device)
-        self.attr_adversary = attr_perturbed.to(self.device)
+        self.adj_adversary = adj_perturbed.to(self.data_device)
+        self.attr_adversary = attr_perturbed.to(self.data_device)
 
     def get_pertubations(self):
         if isinstance(self.adj_adversary, torch.Tensor):
@@ -181,6 +183,7 @@ class SparseAttack(Attack):
                  idx_attack: np.ndarray,
                  model: MODEL_TYPE,
                  device: Union[str, int, torch.device],
+                 data_device: Union[str, int, torch.device],
                  loss_type: str = 'CE',  # 'CW', 'LeakyCW'  # 'CE', 'MCE', 'Margin'
                  **kwargs):
 
@@ -189,11 +192,11 @@ class SparseAttack(Attack):
         elif isinstance(adj, sp.csr_matrix):
             adj = SparseTensor.from_scipy(adj)
 
-        super().__init__(adj, X, labels, idx_attack, model, device, loss_type, **kwargs)
+        super().__init__(adj, X, labels, idx_attack, model, device, data_device, loss_type=loss_type, **kwargs)
 
         edge_index_rows, edge_index_cols, edge_weight = adj.coo()
-        self.edge_index = torch.stack([edge_index_rows, edge_index_cols], dim=0).to(self.device)
-        self.edge_weight = edge_weight.to(self.device)
+        self.edge_index = torch.stack([edge_index_rows, edge_index_cols], dim=0).to(self.data_device)
+        self.edge_weight = edge_weight.to(self.data_device)
         self.n = adj.size(0)
         self.d = X.shape[1]
 
@@ -232,6 +235,7 @@ class DenseAttack(Attack):
                  idx_attack: np.ndarray,
                  model: DenseGCN,
                  device: Union[str, int, torch.device],
+                 data_device: Union[str, int, torch.device],
                  loss_type: str = 'CE',  # 'CW', 'LeakyCW'  # 'CE', 'MCE', 'Margin'
                  **kwargs):
         assert isinstance(model, DenseGCN), "DenseAttacks can only attack the DenseGCN model"
@@ -240,6 +244,6 @@ class DenseAttack(Attack):
             adj = adj.to_dense()
 
         assert isinstance(adj,  torch.Tensor)
-        super().__init__(adj, X, labels, idx_attack, model, device, loss_type, **kwargs)
+        super().__init__(adj, X, labels, idx_attack, model, device, data_device, loss_type, **kwargs)
 
         self.n = adj.shape[0]

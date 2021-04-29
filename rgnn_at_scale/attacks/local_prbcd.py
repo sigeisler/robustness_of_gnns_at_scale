@@ -18,18 +18,12 @@ from rgnn_at_scale.models import MODEL_TYPE, BATCHED_PPR_MODELS
 from rgnn_at_scale.helper.utils import grad_with_checkpoint
 
 from rgnn_at_scale.attacks.base_attack import Attack, SparseLocalAttack
-from rgnn_at_scale.helper import utils
 
 
 class LocalPRBCD(SparseLocalAttack):
 
     def __init__(self,
-                 adj: Union[SparseTensor, torch.Tensor, sp.csr_matrix],
-                 X: torch.Tensor,
-                 labels: torch.Tensor,
-                 idx_attack: np.ndarray,
-                 model: MODEL_TYPE,
-                 device: Union[str, int, torch.device],
+                 *args,
                  loss_type: str = 'Margin',  # 'CW', 'LeakyCW'  # 'CE', 'MCE', 'Margin'
                  attack_labeled_nodes_only: bool = False,
                  lr_factor: float = 1.0,
@@ -44,7 +38,7 @@ class LocalPRBCD(SparseLocalAttack):
                  K: int = 20,
                  **kwargs):
 
-        super().__init__(adj, X, labels, idx_attack, model, device, loss_type, **kwargs)
+        super().__init__(*args, **kwargs)
 
         self.n_possible_edges = self.n * (self.n - 1) // 2
         self.attack_labeled_nodes_only = attack_labeled_nodes_only
@@ -150,9 +144,9 @@ class LocalPRBCD(SparseLocalAttack):
             perturbed_graph = self.adj
 
         if type(model) in BATCHED_PPR_MODELS.__args__:
-            return F.log_softmax(model.forward(self.X, perturbed_graph, ppr_idx=np.array([node_idx])), dim=-1)
+            return F.log_softmax(model.forward(self.X.to(self.device), perturbed_graph, ppr_idx=np.array([node_idx])), dim=-1)
         else:
-            return model(data=self.X.to(self.device), adj=perturbed_graph)[node_idx:node_idx + 1]
+            return model(data=self.X.to(self.device), adj=perturbed_graph.to(self.device))[node_idx:node_idx + 1]
 
     def sample_final_edges(self, node_idx: int, n_perturbations: int):
         perturbed_graph = self.sample_edges(node_idx, n_perturbations)

@@ -7,6 +7,7 @@ from typing import Any, Dict, Iterable, List, Union, Tuple
 import warnings
 
 import numpy as np
+import pandas as pd
 from ogb.nodeproppred import PygNodePropPredDataset
 import scipy.sparse as sp
 import sklearn
@@ -688,7 +689,7 @@ def prep_graph(name: str,
         logging.debug("Memory Usage after normalizing the graph")
         logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))
 
-        #adj = torch_sparse.SparseTensor.from_scipy(adj).coalesce()
+        adj = torch_sparse.SparseTensor.from_scipy(adj).coalesce()
 
         attr_matrix = data.x.to(device).numpy()
 
@@ -809,6 +810,9 @@ class CachedPPRMatrix:
                  ppr_normalization: str,
                  use_train_val_ppr: bool = True):
 
+        logging.info("Memory Usage before creating CachedPPRMatrix:")
+        logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
+
         self.adj = adj.to_scipy(layout="csr")
         self.ppr_cache_params = ppr_cache_params
         self.alpha = alpha
@@ -818,6 +822,7 @@ class CachedPPRMatrix:
 
         n = self.adj.shape[0]
         self.shape = (n, n)
+        self.storage = None
 
         self.storage_params = dict(dataset=self.ppr_cache_params["dataset"],
                                    alpha=self.alpha,
@@ -829,26 +834,76 @@ class CachedPPRMatrix:
                                    make_undirected=self.ppr_cache_params["make_undirected"],
                                    make_unweighted=self.ppr_cache_params["make_unweighted"])
 
+        logging.info("Memory Usage before loading CachedPPRMatrix from storage:")
+        logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
+
         if self.ppr_cache_params is not None:
             # late import to avoid circular import issue
             from rgnn_at_scale.helper.io import Storage
             self.storage = Storage(self.ppr_cache_params["data_artifact_dir"])
-
             stored_topk_ppr = self.storage.find_sparse_matrix(self.ppr_cache_params["data_storage_type"],
                                                               self.storage_params, find_first=True)
 
             self.ppr, _ = stored_topk_ppr[0] if len(stored_topk_ppr) == 1 else (None, None)
 
+        if self.ppr is None and use_train_val_ppr and self.storage is not None:
+            del self.storage_params["split_desc"]
+            stored_ppr_documents = self.storage.find_sparse_matrix(self.ppr_cache_params["data_storage_type"],
+                                                                   self.storage_params, return_documents_only=True)
+            if len(stored_ppr_documents) > 0:
+                df_documents = pd.DataFrame(list(map(lambda doc: doc["params"], stored_ppr_documents)))
+                df_documents["id"] = df_documents.index
+                df_documents["ppr_idx"] = df_documents["ppr_idx"].apply(lambda x: list(x))
+                df_cross = df_documents.merge(df_documents, how="cross", suffixes=[
+                    "_1", "_2"]).merge(df_documents, how="cross")
+
+                df_cross["joint_ppr_idx"] = df_cross["ppr_idx"] + df_cross["ppr_idx_1"] + df_cross["ppr_idx_2"]
+                df_cross["joint_ppr_unique"] = df_cross["joint_ppr_idx"].apply(lambda x: np.unique(x))
+                df_cross["joint_ppr_unique_len"] = df_cross["joint_ppr_unique"].apply(lambda x: len(x))
+                df_cross["joint_ppr_diff"] = df_cross["joint_ppr_idx"].apply(
+                    lambda x: len(x)) - df_cross["joint_ppr_unique_len"]
+
+                df_cross = df_cross.sort_values(['joint_ppr_unique_len', 'joint_ppr_diff'], ascending=[False, True])
+
+                doc_ids_to_read = list(df_cross.iloc[0][["id", "id_1", "id_2"]])
+
+                stored_pprs = []
+                for i in doc_ids_to_read:
+                    doc = stored_ppr_documents[i]
+                    path = self.storage._build_artifact_path(self.ppr_cache_params["data_storage_type"],
+                                                             doc.doc_id).replace(".pt", ".npz")
+                    sparse_matrix = sp.load_npz(path)
+                    stored_pprs.append((sparse_matrix, doc["params"]["ppr_idx"]))
+
+                logging.info("Memory Usage loading CachedPPRMatrix from storage:")
+                logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
+
+                self.ppr = sp.lil_matrix(self.shape, dtype=self.adj.dtype)
+                for stored_ppr, ppr_idx in stored_pprs:
+                    self.ppr[ppr_idx] = stored_ppr
+                    logging.info("Memory Usage loading CachedPPRMatrix from storage:")
+                    logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
+
+                self.ppr = self.ppr.tocsr()
+
         if self.ppr is None:
             self.ppr = sp.csr_matrix(self.shape, dtype=self.adj.dtype)
 
-        self.cached_rows = np.array([])
-
-    def load_from_storage(self):
-        pass
+        logging.info("Memory after loading CachedPPRMatrix from storage:")
+        logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
+        rows, _ = self.ppr.nonzero()
+        self.cached_rows = np.array(np.unique(rows))
 
     def save_to_storage(self):
-        pass
+        if self.storage is not None:
+            self.storage_params["split_desc"] = "attack"
+            rows, _ = self.ppr.nonzero()
+            self.storage_params["ppr_idx"] = np.unique(rows)
+            self.storage.save_sparse_matrix(self.ppr_cache_params["data_storage_type"],
+                                            self.storage_params,
+                                            self.ppr, ignore_duplicate=True)
+            logging.info("Memory after saving CachedPPRMatrix to storage:")
+            logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
 
     def _calc_ppr(self, rows: np.ndarray):
         if len(rows) > 0:
@@ -857,6 +912,8 @@ class CachedPPRMatrix:
             self.ppr[rows] = ppr_scores
             # make sure cached rows stays unique
             self.cached_rows = np.union1d(self.cached_rows, rows)
+            logging.info(f"Memory after calculating {len(rows)} ppr scores for CachedPPRMatrix")
+            logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
 
     def _get_uncached(self, row):
 
@@ -874,3 +931,6 @@ class CachedPPRMatrix:
         uncached_rows = self._get_uncached(row)
         self._calc_ppr(uncached_rows)
         return self.ppr[key]
+
+    def __del__(self):
+        self.save_to_storage()

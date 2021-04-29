@@ -21,12 +21,7 @@ FEATURE_MODES = ('symmetric_float', 'binary', 'sparse_pos')
 class GANG(SparseAttack):
 
     def __init__(self,
-                 adj: SparseTensor,
-                 X: torch.Tensor,
-                 labels: torch.Tensor,
-                 idx_attack: np.ndarray,
-                 model: MODEL_TYPE,
-                 device: Union[str, int, torch.device],
+                 *args,
                  display_step: int = 20,
                  node_budget: int = 500,
                  edge_budget: int = 500,
@@ -44,7 +39,7 @@ class GANG(SparseAttack):
                  do_synchronize: bool = False,
                  **kwargs):
 
-        super().__init__(adj, X, labels, idx_attack, model, device, **kwargs)
+        super().__init__(*args, **kwargs)
 
         self.display_step = display_step
         self.node_budget = node_budget
