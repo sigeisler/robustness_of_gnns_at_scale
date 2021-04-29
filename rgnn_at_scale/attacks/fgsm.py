@@ -63,15 +63,7 @@ class FGSM(DenseAttack):
         for i in range(n_perturbations):
             logits = self.surrogate_model.to(self.device)(self.X, self.adj_tmp)
 
-            if self.loss_type is not None:
-                loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
-            else:
-                not_yet_flipped_mask = logits[self.idx_attack].argmax(-1) == self.labels[self.idx_attack]
-                if self.stop_optimizing_if_label_flipped and not_yet_flipped_mask.sum() > 0:
-                    loss = F.cross_entropy(logits[self.idx_attack][not_yet_flipped_mask],
-                                           self.labels[self.idx_attack][not_yet_flipped_mask])
-                else:
-                    loss = F.cross_entropy(logits[self.idx_attack], self.labels[self.idx_attack])
+            loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
 
             gradient = torch.autograd.grad(loss, self.adj_tmp)[0]
             gradient[self.adj != self.adj_tmp] = 0

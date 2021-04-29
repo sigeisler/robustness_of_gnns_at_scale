@@ -459,7 +459,6 @@ extension/*
 kernels/build
 kernels/dist
 kernels/kernels.egg-info
-seml/*
 datasets/*
 train.sh
 runs/

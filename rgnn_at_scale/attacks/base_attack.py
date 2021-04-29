@@ -115,7 +115,7 @@ class Attack(ABC):
                 - logits[np.arange(logits.size(0)), best_non_target_class]
             )
             loss = -F.leaky_relu(margin, negative_slope=0.1).mean()
-        elif self.loss_type == 'tanhCW':
+        elif self.loss_type == 'tanhMargin':
             sorted = logits.argsort(-1)
             best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
             margin = (
@@ -123,6 +123,33 @@ class Attack(ABC):
                 - logits[np.arange(logits.size(0)), best_non_target_class]
             )
             loss = torch.tanh(-margin).mean()
+        elif self.loss_type == 'Margin':
+            sorted = logits.argsort(-1)
+            best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
+            margin = (
+                logits[np.arange(logits.size(0)), labels]
+                - logits[np.arange(logits.size(0)), best_non_target_class]
+            )
+            loss = -margin.mean()
+        elif self.loss_type.startswith('tanhMarginCW-'):
+            alpha = float(self.loss_type.split('-')[-1])
+            assert alpha >= 0, f'Alpha {alpha} must be greater or equal 0'
+            assert alpha <= 1, f'Alpha {alpha} must be less or equal 1'
+            sorted = logits.argsort(-1)
+            best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
+            margin = (
+                logits[np.arange(logits.size(0)), labels]
+                - logits[np.arange(logits.size(0)), best_non_target_class]
+            )
+            loss = (alpha * torch.tanh(-margin) - (1-alpha) * torch.clamp(margin, min=0)).mean()
+        elif self.loss_type == 'eluMargin':
+            sorted = logits.argsort(-1)
+            best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
+            margin = (
+                logits[np.arange(logits.size(0)), labels]
+                - logits[np.arange(logits.size(0)), best_non_target_class]
+            )
+            loss = -F.elu(margin).mean()
         elif self.loss_type == 'MCE':
             not_flipped = logits.argmax(-1) == labels
             loss = F.nll_loss(logits[not_flipped], labels[not_flipped])

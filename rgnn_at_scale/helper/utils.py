@@ -91,8 +91,8 @@ def calc_ppr_update(ppr: SparseTensor,
     num_nodes = ppr.size(0)
     assert ppr.size(1) == Ai.size(1), "shapes of ppr and adjacency must be the same"
     assert Ai[0, i].nnz() == 0, "The adjacency's must not have self loops"
-    assert (torch.logical_or(Ai.storage.value() == 1, Ai.storage.value() == 0)
-            ).all().item(), "The adjacency must be unweighted"
+    assert (torch.logical_or(Ai.storage.value() == 1, Ai.storage.value() == 0)).all().item(), \
+        "The adjacency must be unweighted"
     assert p[0, i].sum() == 0, "Self loops must not be perturbed"
     assert torch.all(p.storage._value > 0), "For technical reasons all values in p must be greater than 0"
 

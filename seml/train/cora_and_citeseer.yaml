@@ -1,7 +1,6 @@
 seml:
   name: rgnn_at_scale_train
-  db_collection: rgnn_at_scale_train
-  executable: experiment_train.py
+  executable: experiments/experiment_train.py
   conda_environment: rgnn_at_scale
   project_root_dir: ../..
   output_dir: seml/train/output
@@ -23,6 +22,7 @@ fixed:
   artifact_dir: cache
   model_storage_type: pretrained
   device: 0
+  data_device: 0
 
 grid:
   dataset:
@@ -34,7 +34,7 @@ grid:
   binary_attr:
     type: choice
     options:
-      - True
+      # - True
       - False
 
   seed:
@@ -43,35 +43,47 @@ grid:
       - 0
       - 1
       - 5
-      - 42
-      - 100
+      # - 42
+      # - 100
 
-# gcn:
-#   fixed:
-#     model_params:
-#       label: Vanilla GCN
-#       model: GCN
-#       do_cache_adj_prep: True
-#       n_filters: 64
-#       dropout: 0.5
-#       svd_params: None
-#       jaccard_params: None
-#       gdc_params: None
+gcn:
+  fixed:
+    model_params:
+      label: Vanilla GCN
+      model: GCN
+      do_cache_adj_prep: True
+      n_filters: 64
+      dropout: 0.5
+      svd_params: None
+      jaccard_params: None
+      gdc_params: None
 
-# gdc:
-#   fixed:
-#     model_params:
-#       label: Vanilla GDC
-#       model: GCN
-#       do_cache_adj_prep: True
-#       n_filters: 64
-#       dropout: 0.5
-#       svd_params: None
-#       jaccard_params: None
-#       gdc_params:
-#           alpha: 0.15
-#           k: 64
-#           # use_cpu: False
+dense_gcn:
+  fixed:
+    model_params:
+      label: Vanilla Dense GCN
+      model: DenseGCN
+      do_cache_adj_prep: True
+      n_filters: 64
+      dropout: 0.5
+      svd_params: None
+      jaccard_params: None
+      gdc_params: None
+
+gdc:
+  fixed:
+    model_params:
+      label: Vanilla GDC
+      model: GCN
+      do_cache_adj_prep: True
+      n_filters: 64
+      dropout: 0.5
+      svd_params: None
+      jaccard_params: None
+      gdc_params:
+          alpha: 0.15
+          k: 64
+          # use_cpu: False
 
 # soft_medoid_gdc_t1_0:
 #   fixed:
@@ -92,24 +104,24 @@ grid:
 #       jaccard_params: None
 #       do_cache_adj_prep: True
 
-# soft_medoid_gdc_t0_5:
-#   fixed:
-#     model_params:
-#       label: Soft Medoid GDC (T=0.5)
-#       model: RGNN
-#       dropout: 0.5
-#       n_filters: 64
-#       mean: soft_k_medoid
-#       mean_kwargs:
-#           k: 64
-#           temperature: 0.5
-#           with_weight_correction: True
-#       gdc_params:
-#           alpha: 0.15
-#           k: 64
-#       svd_params: None
-#       jaccard_params: None
-#       do_cache_adj_prep: True
+soft_medoid_gdc_t0_5:
+  fixed:
+    model_params:
+      label: Soft Medoid GDC (T=0.5)
+      model: RGNN
+      dropout: 0.5
+      n_filters: 64
+      mean: soft_k_medoid
+      mean_kwargs:
+          k: 64
+          temperature: 0.5
+          with_weight_correction: True
+      gdc_params:
+          alpha: 0.15
+          k: 64
+      svd_params: None
+      jaccard_params: None
+      do_cache_adj_prep: True
 
 # soft_medoid_gdc_t0_2:
 #   fixed:
@@ -181,39 +193,39 @@ soft_median_gdc_t0_2:
       jaccard_params: None
       do_cache_adj_prep: True
 
-# svd:
-#   fixed:
-#     model_params:
-#       label: SVD GCN
-#       model: GCN
-#       do_cache_adj_prep: True
-#       n_filters: 64
-#       dropout: 0.5
-#       svd_params: 
-#         rank: 50
-#       jaccard_params: None
-#       gdc_params: None
+svd:
+  fixed:
+    model_params:
+      label: SVD GCN
+      model: GCN
+      do_cache_adj_prep: True
+      n_filters: 64
+      dropout: 0.5
+      svd_params: 
+        rank: 50
+      jaccard_params: None
+      gdc_params: None
 
-# jaccard:
-#   fixed:
-#     model_params:
-#       label: Jaccard GCN
-#       model: GCN
-#       do_cache_adj_prep: True
-#       n_filters: 64
-#       dropout: 0.5
-#       svd_params: None
-#       jaccard_params: 
-#         threshold: 0.01
-#       gdc_params: None
+jaccard:
+  fixed:
+    model_params:
+      label: Jaccard GCN
+      model: GCN
+      do_cache_adj_prep: True
+      n_filters: 64
+      dropout: 0.5
+      svd_params: None
+      jaccard_params: 
+        threshold: 0.01
+      gdc_params: None
 
-# rgcn:
-#   fixed:
-#     model_params:
-#       label: RGCN
-#       model: RGCN
-#       do_cache_adj_prep: True
-#       n_filters: 64
-#       svd_params: None
-#       jaccard_params: None
-#       gdc_params: None
+rgcn:
+  fixed:
+    model_params:
+      label: RGCN
+      model: RGCN
+      do_cache_adj_prep: True
+      n_filters: 64
+      svd_params: None
+      jaccard_params: None
+      gdc_params: None
