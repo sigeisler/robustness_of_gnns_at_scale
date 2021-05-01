@@ -144,6 +144,22 @@ class Attack(ABC):
                 - logits[np.arange(logits.size(0)), best_non_target_class]
             )
             loss = (alpha * torch.tanh(-margin) - (1-alpha) * torch.clamp(margin, min=0)).mean()
+        elif self.loss_type.startswith('tanhMarginMCE-'):
+            alpha = float(self.loss_type.split('-')[-1])
+            assert alpha >= 0, f'Alpha {alpha} must be greater or equal 0'
+            assert alpha <= 1, f'Alpha {alpha} must be less or equal 1'
+
+            sorted = logits.argsort(-1)
+            best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
+            margin = (
+                logits[np.arange(logits.size(0)), labels]
+                - logits[np.arange(logits.size(0)), best_non_target_class]
+            )
+
+            not_flipped = logits.argmax(-1) == labels
+            loss = F.nll_loss(logits[not_flipped], labels[not_flipped])
+
+            loss = alpha * torch.tanh(-margin).mean() - (1-alpha) * F.nll_loss(logits[not_flipped], labels[not_flipped])
         elif self.loss_type == 'eluMargin':
             sorted = logits.argsort(-1)
             best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]

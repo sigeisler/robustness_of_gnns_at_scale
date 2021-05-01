@@ -98,8 +98,8 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
     
     for epsilon in epsilons:
         try:
-            adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels,
-                                      model=surrogate_model, idx_attack=idx_test, device=device, **attack_params)
+            adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels, model=surrogate_model,
+                                      idx_attack=idx_test, device=device, data_device=data_device, **attack_params)
         except Exception as e:
             logging.exception(e)
             logging.error(f"Failed to instantiate attack {attack} for model '{surrogate_model}'.")
@@ -110,7 +110,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
 
         for model, hyperparams in models_and_hyperparams:
             current_label = hyperparams["label"]
-            logging.error(f"Evaluate  {attack} for model '{current_label}'.")
+            logging.info(f"Evaluate  {attack} for model '{current_label}'.")
             adversary.set_eval_model(model)
             logits, accuracy = adversary.evaluate_global(idx_test)
 

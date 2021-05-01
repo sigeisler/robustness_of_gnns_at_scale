@@ -108,7 +108,10 @@ class GreedyRBCD(PRBCD):
             del loss
             del gradient
 
+        edge_index, edge_weight = self.get_modified_adj(is_final=True)
+        edge_weight = edge_weight.round()
+        edge_mask = edge_weight == 1
         self.adj_adversary = SparseTensor.from_edge_index(
-            edge_index, edge_weight, (self.n, self.n)
+            edge_index[:, edge_mask], edge_weight[edge_mask], (self.n, self.n)
         ).coalesce().detach()
         self.attr_adversary = self.X

@@ -280,6 +280,7 @@ class GCN(nn.Module):
                 **self.svd_params
             )
             self._deactivate_normalization()
+            self.do_normalize_adj_once = False
             edge_idx, edge_weight = adj.indices(), adj.values()
             del adj
         elif self.jaccard_params is not None:

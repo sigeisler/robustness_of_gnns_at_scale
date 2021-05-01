@@ -49,7 +49,7 @@ class PRBCD(SparseAttack):
                  K: int = 20,
                  **kwargs):
 
-        super().__init__(adj, X, labels, idx_attack, model, device, loss_type, **kwargs)
+        super().__init__(adj, X, labels, idx_attack, model, device=device, loss_type=loss_type, **kwargs)
 
         self.n_possible_edges = self.n * (self.n - 1) // 2
         self.keep_heuristic = keep_heuristic
