@@ -34,7 +34,7 @@ grid:
     type: choice
     options:
       - cora_ml
-      #- citeseer
+      - citeseer
   seed:
     type: choice
     options:
@@ -63,9 +63,18 @@ fgsm:
             - tanhMargin
             - Margin
             - eluMargin
-            - tanhMarginCW-0.25
-            - tanhMarginCW-0.5
-            - tanhMarginCW-0.75
+            # - tanhMarginCW-0.25
+            # - tanhMarginCW-0.5
+            # - tanhMarginCW-0.625
+            # - tanhMarginCW-0.75
+            # - tanhMarginCW-0.9
+            # - tanhMarginCW-0.95
+            # - tanhMarginMCE-0.25
+            - tanhMarginMCE-0.5
+            # - tanhMarginMCE-0.625
+            # - tanhMarginMCE-0.75
+            # - tanhMarginMCE-0.9
+            # - tanhMarginMCE-0.95
 
 pgd:
   fixed:
@@ -85,9 +94,26 @@ pgd:
             - tanhMargin
             - Margin
             - eluMargin
-            - tanhMarginCW-0.25
-            - tanhMarginCW-0.5
-            - tanhMarginCW-0.75
+            # - tanhMarginCW-0.25
+            # - tanhMarginCW-0.5
+            # - tanhMarginCW-0.625
+            # - tanhMarginCW-0.75
+            # - tanhMarginCW-0.9
+            # - tanhMarginCW-0.95
+            # - tanhMarginMCE-0.25
+            # - tanhMarginMCE-0.5
+            # - tanhMarginMCE-0.625
+            - tanhMarginMCE-0.75
+            # - tanhMarginMCE-0.9
+            # - tanhMarginMCE-0.95
+        base_lr: 
+          type: choice
+          options:
+            # - 1
+            - 1e-1
+            # - 5e-2
+            # - 1e-2
+            # - 1e-3
 
 greedy_rbcd:
   fixed:

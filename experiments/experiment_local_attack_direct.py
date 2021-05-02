@@ -88,8 +88,8 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
         model_label = hyperparams["label"]
 
         try:
-            adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels,
-                                      model=model, idx_attack=idx_test, device=device, data_device=data_device, **attack_params)
+            adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels, model=model,
+                                      idx_attack=idx_test, device=device, data_device=data_device, **attack_params)
         except Exception as e:
             logging.exception(e)
             logging.error(f"Failed to instantiate attack {attack} for model '{model_label}'.")

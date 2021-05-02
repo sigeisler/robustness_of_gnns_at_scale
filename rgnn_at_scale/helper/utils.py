@@ -398,8 +398,10 @@ def get_ppr_matrix(adjacency_matrix: torch.Tensor,
     """
     dim = -1
 
+    if k < 1:
+        k = adjacency_matrix.shape[0]
+
     assert alpha > 0 and alpha < 1
-    assert k >= 1
     if use_cpu:
         device = adjacency_matrix.device
         adjacency_matrix = adjacency_matrix.cpu()
@@ -429,10 +431,13 @@ def get_ppr_matrix(adjacency_matrix: torch.Tensor,
 
     row_idx = torch.arange(adjacency_matrix.size(0), device=adjacency_matrix.device)[:, None]\
         .expand(adjacency_matrix.size(0), int(k))
+    
     return torch.sparse.FloatTensor(
         torch.stack((row_idx.flatten(), selected_idx.flatten())),
         selected_vals.flatten()
     ).coalesce()
+
+
 
 
 @ numba.njit(cache=True, locals={'_val': numba.float32, 'res': numba.float32, 'res_vnode': numba.float32})

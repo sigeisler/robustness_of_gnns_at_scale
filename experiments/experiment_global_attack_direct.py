@@ -41,18 +41,18 @@ def config():
     normalize_attr = False
     seed = 0
 
-    attack = 'DICE'
+    attack = 'PRBCD'
     attack_params = {}
     epsilons = [0.01]
 
     artifact_dir = 'cache_debug'
-    model_storage_type = 'victim_cora_2'
+    model_storage_type = 'pretrained_direct'
     pert_adj_storage_type = 'evasion_attack_adj'
     pert_attr_storage_type = 'evasion_attack_attr'
     model_label = "Vanilla GCN"
 
-    device = "cpu"
-    data_device = "cpu"
+    device = 0
+    data_device = 0
 
     display_steps = 10
 
@@ -87,8 +87,8 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
     for model, hyperparams in models_and_hyperparams:
         model_label = hyperparams["label"]
         try:
-            adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels,
-                                      model=model, idx_attack=idx_test, device=device, **attack_params)
+            adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels, model=model,
+                                      idx_attack=idx_test, device=device, data_device=data_device, **attack_params)
         except Exception as e:
             logging.exception(e)
             logging.error(f"Failed to instantiate attack {attack} for model '{model_label}'.")

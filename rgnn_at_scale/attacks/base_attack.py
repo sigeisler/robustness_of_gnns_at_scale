@@ -31,7 +31,11 @@ class Attack(ABC):
             warnings.warn("The attack will fail if the gradient w.r.t. the adjacency can't be computed.")
 
         if isinstance(model, GCN):
-            assert model.gdc_params is None, "GDC doesn't support a gradient w.r.t. the adjacency"
+            assert (
+                model.gdc_params is None
+                or 'use_cpu' not in model.gdc_params
+                or not model.gdc_params['use_cpu']
+            ), "GDC doesn't support a gradient w.r.t. the adjacency"
             assert model.svd_params is None, "GDC doesn't support a gradient w.r.t. the adjacency"
             assert model.jaccard_params is None, "GDC doesn't support a gradient w.r.t. the adjacency"
 
@@ -159,7 +163,7 @@ class Attack(ABC):
             not_flipped = logits.argmax(-1) == labels
             loss = F.nll_loss(logits[not_flipped], labels[not_flipped])
 
-            loss = alpha * torch.tanh(-margin).mean() - (1-alpha) * F.nll_loss(logits[not_flipped], labels[not_flipped])
+            loss = alpha * torch.tanh(-margin).mean() + (1-alpha) * F.nll_loss(logits[not_flipped], labels[not_flipped])
         elif self.loss_type == 'eluMargin':
             sorted = logits.argsort(-1)
             best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]

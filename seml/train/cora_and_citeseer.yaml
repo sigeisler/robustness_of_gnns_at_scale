@@ -193,16 +193,29 @@ soft_median_gdc_t0_2:
       jaccard_params: None
       do_cache_adj_prep: True
 
-svd:
+svd_rank50:
   fixed:
     model_params:
-      label: SVD GCN
+      label: SVD GCN (rank=50)
       model: GCN
       do_cache_adj_prep: True
       n_filters: 64
       dropout: 0.5
       svd_params: 
         rank: 50
+      jaccard_params: None
+      gdc_params: None
+
+svd_rank100:
+  fixed:
+    model_params:
+      label: SVD GCN (rank=100)
+      model: GCN
+      do_cache_adj_prep: True
+      n_filters: 64
+      dropout: 0.5
+      svd_params: 
+        rank: 100
       jaccard_params: None
       gdc_params: None
 

@@ -234,6 +234,10 @@ class GCN(nn.Module):
             edge_idx = torch.stack([edge_idx_rows, edge_idx_cols], dim=0)
         else:
             x, edge_idx, edge_weight = data, adj._indices(), adj._values()
+
+        if edge_weight is None:
+            edge_weight = torch.ones_like(edge_idx[0], dtype=torch.float32)
+
         return x, edge_idx, edge_weight
 
     def release_cache(self):
@@ -265,9 +269,7 @@ class GCN(nn.Module):
                 )
             else:
                 adj = get_ppr_matrix(
-                    torch.sparse.FloatTensor(edge_idx, torch.ones_like(edge_idx[0], dtype=torch.float32)),
-                    **self.gdc_params,
-                    normalize_adjacency_matrix=True
+                    torch.sparse.FloatTensor(edge_idx, edge_weight), **self.gdc_params, normalize_adjacency_matrix=True
                 )
                 edge_idx, edge_weight = adj.indices(), adj.values()
                 del adj

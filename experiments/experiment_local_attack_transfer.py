@@ -113,8 +113,8 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
         #tmp_epsilons.insert(0, 0)
         for eps in tmp_epsilons:
             try:
-                adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels,
-                                          model=surrogate_model, idx_attack=idx_test, device=device, **attack_params)
+                adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels, model=model,
+                                          idx_attack=idx_test, device=device, data_device=data_device, **attack_params)
             except Exception as e:
                 logging.exception(e)
                 logging.error(f"Failed to instantiate attack {attack} for model '{surrogate_model}'.")
