@@ -2,7 +2,6 @@ seml:
   name: rgnn_at_scale_train
   db_collection: rgnn_at_scale_train
   executable: experiments/experiment_train.py
-  conda_environment: rgnn_at_scale
   project_root_dir: ../..
   output_dir: seml/train/output
 

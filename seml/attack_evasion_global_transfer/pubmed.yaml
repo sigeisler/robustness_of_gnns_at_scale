@@ -1,7 +1,6 @@
 seml:
   name: rgnn_at_scale_attack_evasion_transfer
   executable: experiments/experiment_attack_evasion_transfer.py
-  conda_environment: rgnn_at_scale
   project_root_dir: ../..
   output_dir: seml/attack_evasion_transfer/output
 
