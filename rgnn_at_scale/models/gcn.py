@@ -237,6 +237,9 @@ class GCN(nn.Module):
 
         if edge_weight is None:
             edge_weight = torch.ones_like(edge_idx[0], dtype=torch.float32)
+        
+        if edge_weight.dtype != torch.float32:
+            edge_weight = edge_weight.float()
 
         return x, edge_idx, edge_weight
 
