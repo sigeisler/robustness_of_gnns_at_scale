@@ -74,7 +74,7 @@ class LocalPRBCD(SparseLocalAttack):
 
         for epoch in tqdm(range(self.epochs + self.fine_tune_epochs)):
             self.modified_edge_weight_diff.requires_grad = True
-            perturbed_graph = self.perturbe_graph(node_idx)
+            perturbed_graph = self.perturb_graph(node_idx)
 
             if self.do_synchronize:
                 torch.cuda.empty_cache()
@@ -101,7 +101,7 @@ class LocalPRBCD(SparseLocalAttack):
                     n_perturbations, self.modified_edge_weight_diff, self.eps
                 )
 
-                perturbed_graph = self.perturbe_graph(node_idx)
+                perturbed_graph = self.perturb_graph(node_idx)
                 logits = self.get_surrogate_logits(node_idx, perturbed_graph)
                 classification_statistics = LocalPRBCD.classification_statistics(logits, self.labels[node_idx])
                 if epoch % self.display_step == 0:
@@ -163,7 +163,7 @@ class LocalPRBCD(SparseLocalAttack):
             return torch.tensor([])
         return self.perturbed_edges
 
-    def perturbe_graph(self, node_idx: int) -> SparseTensor:
+    def perturb_graph(self, node_idx: int) -> SparseTensor:
 
         if self.attack_labeled_nodes_only:
             current_search_space = torch.tensor(self.idx_attack, device=self.device)[self.current_search_space]
@@ -308,7 +308,7 @@ class LocalPRBCD(SparseLocalAttack):
                         self.modified_edge_weight_diff == 1
                     ].to(self.device)
 
-                    perturbed_graph = self.perturbe_graph(node_idx)
+                    perturbed_graph = self.perturb_graph(node_idx)
                     logits = self.get_surrogate_logits(node_idx, perturbed_graph)
                     margin = LocalPRBCD.classification_statistics(logits, self.labels[node_idx])['margin']
                     if best_margin > margin:
@@ -318,5 +318,5 @@ class LocalPRBCD(SparseLocalAttack):
             self.modified_edge_weight_diff = best_weights.to(self.device).float()
             self.current_search_space = best_search_space.to(self.device).long()
 
-            perturbed_graph = self.perturbe_graph(node_idx)
+            perturbed_graph = self.perturb_graph(node_idx)
         return perturbed_graph
