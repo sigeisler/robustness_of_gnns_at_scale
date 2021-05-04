@@ -1,0 +1,79 @@
+seml:
+  name: rgnn_at_scale_attack_evasion_global_direct
+  executable: experiments/experiment_global_attack_direct.py
+  project_root_dir: ../..
+  output_dir: seml/attack_evasion_global_direct/output
+
+slurm:
+  experiments_per_job: 1
+  sbatch_options:
+    gres: gpu:1       # num GPUs
+    mem: 4G          # memory
+    cpus-per-task: 4  # num cores
+    time: 0-01:00     # max time, D-HH:MM
+    #qos: interactive
+
+
+fixed:
+  data_dir: datasets/
+  epsilons: [0, 0.01, 0.05, 0.1]
+  artifact_dir: cache
+  pert_adj_storage_type: evasion_global_adj
+  pert_attr_storage_type: evasion_global_attr
+  model_storage_type: pretrained_direct
+  device: 0
+  data_device: 0
+  make_unweighted: True
+  make_undirected: True
+  normalize: False
+  normalize_attr: False
+
+grid:
+  dataset:
+    type: choice
+    options:
+      - cora_ml
+      - citeseer
+  seed:
+    type: choice
+    options:
+      - 0
+      - 1
+      - 5
+      # - 42
+      # - 100
+
+greedy_rbcd:
+  fixed:
+    attack: GreedyRBCD
+    surrogate_model_label: Vanilla GCN
+  grid: 
+    attack_params:
+      type: parameter_collection
+      params:
+        loss_type: 
+          type: choice
+          options:
+            - CE
+            - MCE
+
+prbcd:
+  fixed:
+    binary_attr: False
+    attack: PRBCD
+    surrogate_model_label: Vanilla GCN
+    attack_params:
+      epochs: 400
+      fine_tune_epochs: 100
+      keep_heuristic: WeightOnly
+      search_space_size: 1_000_000
+      do_synchronize: True
+  grid: 
+    attack_params:
+      type: parameter_collection
+      params:
+        loss_type: 
+          type: choice
+          options:
+            - CE
+            - tanhMargin

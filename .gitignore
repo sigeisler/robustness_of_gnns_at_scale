@@ -455,6 +455,7 @@ datasets/*
 # Local
 cache_debug
 data
+datasets
 cache_debug/*
 cache
 extension/*

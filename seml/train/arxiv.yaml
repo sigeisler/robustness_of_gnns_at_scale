@@ -106,28 +106,6 @@ soft_medoid_gdc_t5:
       jaccard_params: None
       with_batch_norm: True
 
-# soft_medoid_gdc_t50:
-#   fixed:
-#     model_params:
-#       label: Soft Medoid GDC (T=50.0)
-#       model: RGNN
-#       dropout: 0.5
-#       n_filters: 64
-#       mean: soft_k_medoid
-#       mean_kwargs:
-#           k: 64
-#           temperature: 50
-#       gdc_params:
-#           alpha: 0.1
-#           k: 64
-#           use_cpu: True
-#       do_checkpoint: True
-#       do_normalize_adj_once: True
-#       n_chunks: 32
-#       svd_params: None
-#       jaccard_params: None
-#       with_batch_norm: True
-
 soft_median_gdc_t0_2:
   fixed:
     model_params:
@@ -211,24 +189,4 @@ soft_median_gdc_t5_0:
       svd_params: None
       jaccard_params: None
       with_batch_norm: True
-
-# soft_median_gdc_t50:
-#   fixed:
-#     model_params:
-#       label: Soft Median GDC (T=50.0)
-#       model: RGNN
-#       dropout: 0.5
-#       n_filters: [256, 256]
-#       mean: soft_median
-#       mean_kwargs:
-#           temperature: 50
-#       gdc_params:
-#           alpha: 0.1
-#           k: 64
-#           use_cpu: True
-#       do_checkpoint: True
-#       do_normalize_adj_once: True
-#       n_chunks: 10
-#       svd_params: None
-#       jaccard_params: None
-#       with_batch_norm: True
+      
