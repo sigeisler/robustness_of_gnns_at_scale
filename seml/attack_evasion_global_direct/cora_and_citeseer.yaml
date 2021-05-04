@@ -10,7 +10,7 @@ slurm:
     gres: gpu:1       # num GPUs
     mem: 4G          # memory
     cpus-per-task: 4  # num cores
-    time: 0-01:00     # max time, D-HH:MM
+    time: 0-08:00     # max time, D-HH:MM
     #qos: interactive
 
 
@@ -54,7 +54,6 @@ greedy_rbcd:
         loss_type: 
           type: choice
           options:
-            - CE
             - MCE
 
 prbcd:
@@ -75,5 +74,4 @@ prbcd:
         loss_type: 
           type: choice
           options:
-            - CE
             - tanhMargin

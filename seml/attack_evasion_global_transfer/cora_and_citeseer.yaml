@@ -126,7 +126,7 @@ greedy_rbcd:
         loss_type: 
           type: choice
           options:
-            - CE
+            # - CE
             - MCE
 
 prbcd:
@@ -147,7 +147,7 @@ prbcd:
         loss_type: 
           type: choice
           options:
-            - CE
+            # - CE
             - tanhMargin
 
 # gang:
