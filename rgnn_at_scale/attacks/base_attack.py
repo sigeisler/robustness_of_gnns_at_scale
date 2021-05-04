@@ -202,9 +202,9 @@ class Attack(ABC):
         return values
 
     @staticmethod
-    def bisection(pos_modified_edge_weight_diff, a, b, n_perturbations, epsilon=1e-5, iter_max=1e5):
+    def bisection(edge_weights, a, b, n_perturbations, epsilon=1e-5, iter_max=1e5):
         def func(x):
-            return torch.clamp(pos_modified_edge_weight_diff - x, 0, 1).sum() - n_perturbations
+            return torch.clamp(edge_weights - x, 0, 1).sum() - n_perturbations
 
         miu = a
         for i in range(int(iter_max)):
