@@ -24,10 +24,9 @@ class LocalPRBCD(SparseLocalAttack):
 
     def __init__(self,
                  *args,
-                 loss_type: str = 'Margin',  # 'CW', 'LeakyCW'  # 'CE', 'MCE', 'Margin'
+                 loss_type: str = 'Margin',
                  attack_labeled_nodes_only: bool = False,
                  lr_factor: float = 1.0,
-                 lr_n_perturbations_factor: float = 0.1,
                  display_step: int = 20,
                  epochs: int = 400,
                  fine_tune_epochs: int = 100,
@@ -40,10 +39,10 @@ class LocalPRBCD(SparseLocalAttack):
 
         super().__init__(*args, **kwargs)
 
+        self.loss_type = loss_type
         self.n_possible_edges = self.n * (self.n - 1) // 2
         self.attack_labeled_nodes_only = attack_labeled_nodes_only
 
-        self.lr_n_perturbations_factor = lr_n_perturbations_factor
         self.display_step = display_step
         self.epochs = epochs
         self.fine_tune_epochs = fine_tune_epochs

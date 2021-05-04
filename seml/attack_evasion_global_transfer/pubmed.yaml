@@ -30,6 +30,7 @@ fixed:
   pert_attr_storage_type: evasion_transfer_attack_attr
   model_storage_type: pretrained
   device: 0
+  data_device: 0 
   binary_attr: False
 
 grid:
