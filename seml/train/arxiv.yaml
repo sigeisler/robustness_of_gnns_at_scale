@@ -1,8 +1,6 @@
 seml:
   name: rgnn_at_scale_train
-  db_collection: rgnn_at_scale_train
-  executable: experiment_train.py
-  conda_environment: rgnn_at_scale
+  executable: experiments/experiment_train.py
   project_root_dir: ../..
   output_dir: seml/train/output
 
@@ -23,9 +21,10 @@ fixed:
   artifact_dir: cache
   model_storage_type: pretrained
   device: 0
+  data_device: 0 
+  binary_attr: False
 
   dataset: ogbn-arxiv
-  binary_attr: False
 
 grid:      
   seed:
@@ -105,28 +104,6 @@ soft_medoid_gdc_t5:
       svd_params: None
       jaccard_params: None
       with_batch_norm: True
-
-# soft_medoid_gdc_t50:
-#   fixed:
-#     model_params:
-#       label: Soft Medoid GDC (T=50.0)
-#       model: RGNN
-#       dropout: 0.5
-#       n_filters: 64
-#       mean: soft_k_medoid
-#       mean_kwargs:
-#           k: 64
-#           temperature: 50
-#       gdc_params:
-#           alpha: 0.1
-#           k: 64
-#           use_cpu: True
-#       do_checkpoint: True
-#       do_normalize_adj_once: True
-#       n_chunks: 32
-#       svd_params: None
-#       jaccard_params: None
-#       with_batch_norm: True
 
 soft_median_gdc_t0_2:
   fixed:
@@ -211,24 +188,3 @@ soft_median_gdc_t5_0:
       svd_params: None
       jaccard_params: None
       with_batch_norm: True
-
-# soft_median_gdc_t50:
-#   fixed:
-#     model_params:
-#       label: Soft Median GDC (T=50.0)
-#       model: RGNN
-#       dropout: 0.5
-#       n_filters: [256, 256]
-#       mean: soft_median
-#       mean_kwargs:
-#           temperature: 50
-#       gdc_params:
-#           alpha: 0.1
-#           k: 64
-#           use_cpu: True
-#       do_checkpoint: True
-#       do_normalize_adj_once: True
-#       n_chunks: 10
-#       svd_params: None
-#       jaccard_params: None
-#       with_batch_norm: True

@@ -36,8 +36,7 @@ class PRBCD(SparseAttack):
                  loss_type: str = 'CE',  # 'CW', 'LeakyCW'  # 'CE', 'MCE', 'Margin'
                  keep_heuristic: str = 'WeightOnly',  # 'InvWeightGradient' 'Gradient', 'WeightOnly'
                  keep_weight: float = .1,
-                 lr_n_perturbations_factor: float = 0.1,
-                 lr_factor: float = 1,
+                 lr_factor: float = 100,
                  display_step: int = 20,
                  epochs: int = 400,
                  fine_tune_epochs: int = 100,
@@ -49,12 +48,11 @@ class PRBCD(SparseAttack):
                  K: int = 20,
                  **kwargs):
 
-        super().__init__(adj, X, labels, idx_attack, model, device, loss_type, **kwargs)
+        super().__init__(adj, X, labels, idx_attack, model, device=device, loss_type=loss_type, **kwargs)
 
         self.n_possible_edges = self.n * (self.n - 1) // 2
         self.keep_heuristic = keep_heuristic
         self.keep_weight = keep_weight
-        self.lr_n_perturbations_factor = lr_n_perturbations_factor
         self.display_step = display_step
         self.epochs = epochs
         self.fine_tune_epochs = fine_tune_epochs
@@ -70,11 +68,7 @@ class PRBCD(SparseAttack):
         self.modified_edge_index: torch.Tensor = None
         self.modified_edge_weight_diff: torch.Tensor = None
 
-        if self.loss_type == 'CW':
-            self.lr_factor = .5 * lr_factor
-        else:
-            self.lr_factor = 10 * lr_factor
-        self.lr_factor *= max(math.log2(self.n_possible_edges / self.search_space_size), 1.)
+        self.lr_factor = lr_factor * max(math.log2(self.n_possible_edges / self.search_space_size), 1.)
 
     def _attack(self, n_perturbations, **kwargs):
         """Perform attack (`n_perturbations` is increasing as it was a greedy attack).
@@ -311,7 +305,7 @@ class PRBCD(SparseAttack):
         return edge_index, edge_weight
 
     def update_edge_weights(self, n_perturbations: int, epoch: int, gradient: torch.Tensor):
-        lr_factor = n_perturbations / self.n / 2 / self.lr_n_perturbations_factor * self.lr_factor
+        lr_factor = n_perturbations / self.n / 2 * self.lr_factor
         lr = lr_factor / np.sqrt(max(0, epoch - self.epochs) + 1)
         self.modified_edge_weight_diff.data.add_(lr * gradient)
 

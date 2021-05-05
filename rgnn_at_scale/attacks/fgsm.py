@@ -29,14 +29,10 @@ class FGSM(DenseAttack):
         Model to be attacked.
     """
 
-    def __init__(self,
-                 *args,
-                 stop_optimizing_if_label_flipped: bool = False,
-                 **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.adj_tmp = self.adj.clone().requires_grad_(True)
-        self.stop_optimizing_if_label_flipped = stop_optimizing_if_label_flipped
+        self.adj_perturbed = self.adj.clone().requires_grad_(True)
         self.n_perturbations = 0
 
     def _attack(self, n_perturbations: int):
@@ -55,21 +51,13 @@ class FGSM(DenseAttack):
         self.n_perturbations += n_perturbations
 
         for i in range(n_perturbations):
-            logits = self.surrogate_model.to(self.device)(self.X, self.adj_tmp)
+            logits = self.surrogate_model.to(self.device)(self.X, self.adj_perturbed)
 
-            if self.loss_type is not None:
-                loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
-            else:
-                not_yet_flipped_mask = logits[self.idx_attack].argmax(-1) == self.labels[self.idx_attack]
-                if self.stop_optimizing_if_label_flipped and not_yet_flipped_mask.sum() > 0:
-                    loss = F.cross_entropy(logits[self.idx_attack][not_yet_flipped_mask],
-                                           self.labels[self.idx_attack][not_yet_flipped_mask])
-                else:
-                    loss = F.cross_entropy(logits[self.idx_attack], self.labels[self.idx_attack])
+            loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
 
-            gradient = torch.autograd.grad(loss, self.adj_tmp)[0]
-            gradient[self.adj != self.adj_tmp] = 0
-            gradient *= 2 * (0.5 - self.adj_tmp)
+            gradient = torch.autograd.grad(loss, self.adj_perturbed)[0]
+            gradient[self.adj != self.adj_perturbed] = 0
+            gradient *= 2 * (0.5 - self.adj_perturbed)
 
             # assert torch.all(gradient.nonzero()[:, 0] < gradient.nonzero()[:, 1]),\
             #     'Only upper half should get nonzero gradient'
@@ -78,9 +66,9 @@ class FGSM(DenseAttack):
             edge_pert = (maximum == gradient).nonzero()
 
             with torch.no_grad():
-                new_edge_value = -self.adj_tmp[edge_pert[0][0], edge_pert[0][1]] + 1
-                self.adj_tmp[edge_pert[0][0], edge_pert[0][1]] = new_edge_value
-                self.adj_tmp[edge_pert[0][1], edge_pert[0][0]] = new_edge_value
+                new_edge_value = -self.adj_perturbed[edge_pert[0][0], edge_pert[0][1]] + 1
+                self.adj_perturbed[edge_pert[0][0], edge_pert[0][1]] = new_edge_value
+                self.adj_perturbed[edge_pert[0][1], edge_pert[0][0]] = new_edge_value
 
         self.attr_adversary = self.X
-        self.adj_adversary = SparseTensor.from_dense(self.adj_tmp.detach())
+        self.adj_adversary = SparseTensor.from_dense(self.adj_perturbed.detach())

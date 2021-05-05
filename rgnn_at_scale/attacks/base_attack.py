@@ -31,7 +31,11 @@ class Attack(ABC):
             warnings.warn("The attack will fail if the gradient w.r.t. the adjacency can't be computed.")
 
         if isinstance(model, GCN):
-            assert model.gdc_params is None, "GDC doesn't support a gradient w.r.t. the adjacency"
+            assert (
+                model.gdc_params is None
+                or 'use_cpu' not in model.gdc_params
+                or not model.gdc_params['use_cpu']
+            ), "GDC doesn't support a gradient w.r.t. the adjacency"
             assert model.svd_params is None, "GDC doesn't support a gradient w.r.t. the adjacency"
             assert model.jaccard_params is None, "GDC doesn't support a gradient w.r.t. the adjacency"
 
@@ -117,7 +121,7 @@ class Attack(ABC):
                 - logits[np.arange(logits.size(0)), best_non_target_class]
             )
             loss = -F.leaky_relu(margin, negative_slope=0.1).mean()
-        elif self.loss_type == 'tanhCW':
+        elif self.loss_type == 'tanhMargin':
             sorted = logits.argsort(-1)
             best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
             margin = (
@@ -125,6 +129,49 @@ class Attack(ABC):
                 - logits[np.arange(logits.size(0)), best_non_target_class]
             )
             loss = torch.tanh(-margin).mean()
+        elif self.loss_type == 'Margin':
+            sorted = logits.argsort(-1)
+            best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
+            margin = (
+                logits[np.arange(logits.size(0)), labels]
+                - logits[np.arange(logits.size(0)), best_non_target_class]
+            )
+            loss = -margin.mean()
+        elif self.loss_type.startswith('tanhMarginCW-'):
+            alpha = float(self.loss_type.split('-')[-1])
+            assert alpha >= 0, f'Alpha {alpha} must be greater or equal 0'
+            assert alpha <= 1, f'Alpha {alpha} must be less or equal 1'
+            sorted = logits.argsort(-1)
+            best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
+            margin = (
+                logits[np.arange(logits.size(0)), labels]
+                - logits[np.arange(logits.size(0)), best_non_target_class]
+            )
+            loss = (alpha * torch.tanh(-margin) - (1-alpha) * torch.clamp(margin, min=0)).mean()
+        elif self.loss_type.startswith('tanhMarginMCE-'):
+            alpha = float(self.loss_type.split('-')[-1])
+            assert alpha >= 0, f'Alpha {alpha} must be greater or equal 0'
+            assert alpha <= 1, f'Alpha {alpha} must be less or equal 1'
+
+            sorted = logits.argsort(-1)
+            best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
+            margin = (
+                logits[np.arange(logits.size(0)), labels]
+                - logits[np.arange(logits.size(0)), best_non_target_class]
+            )
+
+            not_flipped = logits.argmax(-1) == labels
+            loss = F.nll_loss(logits[not_flipped], labels[not_flipped])
+
+            loss = alpha * torch.tanh(-margin).mean() + (1-alpha) * F.nll_loss(logits[not_flipped], labels[not_flipped])
+        elif self.loss_type == 'eluMargin':
+            sorted = logits.argsort(-1)
+            best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
+            margin = (
+                logits[np.arange(logits.size(0)), labels]
+                - logits[np.arange(logits.size(0)), best_non_target_class]
+            )
+            loss = -F.elu(margin).mean()
         elif self.loss_type == 'MCE':
             not_flipped = logits.argmax(-1) == labels
             loss = F.nll_loss(logits[not_flipped], labels[not_flipped])
@@ -155,9 +202,9 @@ class Attack(ABC):
         return values
 
     @staticmethod
-    def bisection(pos_modified_edge_weight_diff, a, b, n_perturbations, epsilon=1e-5, iter_max=1e5):
+    def bisection(edge_weights, a, b, n_perturbations, epsilon=1e-5, iter_max=1e5):
         def func(x):
-            return torch.clamp(pos_modified_edge_weight_diff - x, 0, 1).sum() - n_perturbations
+            return torch.clamp(edge_weights - x, 0, 1).sum() - n_perturbations
 
         miu = a
         for i in range(int(iter_max)):

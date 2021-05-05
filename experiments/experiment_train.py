@@ -32,10 +32,10 @@ def config():
         ex.observers.append(seml.create_mongodb_observer(db_collection, overwrite=overwrite))
 
     # default params
-    dataset = 'cora_ml'
+    dataset = 'ogbn-arxiv'  # 'cora_ml'
     model_params = {
         'label': 'Vanilla PPRGo Diffusion Embedding',
-        'model': 'DenseGCN',
+        'model': 'GCN',
         'dropout': 0.5,
         'n_filters': 64,
         'hidden_size': 64,
@@ -68,10 +68,10 @@ def config():
         data_artifact_dir="/nfs/students/schmidtt/cache",
         data_storage_type="ppr"
     )
-    device = 'cpu'
+    device = 0
     display_steps = 10
     data_dir = './datasets'
-    data_device = 'cpu'
+    data_device = 0
     debug_level = "debug"
 
 

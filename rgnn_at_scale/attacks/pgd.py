@@ -51,12 +51,14 @@ class PGD(DenseAttack):
                  loss_type: str = 'CE',
                  epochs: int = 200,
                  epsilon: float = 1e-5,
+                 base_lr: float = 1e-2,
                  **kwargs):
 
-        super().__init__(adj, X, labels, idx_attack, model, device, loss_type, **kwargs)
+        super().__init__(adj, X, labels, idx_attack, model, device=device, loss_type=loss_type, **kwargs)
 
         self.epochs = epochs
         self.epsilon = epsilon
+        self.base_lr = base_lr
 
     def _attack(self, n_perturbations: int, **kwargs):
         """Perform attack (`n_perturbations` is increasing as it was a greedy attack).
@@ -77,15 +79,8 @@ class PGD(DenseAttack):
             loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
             adj_grad = torch.autograd.grad(loss, self.adj_changes)[0]
 
-            if self.loss_type == 'CW':
-                lr = 1 / np.sqrt(t + 1)
-                self.adj_changes.data.add_(lr * adj_grad)
-            elif self.loss_type == 'MCE':
-                lr = 60 / np.sqrt(t + 1)
-                self.adj_changes.data.add_(lr * adj_grad)
-            else:
-                lr = 200 / np.sqrt(t + 1)
-                self.adj_changes.data.add_(lr * adj_grad)
+            lr = n_perturbations * self.base_lr / np.sqrt(t + 1)
+            self.adj_changes.data.add_(lr * adj_grad)
 
             self.projection(n_perturbations)
 

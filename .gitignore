@@ -456,13 +456,13 @@ datasets/*
 cache_debug
 cache_old
 data
+datasets
 cache_debug/*
 cache
 extension/*
 kernels/build
 kernels/dist
 kernels/kernels.egg-info
-seml/*
 datasets/*
 train.sh
 runs/

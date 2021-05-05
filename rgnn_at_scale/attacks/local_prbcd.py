@@ -23,10 +23,14 @@ from rgnn_at_scale.attacks.base_attack import Attack, SparseLocalAttack
 class LocalPRBCD(SparseLocalAttack):
 
     def __init__(self,
+<<<<<<< HEAD
                  loss_type: str = 'Margin',  # 'CW', 'LeakyCW'  # 'CE', 'MCE', 'Margin'
+=======
+                 *args,
+                 loss_type: str = 'Margin',
+>>>>>>> d8e4750cd31525c76e797d7abcf755f5cde299c4
                  attack_labeled_nodes_only: bool = False,
                  lr_factor: float = 1.0,
-                 lr_n_perturbations_factor: float = 0.1,
                  display_step: int = 20,
                  epochs: int = 400,
                  fine_tune_epochs: int = 100,
@@ -39,10 +43,10 @@ class LocalPRBCD(SparseLocalAttack):
 
         super().__init__(**kwargs)
 
+        self.loss_type = loss_type
         self.n_possible_edges = self.n * (self.n - 1) // 2
         self.attack_labeled_nodes_only = attack_labeled_nodes_only
 
-        self.lr_n_perturbations_factor = lr_n_perturbations_factor
         self.display_step = display_step
         self.epochs = epochs
         self.fine_tune_epochs = fine_tune_epochs
@@ -74,7 +78,7 @@ class LocalPRBCD(SparseLocalAttack):
 
         for epoch in tqdm(range(self.epochs + self.fine_tune_epochs)):
             self.modified_edge_weight_diff.requires_grad = True
-            perturbed_graph = self.perturbe_graph(node_idx)
+            perturbed_graph = self.perturb_graph(node_idx)
 
             if self.do_synchronize:
                 torch.cuda.empty_cache()
@@ -102,10 +106,16 @@ class LocalPRBCD(SparseLocalAttack):
                     n_perturbations, self.modified_edge_weight_diff, self.eps
                 )
 
+<<<<<<< HEAD
                 perturbed_graph = self.perturbe_graph(node_idx)
                 logits = self.get_surrogate_logits(node_idx, perturbed_graph).to(self.device)
                 classification_statistics = LocalPRBCD.classification_statistics(
                     logits, self.labels[node_idx].to(self.device))
+=======
+                perturbed_graph = self.perturb_graph(node_idx)
+                logits = self.get_surrogate_logits(node_idx, perturbed_graph)
+                classification_statistics = LocalPRBCD.classification_statistics(logits, self.labels[node_idx])
+>>>>>>> d8e4750cd31525c76e797d7abcf755f5cde299c4
                 if epoch % self.display_step == 0:
                     logging.info(f'\nEpoch: {epoch} Loss: {loss.item()} Statstics: {classification_statistics}\n')
 
@@ -165,7 +175,7 @@ class LocalPRBCD(SparseLocalAttack):
             return torch.tensor([])
         return self.perturbed_edges
 
-    def perturbe_graph(self, node_idx: int) -> SparseTensor:
+    def perturb_graph(self, node_idx: int) -> SparseTensor:
 
         if self.attack_labeled_nodes_only:
             current_search_space = torch.tensor(self.idx_attack, device=self.device)[self.current_search_space]
@@ -310,7 +320,7 @@ class LocalPRBCD(SparseLocalAttack):
                         self.modified_edge_weight_diff == 1
                     ].to(self.device)
 
-                    perturbed_graph = self.perturbe_graph(node_idx)
+                    perturbed_graph = self.perturb_graph(node_idx)
                     logits = self.get_surrogate_logits(node_idx, perturbed_graph)
                     margin = LocalPRBCD.classification_statistics(logits, self.labels[node_idx])['margin']
                     if best_margin > margin:
@@ -320,5 +330,5 @@ class LocalPRBCD(SparseLocalAttack):
             self.modified_edge_weight_diff = best_weights.to(self.device).float()
             self.current_search_space = best_search_space.to(self.device).long()
 
-            perturbed_graph = self.perturbe_graph(node_idx)
+            perturbed_graph = self.perturb_graph(node_idx)
         return perturbed_graph

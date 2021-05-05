@@ -660,12 +660,12 @@ def prep_graph(name: str,
         # Also we need numpy arrays because Numba cant determine type of torch.Tensor
         split = {k: v.numpy() for k, v in split.items()}
 
-        edge_index = data.edge_index.to(device)
+        edge_index = data.edge_index.cpu()
         if data.edge_attr is None:
             edge_weight = torch.ones(edge_index.size(1))
         else:
             edge_weight = data.edge_attr
-        edge_weight = edge_weight.to(device)
+        edge_weight = edge_weight.cpu()
 
         adj = sp.csr_matrix((edge_weight, edge_index), (num_nodes, num_nodes))
 
@@ -689,9 +689,9 @@ def prep_graph(name: str,
         logging.debug("Memory Usage after normalizing the graph")
         logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))
 
-        adj = torch_sparse.SparseTensor.from_scipy(adj).coalesce()
+        adj = torch_sparse.SparseTensor.from_scipy(adj).coalesce().to(device)
 
-        attr_matrix = data.x.to(device).numpy()
+        attr_matrix = data.x.cpu().numpy()
 
         # optional attribute normalization
         if normalize_attr == 'per_feature':
@@ -710,7 +710,7 @@ def prep_graph(name: str,
                 attr_invnorms = 1 / np.maximum(attr_norms, 1e-12)
                 attr_matrix = attr_matrix * attr_invnorms[:, np.newaxis]
 
-        attr = torch.from_numpy(attr_matrix)
+        attr = torch.from_numpy(attr_matrix).to(device)
 
         logging.debug("Memory Usage after normalizing graph attributes:")
         logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))

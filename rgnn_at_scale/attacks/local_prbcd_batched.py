@@ -81,11 +81,11 @@ class LocalBatchedPRBCD(LocalPRBCD):
                                                   self.surrogate_model.topk,
                                                   normalization=self.surrogate_model.ppr_normalization)
         else:
-            perturbed_graph = self.perturbe_graph(node_idx)
+            perturbed_graph = self.perturb_graph(node_idx)
 
         return perturbed_graph
 
-    def perturbe_graph(self, node_idx: int, only_update_adj: bool = False) -> SparseTensor:
+    def perturb_graph(self, node_idx: int, only_update_adj: bool = False) -> SparseTensor:
         if self.attack_labeled_nodes_only:
             current_search_space = torch.tensor(self.idx_attack, device=self.device)[self.current_search_space]
         else:

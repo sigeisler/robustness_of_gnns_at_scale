@@ -10,7 +10,7 @@ Dingyuan Zhu, Peng Cui, Ziwei Zhang, and Wenwu Zhu. Robust graph convolutional n
 Proceedings of the ACM SIGKDD International Conference on Knowledge Discovery and Data Mining, pages 1399–1407, 2019.
 doi: 10.1145/3292500.3330851.
 """
-
+from copy import deepcopy
 import numpy as np
 import scipy.sparse as sp
 import torch
@@ -257,8 +257,10 @@ class RGCN(Module):
             if acc_val > best_acc_val:
                 best_acc_val = acc_val
                 self.output = output
+                weights = deepcopy(self.state_dict())
 
         print('=== picking the best model according to the performance on validation ===')
+        self.load_state_dict(weights)
 
     def test(self, idx_test):
         # output = self._forward()
