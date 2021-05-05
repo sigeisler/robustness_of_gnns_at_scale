@@ -237,7 +237,7 @@ class GCN(nn.Module):
 
         if edge_weight is None:
             edge_weight = torch.ones_like(edge_idx[0], dtype=torch.float32)
-        
+
         if edge_weight.dtype != torch.float32:
             edge_weight = edge_weight.float()
 
@@ -264,16 +264,11 @@ class GCN(nn.Module):
                                      edge_weight: Optional[torch.Tensor] = None
                                      ) -> Tuple[Union[torch.Tensor, SparseTensor], Optional[torch.Tensor]]:
         if self.gdc_params is not None:
+            edge_idx, edge_weight = GCN.normalize(edge_idx, x.shape[0], edge_weight, self.add_self_loops)
             if 'use_cpu' in self.gdc_params and self.gdc_params['use_cpu']:
-                edge_idx, edge_weight = get_approx_topk_ppr_matrix(
-                    edge_idx,
-                    x.shape[0],
-                    **self.gdc_params
-                )
+                edge_idx, edge_weight = get_approx_topk_ppr_matrix(edge_idx, x.shape[0], **self.gdc_params)
             else:
-                adj = get_ppr_matrix(
-                    torch.sparse.FloatTensor(edge_idx, edge_weight), **self.gdc_params, normalize_adjacency_matrix=True
-                )
+                adj = get_ppr_matrix(torch.sparse.FloatTensor(edge_idx, edge_weight), **self.gdc_params)
                 edge_idx, edge_weight = adj.indices(), adj.values()
                 del adj
         elif self.svd_params is not None:
@@ -340,22 +335,7 @@ class GCN(nn.Module):
         if self.do_normalize_adj_once:
             self._deactivate_normalization()
 
-            num_nodes = x.shape[0]
-            if edge_weight is None:
-                edge_weight = torch.ones((edge_idx.size(1), ), dtype=torch.float32,
-                                         device=edge_idx.device)
-
-            if self.add_self_loops:
-                edge_idx, tmp_edge_weight = add_remaining_self_loops(
-                    edge_idx, edge_weight, 1., num_nodes)
-                assert tmp_edge_weight is not None
-                edge_weight = tmp_edge_weight
-
-            row, col = edge_idx
-            deg = scatter_add(edge_weight, col, dim=0, dim_size=x.shape[0])
-            deg_inv_sqrt = deg.pow_(-0.5)
-            deg_inv_sqrt.masked_fill_(deg_inv_sqrt == float('inf'), 0)
-            edge_weight = deg_inv_sqrt[row] * edge_weight * deg_inv_sqrt[col]
+            edge_idx, edge_weight = GCN.normalize(edge_idx, x.shape[0], edge_weight, self.add_self_loops)
 
         if self.do_use_sparse_tensor:
             if hasattr(SparseTensor, 'from_edge_index'):
@@ -369,6 +349,24 @@ class GCN(nn.Module):
     def _deactivate_normalization(self):
         for layer in self.layers:
             layer[0].normalize = False
+
+    @staticmethod
+    def normalize(edge_idx: torch.Tensor, n: int, edge_weight: Optional[torch.Tensor] = None, add_self_loops=True):
+        if edge_weight is None:
+            edge_weight = torch.ones((edge_idx.size(1), ), dtype=torch.float32, device=edge_idx.device)
+
+        if add_self_loops:
+            edge_idx, tmp_edge_weight = add_remaining_self_loops(edge_idx, edge_weight, 1., n)
+            assert tmp_edge_weight is not None
+            edge_weight = tmp_edge_weight
+
+        row, col = edge_idx
+        deg = scatter_add(edge_weight, col, dim=0, dim_size=n)
+        deg_inv_sqrt = deg.pow_(-0.5)
+        deg_inv_sqrt.masked_fill_(deg_inv_sqrt == float('inf'), 0)
+        edge_weight = deg_inv_sqrt[row] * edge_weight * deg_inv_sqrt[col]
+
+        return edge_idx, edge_weight
 
 
 class DenseGraphConvolution(nn.Module):

@@ -56,7 +56,7 @@ gdc:
       gdc_params:
           alpha: 0.15
           k: 32
-          use_cpu: False
+          use_cpu: True
       svd_params: None
       jaccard_params: None
       do_cache_adj_prep: True
