@@ -35,7 +35,11 @@ def config():
     # default params
     dataset = 'cora_ml'  # Options are 'cora_ml' and 'citeseer' (or with a big GPU 'pubmed')
     attack = 'LocalBatchedPRBCD'
-    attack_params = {}
+    attack_params = {"ppr_cache_params": {
+        "data_artifact_dir": "cache",
+        "data_storage_type": "ppr"
+    }
+    }
     nodes = None  # [1854, 513, 2383]
     nodes_topk = 3
 
@@ -44,14 +48,14 @@ def config():
     display_steps = 10
 
     artifact_dir = "cache"
-    model_storage_type = 'victim_papers_100M'
-    model_label = 'Vanilla PPRGo Diffusion Embedding'
+    model_storage_type = 'victim_cora'
+    model_label = 'Vanilla PPRGo'
 
     data_dir = './data'
     binary_attr = False
-    normalize = "row"
+    normalize = False
     normalize_attr = False
-    make_undirected = False
+    make_undirected = True
     make_unweighted = True
 
     data_device = 'cpu'
@@ -72,6 +76,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
      idx_val,
      idx_test,
      storage,
+     attack_params,
      _,
      model_params, _) = prepare_attack_experiment(data_dir, dataset, attack, attack_params,
                                                   epsilons, binary_attr, make_undirected,
@@ -85,6 +90,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
     models_and_hyperparams = storage.find_models(model_storage_type, model_params)
 
     for model, hyperparams in models_and_hyperparams:
+        model.to(device)
         model_label = hyperparams["label"]
 
         try:
