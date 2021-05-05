@@ -7,7 +7,8 @@ from sacred import Experiment
 
 from rgnn_at_scale.data import prep_graph, split
 from rgnn_at_scale.helper.io import Storage
-from rgnn_at_scale.attacks import create_attack
+from rgnn_at_scale.models import BATCHED_PPR_MODELS
+from rgnn_at_scale.helper.utils import accuracy
 
 
 def prepare_attack_experiment(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
@@ -50,6 +51,17 @@ def prepare_attack_experiment(data_dir: str, dataset: str, attack: str, attack_p
 
     storage = Storage(artifact_dir, experiment=ex)
 
+    tmp_attack_params = dict(attack_params)
+    if "ppr_cache_params" in tmp_attack_params.keys():
+        ppr_cache_params = dict(tmp_attack_params["ppr_cache_params"])
+        ppr_cache_params.update(dict(
+            dataset=dataset,
+            normalize=normalize,
+            make_undirected=make_undirected,
+            make_unweighted=make_unweighted,
+        ))
+        tmp_attack_params["ppr_cache_params"] = ppr_cache_params
+
     pert_params = dict(dataset=dataset,
                        binary_attr=binary_attr,
                        normalize=normalize,
@@ -60,7 +72,7 @@ def prepare_attack_experiment(data_dir: str, dataset: str, attack: str, attack_p
                        attack=attack,
                        model=model_label,
                        surrogate_model=surrogate_model_label,
-                       attack_params=attack_params)
+                       attack_params=tmp_attack_params)
 
     model_params = dict(dataset=dataset,
                         binary_attr=binary_attr,
@@ -78,7 +90,7 @@ def prepare_attack_experiment(data_dir: str, dataset: str, attack: str, attack_p
     else:
         m = adj.nnz()
 
-    return attr, adj, labels, idx_train, idx_val, idx_test,  storage, pert_params, model_params, m
+    return attr, adj, labels, idx_train, idx_val, idx_test, storage, tmp_attack_params, pert_params, model_params, m
 
 
 def run_global_attack(epsilon, m, storage, pert_adj_storage_type, pert_attr_storage_type,
@@ -108,8 +120,6 @@ def sample_attack_nodes(logits: torch.Tensor, labels: torch.Tensor, topk: int, n
     logits = logits.cpu()
 
     correctly_classifed = logits.max(-1).indices == labels
-    acc = correctly_classifed.sum().item() / float(labels.shape[0])
-    logging.info(f"Sample Attack Nodes for model with accuracy {acc:.4}")
 
     _, max_confidence_nodes_idx = torch.topk(logits[correctly_classifed].max(-1).values, k=topk)
     _, min_confidence_nodes_idx = torch.topk(-logits[correctly_classifed].max(-1).values, k=topk)
@@ -117,7 +127,7 @@ def sample_attack_nodes(logits: torch.Tensor, labels: torch.Tensor, topk: int, n
     rand_nodes_idx = np.arange(correctly_classifed.sum().item())
     rand_nodes_idx = np.setdiff1d(rand_nodes_idx, max_confidence_nodes_idx)
     rand_nodes_idx = np.setdiff1d(rand_nodes_idx, min_confidence_nodes_idx)
-    rand_nodes_idx = np.random.choice(rand_nodes_idx, size=(topk), replace=False)
+    rand_nodes_idx = np.random.choice(rand_nodes_idx, size=(topk * 2), replace=False)
 
     return (nodes_idx[correctly_classifed][max_confidence_nodes_idx],
             nodes_idx[correctly_classifed][min_confidence_nodes_idx],
@@ -125,14 +135,23 @@ def sample_attack_nodes(logits: torch.Tensor, labels: torch.Tensor, topk: int, n
 
 
 def get_local_attack_nodes(attack, binary_attr, attr, adj, labels, surrogate_model, idx_test, device, attack_params, topk=10):
-    if isinstance(attack, str):
-        adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels,
-                                  model=surrogate_model, idx_attack=idx_test, device=device, **attack_params)
-    else:
-        adversary = attack
 
-    logits, acc = adversary.evaluate_global(idx_test)
+    with torch.no_grad():
+        surrogate_model.eval()
+        if type(surrogate_model) in BATCHED_PPR_MODELS.__args__:
+            logits = surrogate_model.forward(attr,
+                                             adj,
+                                             ppr_idx=np.array(idx_test))
+        else:
+            logits = surrogate_model(attr, adj)[idx_test]
+
+        acc = accuracy(logits.cpu(), labels.cpu()[idx_test], np.arange(logits.shape[0]))
+
+    logging.info(f"Sample Attack Nodes for model with accuracy {acc:.4}")
+
     max_confidence_nodes_idx, min_confidence_nodes_idx, rand_nodes_idx = sample_attack_nodes(
         logits, labels[idx_test], topk, idx_test)
     tmp_nodes = np.concatenate((max_confidence_nodes_idx, min_confidence_nodes_idx, rand_nodes_idx))
+    logging.info(
+        f"Sample the following attack nodes:\n{max_confidence_nodes_idx}\n{min_confidence_nodes_idx}\n{rand_nodes_idx}")
     return tmp_nodes
