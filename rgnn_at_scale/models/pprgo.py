@@ -396,7 +396,7 @@ class PPRGoWrapperBase():
                 storage = Storage(self.ppr_cache_params["data_artifact_dir"])
                 params = dict(dataset=self.ppr_cache_params["dataset"],
                               alpha=self.alpha,
-                              ppr_idx=list(map(int, ppr_idx)),
+                              ppr_idx=np.array(ppr_idx),
                               eps=self.eps,
                               topk=self.topk,
                               ppr_normalization=self.ppr_normalization,
@@ -414,6 +414,7 @@ class PPRGoWrapperBase():
 
                 # save topk_ppr to disk
                 if self.ppr_cache_params is not None:
+                    params["ppr_idx"] = np.array(ppr_idx)
                     storage.save_sparse_matrix(self.ppr_cache_params["data_storage_type"], params,
                                                topk_ppr, ignore_duplicate=True)
 
@@ -491,7 +492,7 @@ class PPRGoWrapperBase():
             storage = Storage(self.ppr_cache_params["data_artifact_dir"])
             params = dict(dataset=self.ppr_cache_params["dataset"],
                           alpha=self.alpha,
-                          ppr_idx=list(map(int, idx_train)),
+                          ppr_idx=np.array(idx_train),
                           eps=self.eps,
                           topk=self.topk,
                           ppr_normalization=self.ppr_normalization,
@@ -510,6 +511,7 @@ class PPRGoWrapperBase():
                                              self.topk,  normalization=self.ppr_normalization)
             # save topk_ppr to disk
             if self.ppr_cache_params is not None:
+                params["ppr_idx"] = np.array(idx_train)
                 storage.save_sparse_matrix(self.ppr_cache_params["data_storage_type"], params,
                                            topk_train, ignore_duplicate=True)
 
@@ -519,7 +521,7 @@ class PPRGoWrapperBase():
         # try to read topk train from disk:
         topk_val = None
         if self.ppr_cache_params is not None:
-            params["ppr_idx"] = list(map(int, idx_val))
+            params["ppr_idx"] = np.array(idx_val)
             params["split_desc"] = "val"
 
             stored_topk_val = storage.find_sparse_matrix(self.ppr_cache_params["data_storage_type"],
@@ -531,6 +533,7 @@ class PPRGoWrapperBase():
                                            self.topk,  normalization=self.ppr_normalization)
             # save topk_ppr to disk
             if self.ppr_cache_params is not None:
+                params["ppr_idx"] = np.array(idx_val)
                 storage.save_sparse_matrix(self.ppr_cache_params["data_storage_type"], params,
                                            topk_val, ignore_duplicate=True)
 

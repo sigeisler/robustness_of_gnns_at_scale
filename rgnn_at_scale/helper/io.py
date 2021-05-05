@@ -277,7 +277,7 @@ class Storage():
             File storage location.
         """
         ppr_idx = None
-        if "ppr_idx" in params.keys():
+        if "ppr_idx" in params.keys() and not isinstance(params["ppr_idx"], int):
             ppr_idx = np.array(params["ppr_idx"])
             params["ppr_idx"] = hash(frozenset(params["ppr_idx"]))
 
@@ -349,6 +349,8 @@ class Storage():
             self._get_lock_path(artifact_type),
             self.lock_timeout,
         )
+        # to get the most recent documents first we revert the list
+        raw_documents.reverse()
         if return_documents_only:
             for document in raw_documents:
                 if "ppr_idx" in document['params'].keys() and isinstance(document['params']["ppr_idx"], int):
