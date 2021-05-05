@@ -72,12 +72,14 @@ def config():
     display_steps = 10
     data_dir = './datasets'
     data_device = 'cpu'
+    debug_level = "debug"
 
 
 @ex.automain
 def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params: Dict[str, Any], binary_attr: bool,
         make_undirected: bool, make_unweighted: bool, normalize: bool, normalize_attr: str, seed: int, artifact_dir: str,
-        model_storage_type: str, ppr_cache_params: Dict[str, str], device: Union[str, int], data_device: Union[str, int], display_steps: int):
+        model_storage_type: str, ppr_cache_params: Dict[str, str], device: Union[str, int], data_device: Union[str, int],
+        display_steps: int, debug_level: str):
     """
     Instantiates a SEML experiment executing a training run for a given model configuration.
     Saves the model to storage and evaluates its accuracy. 
@@ -105,6 +107,16 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
     Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
         dense attribute tensor, sparse adjacency matrix (normalized) and labels tensor.
     """
+    if debug_level is not None and isinstance(debug_level, str):
+        logger = logging.getLogger()
+        if debug_level.lower() == "info":
+            logger.setLevel(logging.INFO)
+        if debug_level.lower() == "debug":
+            logger.setLevel(logging.DEBUG)
+        if debug_level.lower() == "critical":
+            logger.setLevel(logging.CRITICAL)
+        if debug_level.lower() == "error":
+            logger.setLevel(logging.ERROR)
 
     logging.info({
         'dataset': dataset, 'model_params': model_params, 'train_params': train_params, 'binary_attr': binary_attr,
