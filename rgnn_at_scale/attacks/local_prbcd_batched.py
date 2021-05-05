@@ -21,13 +21,12 @@ from rgnn_at_scale.data import CachedPPRMatrix
 class LocalBatchedPRBCD(LocalPRBCD):
 
     def __init__(self,
-                 *args,
                  ppr_matrix: Optional[SparseTensor] = None,
                  ppr_recalc_at_end: bool = False,
                  ppr_cache_params: Dict[str, Any] = None,
-                 **kwargs):
+                 ** kwargs):
 
-        super().__init__(*args, **kwargs)
+        super().__init__(**kwargs)
 
         assert type(self.surrogate_model) in BATCHED_PPR_MODELS.__args__, "LocalBatchedPRBCD Attack only supports PPRGo models"
 

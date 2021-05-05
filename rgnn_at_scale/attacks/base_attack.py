@@ -36,7 +36,7 @@ class Attack(ABC):
             assert model.jaccard_params is None, "GDC doesn't support a gradient w.r.t. the adjacency"
 
         self.device = device
-        self.data_device = device
+        self.data_device = data_device
         self.idx_attack = idx_attack
         self.loss_type = loss_type
 
@@ -47,7 +47,7 @@ class Attack(ABC):
 
         self.set_eval_model(model)
 
-        self.labels = labels.to(self.data_device)
+        self.labels = labels.to(torch.long).to(self.device)
         self.labels_attack = self.labels[self.idx_attack]
         self.X = X.to(self.data_device)
         self.adj = adj.to(self.data_device)

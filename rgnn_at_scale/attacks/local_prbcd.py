@@ -23,7 +23,6 @@ from rgnn_at_scale.attacks.base_attack import Attack, SparseLocalAttack
 class LocalPRBCD(SparseLocalAttack):
 
     def __init__(self,
-                 *args,
                  loss_type: str = 'Margin',  # 'CW', 'LeakyCW'  # 'CE', 'MCE', 'Margin'
                  attack_labeled_nodes_only: bool = False,
                  lr_factor: float = 1.0,
@@ -38,7 +37,7 @@ class LocalPRBCD(SparseLocalAttack):
                  K: int = 20,
                  **kwargs):
 
-        super().__init__(*args, **kwargs)
+        super().__init__(**kwargs)
 
         self.n_possible_edges = self.n * (self.n - 1) // 2
         self.attack_labeled_nodes_only = attack_labeled_nodes_only
@@ -67,8 +66,8 @@ class LocalPRBCD(SparseLocalAttack):
         self.attack_statistics = defaultdict(list)
 
         with torch.no_grad():
-            logits_orig = self.get_surrogate_logits(node_idx)
-            loss_orig = self.calculate_loss(logits_orig, self.labels[node_idx][None])
+            logits_orig = self.get_surrogate_logits(node_idx).to(self.device)
+            loss_orig = self.calculate_loss(logits_orig, self.labels[node_idx][None]).to(self.device)
             statistics_orig = LocalPRBCD.classification_statistics(logits_orig,
                                                                    self.labels[node_idx])
             logging.info(f'Original: Loss: {loss_orig.item()} Statstics: {statistics_orig}\n')
@@ -81,10 +80,11 @@ class LocalPRBCD(SparseLocalAttack):
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
 
-            logits = self.get_surrogate_logits(node_idx, perturbed_graph)
+            logits = self.get_surrogate_logits(node_idx, perturbed_graph).to(self.device)
             loss = self.calculate_loss(logits, self.labels[node_idx][None])
 
-            classification_statistics = LocalPRBCD.classification_statistics(logits, self.labels[node_idx])
+            classification_statistics = LocalPRBCD.classification_statistics(
+                logits, self.labels[node_idx].to(self.device))
             if epoch == 0:
                 logging.info(f'Initial: Loss: {loss.item()} Statstics: {classification_statistics}\n')
 
@@ -103,8 +103,9 @@ class LocalPRBCD(SparseLocalAttack):
                 )
 
                 perturbed_graph = self.perturbe_graph(node_idx)
-                logits = self.get_surrogate_logits(node_idx, perturbed_graph)
-                classification_statistics = LocalPRBCD.classification_statistics(logits, self.labels[node_idx])
+                logits = self.get_surrogate_logits(node_idx, perturbed_graph).to(self.device)
+                classification_statistics = LocalPRBCD.classification_statistics(
+                    logits, self.labels[node_idx].to(self.device))
                 if epoch % self.display_step == 0:
                     logging.info(f'\nEpoch: {epoch} Loss: {loss.item()} Statstics: {classification_statistics}\n')
 
