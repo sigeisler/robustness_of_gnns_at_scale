@@ -11,25 +11,21 @@ slurm:
     mem: 16G          # memory
     cpus-per-task: 4  # num cores
     time: 0-08:00     # max time, D-HH:MM
-    partition: gpu_large
+    # partition: gpu_large
 
 fixed:
+  data_dir: datasets/
   epsilons: [0, 0.01, 0.05, 0.1, 0.25]
-  surrogate_params:
-    n_filters: 64
-    dropout: 0.5
-    train_params:
-      lr: 1e-2
-      weight_decay: 1e-3
-      patience: 100
-      max_epochs: 3000
-  artifact_dir: cache
   pert_adj_storage_type: evasion_transfer_attack_adj
   pert_attr_storage_type: evasion_transfer_attack_attr
   model_storage_type: pretrained
+  surrogate_model_storage_type: pretrained
   device: 0
   data_device: 0 
-  binary_attr: False
+  make_unweighted: True
+  make_undirected: True
+  normalize: False
+  normalize_attr: False
 
 grid:
   dataset:
@@ -47,10 +43,12 @@ grid:
 # pgd:
 #   fixed:
 #     attack: PGD
+#     binary_attr: False
 
 # fgsm:
 #   fixed:
 #     attack: FGSM
+#     binary_attr: False
 #   grid: 
 #     attack_params:
 #       type: parameter_collection
@@ -64,6 +62,7 @@ grid:
 greedy_rbcd:
   fixed:
     attack: GreedyRBCD
+    binary_attr: False
   grid: 
     attack_params:
       type: parameter_collection
@@ -77,6 +76,7 @@ greedy_rbcd:
 prbcd:
   fixed:
     attack: PRBCD
+    binary_attr: False
     attack_params:
       keep_heuristic: WeightOnly
       search_space_size: 2_500_000
@@ -94,6 +94,7 @@ prbcd:
 # gang:
 #   fixed:
 #     attack: GANG
+#     binary_attr: False
 #     attack_params:
 #       edge_with_random_reverse: False
 #       edge_step_size: 25
@@ -107,3 +108,4 @@ prbcd:
 dice:
   fixed:
     attack: DICE
+    binary_attr: False

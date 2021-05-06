@@ -47,8 +47,8 @@ grid:
 
 fgsm:
   fixed:
-    binary_attr: False
     attack: FGSM
+    binary_attr: False
   grid: 
     attack_params:
       type: parameter_collection
@@ -78,8 +78,8 @@ fgsm:
 
 pgd:
   fixed:
-    binary_attr: False
     attack: PGD
+    binary_attr: False
   grid: 
     attack_params:
       type: parameter_collection
@@ -118,6 +118,7 @@ pgd:
 greedy_rbcd:
   fixed:
     attack: GreedyRBCD
+    binary_attr: False
     surrogate_model_label: Vanilla GCN
   grid: 
     attack_params:
@@ -131,8 +132,8 @@ greedy_rbcd:
 
 prbcd:
   fixed:
-    binary_attr: False
     attack: PRBCD
+    binary_attr: False
     surrogate_model_label: Vanilla GCN
     attack_params:
       epochs: 400
@@ -165,5 +166,5 @@ prbcd:
 
 dice:
   fixed:
-    binary_attr: False
     attack: DICE
+    binary_attr: False
