@@ -129,9 +129,9 @@ def sample_attack_nodes(logits: torch.Tensor, labels: torch.Tensor, topk: int, n
     rand_nodes_idx = np.setdiff1d(rand_nodes_idx, min_confidence_nodes_idx)
     rand_nodes_idx = np.random.choice(rand_nodes_idx, size=(topk * 2), replace=False)
 
-    return (nodes_idx[correctly_classifed][max_confidence_nodes_idx],
-            nodes_idx[correctly_classifed][min_confidence_nodes_idx],
-            nodes_idx[correctly_classifed][rand_nodes_idx])
+    return (np.array(nodes_idx[correctly_classifed][max_confidence_nodes_idx])[None].flatten(),
+            np.array(nodes_idx[correctly_classifed][min_confidence_nodes_idx])[None].flatten(),
+            np.array(nodes_idx[correctly_classifed][rand_nodes_idx])[None].flatten())
 
 
 def get_local_attack_nodes(attack, binary_attr, attr, adj, labels, surrogate_model, idx_test, device, attack_params, topk=10):
