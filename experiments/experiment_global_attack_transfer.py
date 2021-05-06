@@ -41,7 +41,7 @@ def config():
     normalize_attr = False
     seed = 0
 
-    attack = 'GANG'
+    attack = 'PGD'
     attack_params = {}
     epsilons = [0.01, 0.1, 0.5, 1.0]
 
@@ -49,14 +49,14 @@ def config():
     pert_adj_storage_type = 'evasion_attack_adj'
     pert_attr_storage_type = 'evasion_attack_attr'
 
-    model_storage_type = 'victim_cora_2'
+    model_storage_type = 'pretrained'
     model_label = None
 
-    surrogate_model_storage_type = 'surrogate_cora'
+    surrogate_model_storage_type = 'pretrained'
     surrogate_model_label = "Vanilla Dense GCN"
 
-    device = "cpu"
-    data_device = "cpu"
+    device = 0
+    data_device = 0
 
     display_steps = 10
 
@@ -76,6 +76,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
      idx_val,
      idx_test,
      storage,
+     attack_params,
      pert_params,
      model_params, m) = prepare_attack_experiment(data_dir, dataset, attack, attack_params,
                                                   epsilons, binary_attr, make_undirected,

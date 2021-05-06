@@ -25,7 +25,7 @@ fixed:
   make_unweighted: True
   make_undirected: True
   binary_attr: False
-  dataset: citeseer
+  dataset: cora_ml
 
 grid:
   seed:
