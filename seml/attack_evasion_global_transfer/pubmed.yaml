@@ -46,12 +46,10 @@ grid:
 
 # pgd:
 #   fixed:
-#     binary_attr: False
 #     attack: PGD
 
 # fgsm:
 #   fixed:
-#     binary_attr: False
 #     attack: FGSM
 #   grid: 
 #     attack_params:
@@ -65,7 +63,6 @@ grid:
 
 greedy_rbcd:
   fixed:
-    binary_attr: False
     attack: GreedyRBCD
   grid: 
     attack_params:
@@ -79,7 +76,6 @@ greedy_rbcd:
 
 prbcd:
   fixed:
-    binary_attr: False
     attack: PRBCD
     attack_params:
       keep_heuristic: WeightOnly
@@ -97,7 +93,6 @@ prbcd:
 
 # gang:
 #   fixed:
-#     binary_attr: True
 #     attack: GANG
 #     attack_params:
 #       edge_with_random_reverse: False
@@ -111,5 +106,4 @@ prbcd:
 
 dice:
   fixed:
-    binary_attr: False
     attack: DICE
