@@ -1,8 +1,8 @@
 seml:
-  name: rgnn_at_scale_attack_evasion_transfer
-  executable: experiments/experiment_attack_evasion_transfer.py
+  name: rgnn_at_scale_attack_evasion_global_transfer
+  executable: experiments/experiment_global_attack_transfer.py
   project_root_dir: ../..
-  output_dir: seml/attack_evasion_transfer/output
+  output_dir: seml/attack_evasion_global_transfer/output
 
 slurm:
   experiments_per_job: 1
