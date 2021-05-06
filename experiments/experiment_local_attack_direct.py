@@ -41,14 +41,14 @@ def config():
     }
     }
     nodes = None  # [1854, 513, 2383]
-    nodes_topk = 3
+    nodes_topk = 1
 
-    epsilons = [0.5, 0.75, 1]
+    epsilons = [0.5]  # , 0.75, 1]
     seed = 0
     display_steps = 10
 
     artifact_dir = "cache"
-    model_storage_type = 'victim_cora'
+    model_storage_type = 'pretrained'
     model_label = 'Vanilla PPRGo'
 
     data_dir = './data'
@@ -96,6 +96,9 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
         try:
             adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels, model=model,
                                       idx_attack=idx_test, device=device, data_device=data_device, **attack_params)
+
+            if hasattr(adversary, "ppr_matrix"):
+                adversary.ppr_matrix.save_to_storage()
         except Exception as e:
             logging.exception(e)
             logging.error(f"Failed to instantiate attack {attack} for model '{model_label}'.")
@@ -122,7 +125,6 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                     logging.error(
                         f"Failed to attack model '{model_label}' using {attack} with eps {eps} at node {node}.")
                     continue
-
                 logits, initial_logits = adversary.evaluate_local(node)
 
                 logging.info(
@@ -148,7 +150,8 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                 })
                 # if hasattr(adversary, 'attack_statistics'):
                 #     results[-1]['attack_statistics'] = adversary.attack_statistics
-        del adversary
+        if hasattr(adversary, "ppr_matrix"):
+            adversary.ppr_matrix.save_to_storage()
     assert len(results) > 0
 
     return {

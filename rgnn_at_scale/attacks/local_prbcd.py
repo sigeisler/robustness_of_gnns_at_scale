@@ -27,8 +27,8 @@ class LocalPRBCD(SparseLocalAttack):
                  attack_labeled_nodes_only: bool = False,
                  lr_factor: float = 1.0,
                  display_step: int = 20,
-                 epochs: int = 400,
-                 fine_tune_epochs: int = 100,
+                 epochs: int = 150,
+                 fine_tune_epochs: int = 50,
                  search_space_size: int = 10_000,
                  with_early_stropping: bool = True,
                  do_synchronize: bool = False,
@@ -101,7 +101,7 @@ class LocalPRBCD(SparseLocalAttack):
                     n_perturbations, self.modified_edge_weight_diff, self.eps
                 )
 
-                perturbed_graph = self.perturbe_graph(node_idx)
+                perturbed_graph = self.perturb_graph(node_idx)
                 logits = self.get_surrogate_logits(node_idx, perturbed_graph).to(self.device)
                 classification_statistics = LocalPRBCD.classification_statistics(
                     logits, self.labels[node_idx].to(self.device))
