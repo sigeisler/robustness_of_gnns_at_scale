@@ -126,6 +126,3 @@ class LocalBatchedPRBCD(LocalPRBCD):
             updated_adj = SparseTensor.from_edge_index(A_idx, A_weights, (self.n, self.n))
 
             return updated_adj.to_symmetric('max')
-
-    def __del__(self):
-        del self.ppr_matrix
