@@ -8,6 +8,7 @@ import scipy.sparse as sp
 import torch
 from torch.nn import functional as F
 
+import torch_sparse
 from torch_sparse import SparseTensor
 from rgnn_at_scale.models import MODEL_TYPE, DenseGCN, GCN, BATCHED_PPR_MODELS
 from rgnn_at_scale.helper.utils import accuracy
@@ -48,6 +49,7 @@ class Attack(ABC):
         self.surrogate_model.eval()
         for p in self.surrogate_model.parameters():
             p.requires_grad = False
+        self.eval_model = self.surrogate_model
 
         self.labels = labels.to(torch.long).to(self.device)
         self.labels_attack = self.labels[self.idx_attack]

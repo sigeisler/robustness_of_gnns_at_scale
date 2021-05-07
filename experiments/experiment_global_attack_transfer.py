@@ -39,7 +39,7 @@ def config():
     attack_params = {}
     epsilons = [0.01, 0.1, 0.5, 1.0]
 
-    artifact_dir = 'cache'
+    artifact_dir = 'cache_debug'
     pert_adj_storage_type = 'evasion_attack_adj'
     pert_attr_storage_type = 'evasion_attack_attr'
 

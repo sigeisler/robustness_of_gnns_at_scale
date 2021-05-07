@@ -1,11 +1,10 @@
 from collections import defaultdict
-from typing import Dict, Union
+from typing import Dict
 
 import math
 import logging
 
 import numpy as np
-import scipy.sparse as sp
 
 import torch
 from torch.nn import functional as F
@@ -15,8 +14,7 @@ from torch_sparse import SparseTensor
 from tqdm import tqdm
 
 from rgnn_at_scale.models import MODEL_TYPE, BATCHED_PPR_MODELS
-from rgnn_at_scale.helper.utils import grad_with_checkpoint
-
+from rgnn_at_scale.helper.utils import grad_with_checkpoint, to_symmetric
 from rgnn_at_scale.attacks.base_attack import Attack, SparseLocalAttack
 
 
@@ -67,8 +65,7 @@ class LocalPRBCD(SparseLocalAttack):
         with torch.no_grad():
             logits_orig = self.get_surrogate_logits(node_idx).to(self.device)
             loss_orig = self.calculate_loss(logits_orig, self.labels[node_idx][None]).to(self.device)
-            statistics_orig = LocalPRBCD.classification_statistics(logits_orig,
-                                                                   self.labels[node_idx])
+            statistics_orig = LocalPRBCD.classification_statistics(logits_orig, self.labels[node_idx])
             logging.info(f'Original: Loss: {loss_orig.item()} Statstics: {statistics_orig}\n')
 
         for epoch in tqdm(range(self.epochs + self.fine_tune_epochs)):
@@ -196,9 +193,11 @@ class LocalPRBCD(SparseLocalAttack):
         # Works since the attack will always assign at least a small constant the elements in p
         A_weights[A_weights > 1] = -A_weights[A_weights > 1] + 2
 
+        A_idx, A_weights = to_symmetric(A_idx, A_weights, self.n)
+
         updated_adj = SparseTensor.from_edge_index(A_idx, A_weights, (self.n, self.n))
 
-        return updated_adj.to_symmetric('max')
+        return updated_adj
 
     def update_edge_weights(self, n_perturbations: int, epoch: int, gradient: torch.Tensor):
         lr_factor = n_perturbations * self.lr_factor
@@ -207,7 +206,7 @@ class LocalPRBCD(SparseLocalAttack):
 
     @ staticmethod
     def classification_statistics(logits, label) -> Dict[str, float]:
-        logits, label = logits.cpu(), label.cpu()
+        logits, label = F.log_softmax(logits.cpu(), dim=-1), label.cpu()
         logits = logits[0]
         logit_target = logits[label].item()
         sorted = logits.argsort()

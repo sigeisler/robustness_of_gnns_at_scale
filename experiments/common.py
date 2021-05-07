@@ -137,13 +137,14 @@ def sample_attack_nodes(logits: torch.Tensor, labels: torch.Tensor, topk: int, n
 def get_local_attack_nodes(attack, binary_attr, attr, adj, labels, surrogate_model, idx_test, device, attack_params, topk=10):
 
     with torch.no_grad():
+        surrogate_model = surrogate_model.to(device)
         surrogate_model.eval()
         if type(surrogate_model) in BATCHED_PPR_MODELS.__args__:
-            logits = surrogate_model.forward(attr,
-                                             adj,
+            logits = surrogate_model.forward(attr.to(device),
+                                             adj.to(device),
                                              ppr_idx=np.array(idx_test))
         else:
-            logits = surrogate_model(attr, adj)[idx_test]
+            logits = surrogate_model(attr.to(device), adj.to(device))[idx_test]
 
         acc = accuracy(logits.cpu(), labels.cpu()[idx_test], np.arange(logits.shape[0]))
 
