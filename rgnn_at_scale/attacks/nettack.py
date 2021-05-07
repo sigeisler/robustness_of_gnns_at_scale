@@ -53,14 +53,13 @@ class Nettack(SparseLocalAttack):
                  idx_attack: np.ndarray,
                  model: GCN,
                  device: Union[str, int, torch.device],
-                 epsilon: float = 1e-5,
                  **kwargs):
 
         SparseLocalAttack.__init__(self, adj, X, labels, idx_attack, model, device, **kwargs)
 
         assert len(self.surrogate_model.layers) == 2, "Nettack supports only 2 Layer Linear GCN as surrogate model"
-        assert all([isinstance(module[1], Identity)
-                    for module in self.surrogate_model.layers]), "Nettack only supports Linear GCN as surrogate model"
+        assert isinstance(self.surrogate_model._modules['activation'], Identity), \
+            "Nettack only supports Linear GCN as surrogate model"
 
         self.sp_adj = adj.to_scipy(layout="csr")
         self.sp_attr = SparseTensor.from_dense(self.X).to_scipy(layout="csr")
@@ -87,9 +86,10 @@ class Nettack(SparseLocalAttack):
             perturbed_graph = self.adj
 
         if type(model) in BATCHED_PPR_MODELS.__args__:
-            return F.log_softmax(model.forward(self.X, perturbed_graph, ppr_idx=np.array([node_idx])), dim=-1)
+            return model.to(self.device).forward(self.X, perturbed_graph, ppr_idx=np.array([node_idx]))
         else:
-            return model(data=self.X.to(self.device), adj=perturbed_graph)[node_idx:node_idx + 1]
+            return model.to(self.device)(data=self.X.to(self.device),
+                                         adj=perturbed_graph.to(self.device))[node_idx:node_idx + 1]
 
     def get_perturbed_edges(self):
         if self.nettack is None:

@@ -8,6 +8,7 @@ import scipy.sparse as sp
 import torch
 from torch.nn import functional as F
 
+import torch_sparse
 from torch_sparse import SparseTensor
 from rgnn_at_scale.models import MODEL_TYPE, DenseGCN, GCN, BATCHED_PPR_MODELS
 from rgnn_at_scale.helper.utils import accuracy
@@ -48,6 +49,7 @@ class Attack(ABC):
         self.surrogate_model.eval()
         for p in self.surrogate_model.parameters():
             p.requires_grad = False
+        self.eval_model = self.surrogate_model
 
         self.labels = labels.to(torch.long).to(self.device)
         self.labels_attack = self.labels[self.idx_attack]
@@ -155,10 +157,9 @@ class Attack(ABC):
             )
 
             not_flipped = logits.argmax(-1) == labels
-            loss = F.nll_loss(logits[not_flipped], labels[not_flipped])
 
             loss = alpha * torch.tanh(-margin).mean() + (1 - alpha) * \
-                F.nll_loss(logits[not_flipped], labels[not_flipped])
+                F.cross_entropy(logits[not_flipped], labels[not_flipped])
         elif self.loss_type == 'eluMargin':
             sorted = logits.argsort(-1)
             best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
@@ -169,13 +170,13 @@ class Attack(ABC):
             loss = -F.elu(margin).mean()
         elif self.loss_type == 'MCE':
             not_flipped = logits.argmax(-1) == labels
-            loss = F.nll_loss(logits[not_flipped], labels[not_flipped])
+            loss = F.cross_entropy(logits[not_flipped], labels[not_flipped])
         elif self.loss_type == 'SCE':
             sorted = logits.argsort(-1)
             best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
-            loss = -F.nll_loss(logits, best_non_target_class)
+            loss = -F.cross_entropy(logits, best_non_target_class)
         else:
-            loss = F.nll_loss(logits, labels)
+            loss = F.cross_entropy(logits, labels)
         return loss
 
     @staticmethod

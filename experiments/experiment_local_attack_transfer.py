@@ -108,13 +108,13 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
 
     tmp_nodes = [int(i) for i in tmp_nodes]
     for node in tmp_nodes:
-        degree = adj[node].sum() + 1
+        degree = adj[node].sum()
 
         tmp_epsilons = list(epsilons)
         #tmp_epsilons.insert(0, 0)
         for eps in tmp_epsilons:
             try:
-                adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels, model=model,
+                adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels, model=surrogate_model,
                                           idx_attack=idx_test, device=device, data_device=data_device, **attack_params)
             except Exception as e:
                 logging.exception(e)

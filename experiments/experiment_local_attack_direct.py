@@ -4,14 +4,8 @@ from typing import Any, Dict, Sequence, Union
 import numpy as np
 from sacred import Experiment
 import seml
-import torch
 
-from rgnn_at_scale.data import prep_graph, split
-from rgnn_at_scale.attacks import create_attack, SPARSE_ATTACKS
-from rgnn_at_scale.helper.io import Storage
-from rgnn_at_scale.models import DenseGCN, GCN
-from rgnn_at_scale.train import train
-from rgnn_at_scale.helper.utils import accuracy
+from rgnn_at_scale.attacks import create_attack
 from experiments.common import prepare_attack_experiment, get_local_attack_nodes
 
 from rgnn_at_scale.helper import utils
@@ -35,13 +29,14 @@ def config():
     # default params
     dataset = 'cora_ml'  # Options are 'cora_ml' and 'citeseer' (or with a big GPU 'pubmed')
     attack = 'LocalBatchedPRBCD'
-    attack_params = {"ppr_cache_params": {
-        "data_artifact_dir": "cache",
-        "data_storage_type": "ppr"
+    attack_params = {
+        "ppr_cache_params": {
+            "data_artifact_dir": "cache",
+            "data_storage_type": "ppr"
+        }
     }
-    }
-    nodes = None  # [1854, 513, 2383]
-    nodes_topk = 1
+    nodes = None
+    nodes_topk = 40
 
     epsilons = [0.5]  # , 0.75, 1]
     seed = 0
@@ -51,7 +46,7 @@ def config():
     model_storage_type = 'pretrained'
     model_label = 'Vanilla PPRGo'
 
-    data_dir = './data'
+    data_dir = './datasets'
     binary_attr = False
     normalize = False
     normalize_attr = False
@@ -111,7 +106,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
         tmp_nodes = [int(i) for i in tmp_nodes]
 
         for node in tmp_nodes:
-            degree = adj[node].sum() + 1
+            degree = adj[node].sum()
             for eps in epsilons:
                 n_perturbations = int((eps * degree).round().item())
                 if n_perturbations == 0:
@@ -119,7 +114,9 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
 
                 # In case the model is non-deterministic to get the results either after attacking or after loading
                 try:
-                    adversary.attack(n_perturbations, node_idx=node)
+                    import torch
+                    with torch.autograd.set_detect_anomaly(True):
+                        adversary.attack(n_perturbations, node_idx=node)
                 except Exception as e:
                     logging.exception(e)
                     logging.error(

@@ -47,7 +47,6 @@ linear_gcn:
     model_params:
       label: Linear GCN
       activation: Identiy
-      do_omit_softmax: True
       model: GCN
       do_cache_adj_prep: True
       n_filters: 64
