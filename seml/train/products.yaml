@@ -45,6 +45,8 @@ gcn:
       gdc_params: None
       svd_params: None
       jaccard_params: None
+      do_checkpoint: True
+      n_chunks: 64
 
 gdc:
   fixed:

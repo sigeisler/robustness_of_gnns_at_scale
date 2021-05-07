@@ -49,8 +49,6 @@ class Attack(ABC):
         for p in self.surrogate_model.parameters():
             p.requires_grad = False
 
-        self.set_eval_model(model)
-
         self.labels = labels.to(torch.long).to(self.device)
         self.labels_attack = self.labels[self.idx_attack]
         self.X = X.to(self.data_device)
@@ -83,24 +81,20 @@ class Attack(ABC):
 
         return self.adj_adversary, self.attr_adversary
 
-    def set_eval_model(self, model):
-        self.eval_model = deepcopy(model).to(self.device)
-
-    def evaluate_global(self, eval_idx: List[int]):
+    @staticmethod
+    def evaluate_global(model, attr, adj, labels: torch.Tensor, eval_idx: List[int]):
         with torch.no_grad():
-            self.eval_model.eval()
-            if hasattr(self.eval_model, 'release_cache'):
-                self.eval_model.release_cache()
+            model.eval()
+            if hasattr(model, 'release_cache'):
+                model.release_cache()
 
-            if type(self.eval_model) in BATCHED_PPR_MODELS.__args__:
-                pred_logits_target = self.eval_model.forward(self.attr_adversary,
-                                                             self.adj_adversary,
-                                                             ppr_idx=np.array(eval_idx))
+            if type(model) in BATCHED_PPR_MODELS.__args__:
+                pred_logits_target = model.forward(attr, adj, ppr_idx=np.array(eval_idx))
             else:
-                pred_logits_target = self.eval_model(self.attr_adversary, self.adj_adversary)[eval_idx]
+                pred_logits_target = model(attr, adj)[eval_idx]
 
-            acc_test_target = accuracy(pred_logits_target.cpu(), self.labels.cpu()[
-                                       eval_idx], np.arange(pred_logits_target.shape[0]))
+            acc_test_target = accuracy(pred_logits_target.cpu(), labels.cpu()[eval_idx],
+                                       np.arange(pred_logits_target.shape[0]))
 
         return pred_logits_target, acc_test_target
 
@@ -147,7 +141,7 @@ class Attack(ABC):
                 logits[np.arange(logits.size(0)), labels]
                 - logits[np.arange(logits.size(0)), best_non_target_class]
             )
-            loss = (alpha * torch.tanh(-margin) - (1-alpha) * torch.clamp(margin, min=0)).mean()
+            loss = (alpha * torch.tanh(-margin) - (1 - alpha) * torch.clamp(margin, min=0)).mean()
         elif self.loss_type.startswith('tanhMarginMCE-'):
             alpha = float(self.loss_type.split('-')[-1])
             assert alpha >= 0, f'Alpha {alpha} must be greater or equal 0'
@@ -163,7 +157,8 @@ class Attack(ABC):
             not_flipped = logits.argmax(-1) == labels
             loss = F.nll_loss(logits[not_flipped], labels[not_flipped])
 
-            loss = alpha * torch.tanh(-margin).mean() + (1-alpha) * F.nll_loss(logits[not_flipped], labels[not_flipped])
+            loss = alpha * torch.tanh(-margin).mean() + (1 - alpha) * \
+                F.nll_loss(logits[not_flipped], labels[not_flipped])
         elif self.loss_type == 'eluMargin':
             sorted = logits.argsort(-1)
             best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
@@ -272,6 +267,9 @@ class SparseLocalAttack(SparseAttack):
             initial_logits = self.get_eval_logits(node_idx)
             logits = self.get_eval_logits(node_idx, self.adj_adversary)
         return logits, initial_logits
+
+    def set_eval_model(self, model):
+        self.eval_model = deepcopy(model).to(self.device)
 
 
 class DenseAttack(Attack):

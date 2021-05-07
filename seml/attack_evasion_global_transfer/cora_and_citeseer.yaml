@@ -49,6 +49,7 @@ fgsm:
   fixed:
     attack: FGSM
     binary_attr: False
+    surrogate_model_label: Vanilla Dense GCN
   grid: 
     attack_params:
       type: parameter_collection
@@ -80,6 +81,7 @@ pgd:
   fixed:
     attack: PGD
     binary_attr: False
+    surrogate_model_label: Vanilla Dense GCN
   grid: 
     attack_params:
       type: parameter_collection
@@ -155,6 +157,7 @@ prbcd:
 #   fixed:
 #     binary_attr: True
 #     attack: GANG
+#     surrogate_model_label: Vanilla GCN
 #     attack_params:
 #       edge_with_random_reverse: False
 #       edge_step_size: 5

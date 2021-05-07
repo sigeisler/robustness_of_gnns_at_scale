@@ -4,16 +4,10 @@ from typing import Any, Dict, Sequence, Union
 
 from sacred import Experiment
 import seml
-import numpy as np
 import torch
 
-from rgnn_at_scale.data import prep_graph, split
-from rgnn_at_scale.attacks import create_attack, SPARSE_ATTACKS
-from rgnn_at_scale.helper.io import Storage
-from rgnn_at_scale.models import DenseGCN, GCN
-from rgnn_at_scale.train import train
-from rgnn_at_scale.helper.utils import accuracy
-from experiments.common import (prepare_attack_experiment, run_global_attack)
+from rgnn_at_scale.attacks import Attack, create_attack
+from experiments.common import prepare_attack_experiment, run_global_attack
 
 ex = Experiment()
 seml.setup_logger(ex)
@@ -96,7 +90,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
         warnings.warn("More than one matching surrogate model found. Choose first one by default.")
 
     surrogate_model = surrogate_models_and_hyperparams[0][0]
-    
+
     for epsilon in epsilons:
         try:
             adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels, model=surrogate_model,
@@ -109,11 +103,16 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
         run_global_attack(epsilon, m, storage, pert_adj_storage_type, pert_attr_storage_type,
                           pert_params, adversary, surrogate_model_label)
 
+        # Clear to save GPU memory
+        adj_adversary = adversary.adj_adversary
+        attr_adversary = adversary.attr_adversary
+        del adversary
+
         for model, hyperparams in models_and_hyperparams:
             current_label = hyperparams["label"]
             logging.info(f"Evaluate  {attack} for model '{current_label}'.")
-            adversary.set_eval_model(model)
-            logits, accuracy = adversary.evaluate_global(idx_test)
+            logits, accuracy = Attack.evaluate_global(model.to(device), attr_adversary.to(device), 
+                                                      adj_adversary.to(device), labels, idx_test)
 
             results.append({
                 'label': current_label,
@@ -121,9 +120,9 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                 'accuracy': accuracy
             })
 
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            torch.cuda.synchronize()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
 
     assert len(results) > 0
 

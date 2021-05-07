@@ -48,6 +48,7 @@ greedy_rbcd:
   fixed:
     attack: GreedyRBCD
     binary_attr: False
+    surrogate_model_label: Vanilla GCN
   grid: 
     attack_params:
       type: parameter_collection
@@ -62,6 +63,7 @@ prbcd:
   fixed:
     attack: PRBCD
     binary_attr: False
+    surrogate_model_label: Vanilla GCN
     attack_params:
       keep_heuristic: WeightOnly
       search_space_size: 20_000_000
@@ -81,6 +83,7 @@ prbcd:
 #   fixed:
 #     attack: GANG
 #     binary_attr: False
+#     surrogate_model_label: Vanilla GCN
 #     attack_params:
 #       edge_with_random_reverse: False
 #       edge_step_size: 50_000
@@ -92,3 +95,4 @@ dice:
   fixed:
     attack: DICE
     binary_attr: False
+    surrogate_model_label: Vanilla GCN

@@ -2,18 +2,12 @@
 import logging
 from typing import Any, Dict, Sequence, Union
 
-import numpy as np
 from sacred import Experiment
 import seml
 import torch
 
-from rgnn_at_scale.data import prep_graph, split
-from rgnn_at_scale.attacks import create_attack, SPARSE_ATTACKS
-from rgnn_at_scale.helper.io import Storage
-from rgnn_at_scale.models import DenseGCN, GCN
-from rgnn_at_scale.train import train
-from rgnn_at_scale.helper.utils import accuracy
-from experiments.common import (prepare_attack_experiment, run_global_attack)
+from rgnn_at_scale.attacks import Attack, create_attack
+from experiments.common import prepare_attack_experiment, run_global_attack
 
 ex = Experiment()
 seml.setup_logger(ex)
@@ -99,7 +93,11 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
             run_global_attack(epsilon, m, storage, pert_adj_storage_type, pert_attr_storage_type,
                               pert_params, adversary, model_label)
 
-            logits, accuracy = adversary.evaluate_global(idx_test)
+            adj_adversary = adversary.adj_adversary
+            attr_adversary = adversary.attr_adversary
+
+            logits, accuracy = Attack.evaluate_global(model.to(device), attr_adversary.to(device), 
+                                                      adj_adversary.to(device), labels, idx_test)
 
             results.append({
                 'label': model_label,

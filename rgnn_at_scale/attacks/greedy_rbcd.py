@@ -23,9 +23,9 @@ class GreedyRBCD(PRBCD):
         rows, cols, self.edge_weight = self.adj.coo()
         self.edge_index = torch.stack([rows, cols], dim=0)
 
-        self.edge_index = self.edge_index.to(self.device)
-        self.edge_weight = self.edge_weight.to(self.device)
-        self.X = self.X.to(self.device)
+        self.edge_index = self.edge_index
+        self.edge_weight = self.edge_weight
+        self.X = self.X
         self.epochs = epochs
 
         self.n_perturbations = 0
@@ -90,7 +90,7 @@ class GreedyRBCD(PRBCD):
 
             # print(f'Cuda after sampling: {torch.cuda.memory_summary()}')
 
-            logits = self.surrogate_model(data=self.X, adj=(edge_index, edge_weight))
+            logits = self.surrogate_model(data=self.X.to(self.device), adj=(edge_index, edge_weight))
             loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
 
             gradient = utils.grad_with_checkpoint(loss, self.modified_edge_weight_diff)[0]

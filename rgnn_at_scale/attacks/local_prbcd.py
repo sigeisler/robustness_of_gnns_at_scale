@@ -34,7 +34,7 @@ class LocalPRBCD(SparseLocalAttack):
                  with_early_stropping: bool = True,
                  do_synchronize: bool = False,
                  eps: float = 1e-14,
-                 K: int = 20,
+                 final_samples: int = 20,
                  **kwargs):
 
         super().__init__(**kwargs)
@@ -51,7 +51,7 @@ class LocalPRBCD(SparseLocalAttack):
         self.eps = eps
         self.do_synchronize = do_synchronize
         # TODO: Rename
-        self.K = K
+        self.final_samples = final_samples
 
         self.current_search_space: torch.Tensor = None
         self.modified_edge_weight_diff: torch.Tensor = None
@@ -291,7 +291,7 @@ class LocalPRBCD(SparseLocalAttack):
             s = self.modified_edge_weight_diff.abs().detach()
             s[s == self.eps] = 0
             while best_margin == float('Inf'):
-                for i in range(self.K):
+                for i in range(self.final_samples):
                     if best_margin == float('Inf'):
                         sampled = torch.zeros_like(s)
                         sampled[torch.topk(s, n_perturbations).indices] = 1
