@@ -23,9 +23,9 @@ class GreedyRBCD(PRBCD):
         rows, cols, self.edge_weight = self.adj.coo()
         self.edge_index = torch.stack([rows, cols], dim=0)
 
-        self.edge_index = self.edge_index
-        self.edge_weight = self.edge_weight
-        self.X = self.X
+        self.edge_index = self.edge_index.to(self.data_device)
+        self.edge_weight = self.edge_weight.float().to(self.data_device)
+        self.X = self.X.to(self.data_device)
         self.epochs = epochs
 
         self.n_perturbations = 0
@@ -44,8 +44,8 @@ class GreedyRBCD(PRBCD):
         n_newly_added = int(add_edge_weight.sum().item())
 
         add_edge_index, add_edge_weight = utils.to_symmetric(add_edge_index, add_edge_weight, self.n)
-        add_edge_index = torch.cat((self.edge_index, add_edge_index), dim=-1)
-        add_edge_weight = torch.cat((self.edge_weight, add_edge_weight))
+        add_edge_index = torch.cat((self.edge_index, add_edge_index.to(self.data_device)), dim=-1)
+        add_edge_weight = torch.cat((self.edge_weight, add_edge_weight.to(self.data_device)))
         edge_index, edge_weight = torch_sparse.coalesce(
             add_edge_index, add_edge_weight, m=self.n, n=self.n, op='sum'
         )

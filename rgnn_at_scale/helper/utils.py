@@ -428,8 +428,7 @@ def get_ppr_matrix(adjacency_matrix: torch.Tensor,
 
 
 
-
-@ numba.njit(cache=True, locals={'_val': numba.float32, 'res': numba.float32, 'res_vnode': numba.float32})
+@numba.njit(cache=True, locals={'_val': numba.float32, 'res': numba.float32, 'res_vnode': numba.float32})
 def _calc_ppr_node(inode, indptr, indices, deg, alpha, epsilon):
     alpha_eps = alpha * epsilon
     f32_0 = numba.float32(0)
@@ -458,7 +457,7 @@ def _calc_ppr_node(inode, indptr, indices, deg, alpha, epsilon):
     return list(p.keys()), list(p.values())
 
 
-@ numba.njit(cache=True, parallel=True)
+@numba.njit(parallel=True)
 def _calc_ppr_topk_parallel(indptr, indices, deg, alpha, epsilon, nodes, topk):
     js = [np.zeros(0, dtype=np.int64)] * len(nodes)
     vals = [np.zeros(0, dtype=np.float32)] * len(nodes)

@@ -45,6 +45,8 @@ greedy_rbcd:
     attack: GreedyRBCD
     binary_attr: False
     surrogate_model_label: Vanilla GCN
+    attack_params:
+      search_space_size: 10_000_000
   grid: 
     attack_params:
       type: parameter_collection
@@ -62,7 +64,7 @@ prbcd:
     surrogate_model_label: Vanilla GCN
     attack_params:
       keep_heuristic: WeightOnly
-      search_space_size: 5_000_000
+      search_space_size: 10_000_000
       do_synchronize: True
   grid: 
     attack_params:
