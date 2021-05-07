@@ -14,7 +14,6 @@ from rgnn_at_scale.models import MODEL_TYPE, BATCHED_PPR_MODELS
 from rgnn_at_scale.attacks.local_prbcd import LocalPRBCD
 from rgnn_at_scale.helper import utils
 from rgnn_at_scale.helper import ppr_utils as ppr
-from rgnn_at_scale.helper.io import Storage
 from rgnn_at_scale.data import CachedPPRMatrix
 
 

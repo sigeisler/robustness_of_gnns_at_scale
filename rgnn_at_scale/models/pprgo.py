@@ -409,7 +409,7 @@ class PPRGoWrapperBase():
                 topk_ppr, _ = stored_topk_ppr[0] if len(stored_topk_ppr) == 1 else (None, None)
 
             if topk_ppr is None:
-                topk_ppr = ppr.topk_ppr_matrix(adj, self.alpha, self.eps, ppr_idx,
+                topk_ppr = ppr.topk_ppr_matrix(adj, self.alpha, self.eps, ppr_idx.copy(),
                                                self.topk,  normalization=self.ppr_normalization)
 
                 # save topk_ppr to disk
@@ -496,7 +496,6 @@ class PPRGoWrapperBase():
                           eps=self.eps,
                           topk=self.topk,
                           ppr_normalization=self.ppr_normalization,
-                          split_desc="train",
                           normalize=self.ppr_cache_params["normalize"],
                           make_undirected=self.ppr_cache_params["make_undirected"],
                           make_unweighted=self.ppr_cache_params["make_unweighted"])
@@ -507,7 +506,7 @@ class PPRGoWrapperBase():
 
         if topk_train is None:
             # looks like there was no ppr calculated before hand, so we need to calculate it now
-            topk_train = ppr.topk_ppr_matrix(adj, self.alpha, self.eps, idx_train,
+            topk_train = ppr.topk_ppr_matrix(adj, self.alpha, self.eps, idx_train.copy(),
                                              self.topk,  normalization=self.ppr_normalization)
             # save topk_ppr to disk
             if self.ppr_cache_params is not None:
@@ -522,14 +521,13 @@ class PPRGoWrapperBase():
         topk_val = None
         if self.ppr_cache_params is not None:
             params["ppr_idx"] = np.array(idx_val)
-            params["split_desc"] = "val"
 
             stored_topk_val = storage.find_sparse_matrix(self.ppr_cache_params["data_storage_type"],
                                                          params, find_first=True)
             topk_val, _ = stored_topk_val[0] if len(stored_topk_val) == 1 else (None, None)
 
         if topk_val is None:
-            topk_val = ppr.topk_ppr_matrix(adj, self.alpha, self.eps, idx_val,
+            topk_val = ppr.topk_ppr_matrix(adj, self.alpha, self.eps, idx_val.copy(),
                                            self.topk,  normalization=self.ppr_normalization)
             # save topk_ppr to disk
             if self.ppr_cache_params is not None:

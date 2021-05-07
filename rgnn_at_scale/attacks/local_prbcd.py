@@ -23,13 +23,12 @@ from rgnn_at_scale.attacks.base_attack import Attack, SparseLocalAttack
 class LocalPRBCD(SparseLocalAttack):
 
     def __init__(self,
-                 *args,
-                 loss_type: str = 'Margin',
+                 loss_type: str = 'Margin',  # 'CW', 'LeakyCW'  # 'CE', 'MCE', 'Margin'
                  attack_labeled_nodes_only: bool = False,
                  lr_factor: float = 1.0,
                  display_step: int = 20,
-                 epochs: int = 400,
-                 fine_tune_epochs: int = 100,
+                 epochs: int = 150,
+                 fine_tune_epochs: int = 50,
                  search_space_size: int = 10_000,
                  with_early_stropping: bool = True,
                  do_synchronize: bool = False,
@@ -103,8 +102,9 @@ class LocalPRBCD(SparseLocalAttack):
                 )
 
                 perturbed_graph = self.perturb_graph(node_idx)
-                logits = self.get_surrogate_logits(node_idx, perturbed_graph)
-                classification_statistics = LocalPRBCD.classification_statistics(logits, self.labels[node_idx])
+                logits = self.get_surrogate_logits(node_idx, perturbed_graph).to(self.device)
+                classification_statistics = LocalPRBCD.classification_statistics(
+                    logits, self.labels[node_idx].to(self.device))
                 if epoch % self.display_step == 0:
                     logging.info(f'\nEpoch: {epoch} Loss: {loss.item()} Statstics: {classification_statistics}\n')
 
