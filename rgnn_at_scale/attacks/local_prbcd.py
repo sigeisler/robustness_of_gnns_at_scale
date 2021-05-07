@@ -144,7 +144,7 @@ class LocalPRBCD(SparseLocalAttack):
             perturbed_graph = self.adj
 
         if type(model) in BATCHED_PPR_MODELS.__args__:
-            return F.log_softmax(model.forward(self.X.to(self.device), perturbed_graph, ppr_idx=np.array([node_idx])), dim=-1)
+            return model.forward(self.X.to(self.device), perturbed_graph, ppr_idx=np.array([node_idx]))
         else:
             return model(data=self.X.to(self.device), adj=perturbed_graph.to(self.device))[node_idx:node_idx + 1]
 

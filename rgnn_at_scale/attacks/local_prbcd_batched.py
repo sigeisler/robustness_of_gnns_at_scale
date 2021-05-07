@@ -59,7 +59,7 @@ class LocalBatchedPRBCD(LocalPRBCD):
             perturbed_graph = SparseTensor.from_scipy(self.ppr_matrix[node_idx])
 
         if type(model) in BATCHED_PPR_MODELS.__args__:
-            return F.log_softmax(model.forward(self.X, None, ppr_scores=perturbed_graph), dim=-1)
+            return model.forward(self.X, None, ppr_scores=perturbed_graph)
         else:
             return model(data=self.X.to(self.device), adj=perturbed_graph.to(self.device))[node_idx:node_idx + 1]
 

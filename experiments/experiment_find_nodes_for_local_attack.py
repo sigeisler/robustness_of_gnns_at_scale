@@ -97,14 +97,14 @@ def run(data_dir: str, dataset: str, binary_attr: bool, make_undirected: bool, m
 
         with torch.no_grad():
             if type(model) in BATCHED_PPR_MODELS.__args__:
-                log_prob = F.log_softmax(model.forward(attr, adj, ppr_idx=idx_test), dim=-1).detach().cpu()
+                log_prob = model.forward(attr, adj, ppr_idx=idx_test).detach().cpu()
             else:
                 log_prob = model(data=attr.to(device), adj=adj.to(device))[idx_test].detach().cpu()
-                if model.do_omit_softmax:
-                    log_prob = F.log_softmax(log_prob)
+            log_prob = F.log_softmax(log_prob)
 
-        max_confidence_nodes_idx, min_confidence_nodes_idx, rand_nodes_idx = sample_attack_nodes(log_prob, labels[idx_test], topk, idx_test)
-        
+        max_confidence_nodes_idx, min_confidence_nodes_idx, rand_nodes_idx = sample_attack_nodes(
+            log_prob, labels[idx_test], topk, idx_test)
+
         results.append({
             'hyperparams': hyperparams,
             'log_prob': log_prob.cpu(),

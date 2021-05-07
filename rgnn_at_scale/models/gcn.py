@@ -101,8 +101,6 @@ class GCN(nn.Module):
             an additive bias. (default: :obj:`True`)
     dropout : int, optional
         Dropout rate, by default 0.5
-    do_omit_softmax : bool, optional
-        If you wanto omit the softmax of the output logits (for efficency), by default False
     gdc_params : Dict[str, float], optional
         Parameters for the GCN preprocessing (`alpha`, `k`, `use_cpu`), by default None
     svd_params : Dict[str, float], optional
@@ -120,7 +118,6 @@ class GCN(nn.Module):
                  n_filters: Union[int, Sequence[int]] = 64,
                  bias: bool = True,
                  dropout: int = 0.5,
-                 do_omit_softmax: bool = False,
                  with_batch_norm: bool = False,
                  gdc_params: Optional[Dict[str, float]] = None,
                  svd_params: Optional[Dict[str, float]] = None,
@@ -149,7 +146,6 @@ class GCN(nn.Module):
         self.bias = bias
         self.n_classes = n_classes
         self.dropout = dropout
-        self.do_omit_softmax = do_omit_softmax
         self.with_batch_norm = with_batch_norm
         self.gdc_params = gdc_params
         self.svd_params = svd_params
@@ -181,7 +177,6 @@ class GCN(nn.Module):
         idx = len(modules)
         modules.append(nn.Sequential(collections.OrderedDict([
             (f'gcn_{idx}', self._build_conv_layer(in_channels=self.n_filters[-1], out_channels=self.n_classes)),
-            (f'softmax_{idx}', nn.Identity() if self.do_omit_softmax else nn.LogSoftmax(dim=1))
         ])))
         return modules
 
