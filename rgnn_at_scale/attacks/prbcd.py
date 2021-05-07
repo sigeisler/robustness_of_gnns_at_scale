@@ -85,9 +85,6 @@ class PRBCD(SparseAttack):
         best_epoch = float('-Inf')
         self.attack_statistics = defaultdict(list)
 
-        mn = self.modified_edge_weight_diff.mean()
-        logging.info(f'modified_edge_weight_diff mean is {mn}')
-
         for epoch in tqdm(range(self.epochs + self.fine_tune_epochs)):
             self.modified_edge_weight_diff.requires_grad = True
             edge_index, edge_weight = self.get_modified_adj()
@@ -129,9 +126,6 @@ class PRBCD(SparseAttack):
 
                 if epoch < self.epochs - 1:
                     self.resample_search_space(n_perturbations, edge_index, edge_weight, gradient)
-                    mn = self.modified_edge_weight_diff.mean()
-                    t = (self.modified_edge_weight_diff > 0.4).sum()
-                    #logging.info(f'modified_edge_weight_diff mean is {mn} of this {t} over 0.4')
                 elif self.with_early_stropping and epoch == self.epochs - 1:
                     print(f'Loading search space of epoch {best_epoch} (accuarcy={best_accuracy}) for fine tuning\n')
                     self.current_search_space = best_search_space.to(self.device)
