@@ -27,12 +27,9 @@ fixed:
   normalize: False
   normalize_attr: False
 
-grid:
-  dataset:
-    type: choice
-    options:
-      - pubmed
+  dataset: pubmed
 
+grid:
   seed:
     type: choice
     options:
