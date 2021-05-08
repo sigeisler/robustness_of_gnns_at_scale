@@ -61,6 +61,11 @@ def prepare_attack_experiment(data_dir: str, dataset: str, attack: str, attack_p
             make_unweighted=make_unweighted,
         ))
         tmp_attack_params["ppr_cache_params"] = ppr_cache_params
+        tmp_attack_params.update(
+            normalize=normalize,
+            normalize_attr=normalize_attr,
+            make_undirected=make_undirected,
+            make_unweighted=make_unweighted)
 
     pert_params = dict(dataset=dataset,
                        binary_attr=binary_attr,

@@ -57,6 +57,9 @@ class LocalPRBCD(SparseLocalAttack):
         self.lr_factor *= max(math.sqrt(self.n / self.search_space_size), 1.)
 
     def _attack(self, n_perturbations: int, node_idx: int, **kwargs):
+        if self.make_undirected:
+            n_perturbations = int(math.ceil(n_perturbations / 2))
+
         self.sample_search_space(node_idx, n_perturbations)
         best_margin = float('Inf')
         best_epoch = float('-Inf')
@@ -193,7 +196,8 @@ class LocalPRBCD(SparseLocalAttack):
         # Works since the attack will always assign at least a small constant the elements in p
         A_weights[A_weights > 1] = -A_weights[A_weights > 1] + 2
 
-        A_idx, A_weights = to_symmetric(A_idx, A_weights, self.n)
+        if self.make_undirected:
+            A_idx, A_weights = to_symmetric(A_idx, A_weights, self.n, op='max')
 
         updated_adj = SparseTensor.from_edge_index(A_idx, A_weights, (self.n, self.n))
 

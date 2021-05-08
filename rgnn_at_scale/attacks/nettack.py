@@ -1,6 +1,7 @@
 
 from typing import Dict,  Union
 
+import math
 from torch_sparse import SparseTensor
 import numpy as np
 from numba import jit
@@ -12,6 +13,7 @@ from torch.nn import Identity
 from rgnn_at_scale.models import MODEL_TYPE, BATCHED_PPR_MODELS
 from rgnn_at_scale.helper.utils import sparse_tensor
 from rgnn_at_scale.models import GCN
+from rgnn_at_scale.helper.utils import to_symmetric
 from rgnn_at_scale.attacks.base_attack import SparseLocalAttack
 
 """
@@ -66,6 +68,8 @@ class Nettack(SparseLocalAttack):
         self.nettack = None
 
     def _attack(self, n_perturbations: int, node_idx: int, **kwargs):
+        if self.make_undirected:
+            n_perturbations = int(math.ceil(n_perturbations / 2))
         self.nettack = OriginalNettack(self.sp_adj,
                                        self.sp_attr,
                                        self.labels.detach().cpu().numpy(),
@@ -80,6 +84,13 @@ class Nettack(SparseLocalAttack):
                                       direct=True)
 
         self.adj_adversary = self.nettack.adj_adversary.to(self.device)
+
+        if self.make_undirected:
+            A_rows, A_cols, A_vals = self.adj_adversary.coo()
+            A_idx = torch.stack([A_rows, A_cols], dim=0)
+            assert self.make_unweighted, "Make undirected ist not implemented for weighted adjacencies"
+            A_idx, A_weights = to_symmetric(A_idx, A_vals, self.n, op='max')
+            self.adj_adversary = SparseTensor.from_edge_index(A_idx, A_weights, (self.n, self.n))
 
     def get_logits(self, model: MODEL_TYPE, node_idx: int, perturbed_graph: SparseTensor = None) -> torch.Tensor:
         if perturbed_graph is None:

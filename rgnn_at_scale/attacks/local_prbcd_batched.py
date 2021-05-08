@@ -14,6 +14,7 @@ from rgnn_at_scale.models import MODEL_TYPE, BATCHED_PPR_MODELS
 from rgnn_at_scale.attacks.local_prbcd import LocalPRBCD
 from rgnn_at_scale.helper import utils
 from rgnn_at_scale.helper import ppr_utils as ppr
+from rgnn_at_scale.helper.utils import to_symmetric
 from rgnn_at_scale.data import CachedPPRMatrix
 
 
@@ -21,7 +22,7 @@ class LocalBatchedPRBCD(LocalPRBCD):
 
     def __init__(self,
                  ppr_matrix: Optional[SparseTensor] = None,
-                 ppr_recalc_at_end: bool = False,
+                 ppr_recalc_at_end: bool = True,
                  ppr_cache_params: Dict[str, Any] = None,
                  ** kwargs):
 
@@ -65,26 +66,27 @@ class LocalBatchedPRBCD(LocalPRBCD):
 
     def sample_final_edges(self, node_idx: int, n_perturbations: int):
         if self.ppr_recalc_at_end:
-            adj = self.get_updated_vector_or_graph(node_idx, only_update_adj=True)
+            adj = self.perturb_graph(node_idx, only_update_adj=True, n_perturbations=n_perturbations)
             # Handle disconnected nodes
             disconnected_nodes = (adj.sum(0) == 0).nonzero().flatten()
             if disconnected_nodes.nelement():
                 adj = SparseTensor(row=torch.cat((adj.storage.row(), disconnected_nodes)),
                                    col=torch.cat((adj.storage.col(), disconnected_nodes)),
                                    value=torch.cat((adj.storage.col(), torch.full_like(disconnected_nodes, 1e-9))))
-            sp_adj = self.adj.to_scipy(layout="csr")
+            sp_adj = adj.to_scipy(layout="csr")
             perturbed_graph = ppr.topk_ppr_matrix(sp_adj,
-                                                  self.surrogate_model.alpha + n_perturbations,
+                                                  self.surrogate_model.alpha,
                                                   self.surrogate_model.eps,
                                                   np.array([node_idx]),
-                                                  self.surrogate_model.topk,
+                                                  self.surrogate_model.topk + n_perturbations,
                                                   normalization=self.surrogate_model.ppr_normalization)
+            perturbed_graph = SparseTensor.from_scipy(perturbed_graph)
         else:
             perturbed_graph = self.perturb_graph(node_idx)
 
         return perturbed_graph
 
-    def perturb_graph(self, node_idx: int, only_update_adj: bool = False) -> SparseTensor:
+    def perturb_graph(self, node_idx: int, only_update_adj: bool = False, n_perturbations: int = None) -> SparseTensor:
         if self.attack_labeled_nodes_only:
             current_search_space = torch.tensor(self.idx_attack, device=self.device)[self.current_search_space]
         else:
@@ -99,11 +101,19 @@ class LocalBatchedPRBCD(LocalPRBCD):
             if not isinstance(A_row, SparseTensor):
                 A_row = SparseTensor.from_scipy(A_row)
             perturbed_graph = calc_ppr_update_sparse_result(self.ppr_matrix, A_row,
-                                                            modified_edge_weight_diff, node_idx, self.surrogate_model.alpha)
+                                                            modified_edge_weight_diff,
+                                                            node_idx, self.surrogate_model.alpha)
             return perturbed_graph
         else:
+            assert n_perturbations is not None, "n_perturbations must be given when only updating adjacency"
             v_rows, v_cols, v_vals = modified_edge_weight_diff.coo()
             v_rows += node_idx
+
+            # projection
+            pertubations = v_vals.argsort()[-n_perturbations:]
+            v_rows = v_rows[pertubations]
+            v_cols = v_cols[pertubations]
+            v_vals = v_vals[pertubations]
             v_idx = torch.stack([v_rows, v_cols], dim=0)
 
             A_rows, A_cols, A_vals = self.adj.to(v_vals.device).coo()
@@ -121,8 +131,11 @@ class LocalBatchedPRBCD(LocalPRBCD):
             )
 
             # Works since the attack will always assign at least a small constant the elements in p
-            A_weights[A_weights > 1] = -A_weights[A_weights > 1] + 2
+            # A_weights[A_weights > 1] = -A_weights[A_weights > 1] + 2
+
+            if self.make_undirected:
+                A_idx, A_weights = to_symmetric(A_idx, A_weights, self.n, op='max')
 
             updated_adj = SparseTensor.from_edge_index(A_idx, A_weights, (self.n, self.n))
 
-            return updated_adj.to_symmetric('max')
+            return updated_adj

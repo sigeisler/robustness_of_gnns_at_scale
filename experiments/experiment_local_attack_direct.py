@@ -102,7 +102,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
         tmp_nodes = np.array(nodes)
         if nodes is None:
             tmp_nodes = get_local_attack_nodes(adversary, binary_attr, attr, adj, labels,
-                                               model, idx_test, device, attack_params, topk=nodes_topk)
+                                               model, idx_test, device, attack_params, topk=int(nodes_topk / 4))
         tmp_nodes = [int(i) for i in tmp_nodes]
 
         for node in tmp_nodes:
@@ -145,6 +145,9 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                     for key, value
                     in adversary.classification_statistics(initial_logits.cpu(), labels[node].long().cpu()).items()
                 })
+                logging.info(results[-1])
+                logging.info(
+                    f"Completed attack and evaluation of {model_label} using {attack} with pert. edges for node {node} and budget {n_perturbations}")
                 # if hasattr(adversary, 'attack_statistics'):
                 #     results[-1]['attack_statistics'] = adversary.attack_statistics
         if hasattr(adversary, "ppr_matrix"):

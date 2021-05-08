@@ -8,7 +8,7 @@ slurm:
   experiments_per_job: 1
   sbatch_options:
     gres: gpu:1       # num GPUs
-    mem: 64G
+    mem: 16G
     cpus-per-task: 4  # num cores
     time: 0-05:00     # max time, D-HH:MM
     #qos: interactive
@@ -23,8 +23,9 @@ fixed:
   device: 0
   data_device: cpu
   make_unweighted: True
-  make_undirected: True
   binary_attr: False
+  normalize: False
+  normalize_attr: False
   dataset: cora_ml
 
 grid:
@@ -36,6 +37,11 @@ grid:
       - 5
       # - 42
       # - 100
+  make_undirected:
+    type: choice
+    options:
+      - True
+      - False
 
 #0.826798
 pprgo:

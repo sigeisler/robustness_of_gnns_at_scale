@@ -25,6 +25,8 @@ fixed:
   make_unweighted: True
   make_undirected: True
   binary_attr: False
+  normalize: False
+  normalize_attr: False
 
 grid:
   dataset:

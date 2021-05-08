@@ -24,6 +24,11 @@ class Attack(ABC):
                  model: MODEL_TYPE,
                  device: Union[str, int, torch.device],
                  data_device: Union[str, int, torch.device],
+                 normalize: Union[str, bool],
+                 normalize_attr: Union[str, bool],
+                 make_undirected: bool,
+                 make_unweighted: bool,
+                 binary_attr: bool,
                  loss_type: str = 'CE',  # 'CW', 'LeakyCW'  # 'CE', 'MCE', 'Margin'
                  **kwargs):
 
@@ -44,6 +49,12 @@ class Attack(ABC):
         self.data_device = data_device
         self.idx_attack = idx_attack
         self.loss_type = loss_type
+
+        self.normalize = normalize
+        self.normalize_attr = normalize_attr
+        self.make_undirected = make_undirected
+        self.make_unweighted = make_unweighted
+        self.binary_attr = binary_attr
 
         self.surrogate_model = deepcopy(model).to(self.device)
         self.surrogate_model.eval()

@@ -151,7 +151,7 @@ plots*/
 
 # SEML
 *.out
-seml/train
+output/
 seml/smoothing
 seml/attack_evasion_transfer_vs_number_nodes
 seml/attack_evasion_transfer

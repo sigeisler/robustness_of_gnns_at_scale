@@ -848,6 +848,8 @@ class CachedPPRMatrix:
                                                               self.storage_params, find_first=True)
 
             self.csr_ppr, _ = stored_topk_ppr[0] if len(stored_topk_ppr) == 1 else (None, None)
+            logging.info("Memory Usage after loading 'Attack' CachedPPRMatrix from storage:")
+            logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
 
         if self.csr_ppr is None and use_train_val_ppr and self.storage is not None:
             stored_pprs = self._load_partial_pprs()
@@ -858,21 +860,23 @@ class CachedPPRMatrix:
         if self.csr_ppr is None:
             self.csr_ppr = sp.csr_matrix(self.shape, dtype=self.adj.dtype)
 
-        if self.coo_ppr is None:
+        if self.coo_ppr is None and self.ppr_values_on_demand:
             self.coo_ppr = self.csr_ppr.tocoo()
+            logging.info("Memory Usage after initalizing coo_ppr:")
+            logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
 
         rows, _ = self.csr_ppr.nonzero()
         # make this look up table
         self.cached_csr_rows = np.array(np.unique(rows))
 
-        if not ppr_values_on_demand:
+        if not self.ppr_values_on_demand:
             # calculate all ppr scores beforehand, instead of calculating them on demand
             # this improves training/attack speed as there's no need to check whether the
             # required ppr scores are already cached or not
             missing_ppr_idx = self._get_uncached(np.arange(self.shape[0]))
             if len(missing_ppr_idx) > 0:
                 self._calc_ppr(missing_ppr_idx)
-                self._sync_pprs()
+                self.save_to_storage()
 
         logging.info("Memory after loading CachedPPRMatrix from storage:")
         logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
@@ -943,15 +947,16 @@ class CachedPPRMatrix:
             logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
 
     def _sync_pprs(self):
-        logging.info("Updating csr ppr matrix...")
-        if self.csr_ppr is None:
-            self.csr_ppr = self.coo_ppr.tocsr()
-        elif self.coo_ppr is None:
-            self.coo_ppr = self.csr_ppr.tocoo()
-        elif len(self.csr_ppr.data) < len(self.coo_ppr.data):
-            self.csr_ppr = self.coo_ppr.tocsr()
-        elif len(self.csr_ppr.data) > len(self.coo_ppr.data):
-            self.coo_ppr = self.csr_ppr.tocoo()
+        if self.ppr_values_on_demand:
+            logging.info("Updating csr ppr matrix...")
+            if self.csr_ppr is None:
+                self.csr_ppr = self.coo_ppr.tocsr()
+            elif self.coo_ppr is None:
+                self.coo_ppr = self.csr_ppr.tocoo()
+            elif len(self.csr_ppr.data) < len(self.coo_ppr.data):
+                self.csr_ppr = self.coo_ppr.tocsr()
+            elif len(self.csr_ppr.data) > len(self.coo_ppr.data):
+                self.coo_ppr = self.csr_ppr.tocoo()
 
     def save_to_storage(self):
         self._sync_pprs()

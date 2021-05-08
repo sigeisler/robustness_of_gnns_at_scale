@@ -24,6 +24,8 @@ fixed:
   data_device: 0
   make_unweighted: True
   make_undirected: True
+  normalize: False
+  normalize_attr: False
   binary_attr: False
 
 grid:

@@ -43,7 +43,8 @@ def create_attack(attack: str, binary_attr: bool, attr: torch.Tensor, **kwargs) 
     if kwargs is None:
         kwargs = {}
     kwargs['X'] = attr
-
+    if 'binary_attr' not in kwargs:
+        kwargs['binary_attr'] = binary_attr
     if binary_attr:
         if 'feature_mode' not in kwargs:
             kwargs['feature_mode'] = 'binary'

@@ -63,7 +63,10 @@ def _load_ppr(input_dir, dump_suffix, shape):
     batch_id = 0
     last_row = 0
 
-    incremental_adj = None
+    # incremental_adj = None
+    row_list = []
+    col_list = []
+    val_list = []
     start_read = datetime.now()
     while True:
         start_batch = datetime.now()
@@ -79,10 +82,9 @@ def _load_ppr(input_dir, dump_suffix, shape):
         edge_rows_i, edge_cols_i, edge_vals_i = spi.row, spi.col, spi.data
         edge_rows_i += last_row
 
-        if incremental_adj is None:
-            incremental_adj = IncrementalCSRMatrix(shape, edge_vals_i.dtype)
-
-        incremental_adj.append(edge_rows_i, edge_cols_i, edge_vals_i)
+        row_list.append(edge_rows_i)
+        col_list.append(edge_cols_i)
+        val_list.append(edge_vals_i)
 
         batch_id += 1
         last_row = edge_rows_i.max() + 1
@@ -95,27 +97,27 @@ def _load_ppr(input_dir, dump_suffix, shape):
     logging.info(f"Read took {read_time} seconds")
     logging.info(f'Memory after reading ppr: {utils.get_max_memory_bytes() / (1024 ** 3)}')
 
-    # logging.info("Start concatinating")
-    # concat_start = datetime.now()
-    # edge_rows = np.concatenate(row_list)
-    # concat_time = datetime.now() - concat_start
-    # del row_list
-    # logging.info(f"Concat took {concat_time} seconds")
-    # logging.info(f'Memory concat row ppr: {utils.get_max_memory_bytes() / (1024 ** 3)}')
+    logging.info("Start concatinating")
+    concat_start = datetime.now()
+    edge_rows = np.concatenate(row_list)
+    concat_time = datetime.now() - concat_start
+    del row_list
+    logging.info(f"Concat took {concat_time} seconds")
+    logging.info(f'Memory concat row ppr: {utils.get_max_memory_bytes() / (1024 ** 3)}')
 
-    # concat_start = datetime.now()
-    # edge_cols = np.concatenate(col_list)
-    # concat_time = datetime.now() - concat_start
-    # del col_list
-    # logging.info(f"Concat took {concat_time} seconds")
-    # logging.info(f'Memory concat col ppr: {utils.get_max_memory_bytes() / (1024 ** 3)}')
+    concat_start = datetime.now()
+    edge_cols = np.concatenate(col_list)
+    concat_time = datetime.now() - concat_start
+    del col_list
+    logging.info(f"Concat took {concat_time} seconds")
+    logging.info(f'Memory concat col ppr: {utils.get_max_memory_bytes() / (1024 ** 3)}')
 
-    # concat_start = datetime.now()
-    # edge_vals = np.concatenate(val_list)
-    # concat_time = datetime.now() - concat_start
-    # del val_list
-    # logging.info(f"Concat took {concat_time} seconds")
-    # logging.info(f'Memory concat val ppr: {utils.get_max_memory_bytes() / (1024 ** 3)}')
+    concat_start = datetime.now()
+    edge_vals = np.concatenate(val_list)
+    concat_time = datetime.now() - concat_start
+    del val_list
+    logging.info(f"Concat took {concat_time} seconds")
+    logging.info(f'Memory concat val ppr: {utils.get_max_memory_bytes() / (1024 ** 3)}')
 
     # if shape is None:
     #     # guess shape
@@ -126,14 +128,15 @@ def _load_ppr(input_dir, dump_suffix, shape):
     #     shape = (max_nodes, max_nodes)
 
     concat_start = datetime.now()
-    logging.info("try build adj")
-    adj = incremental_adj.tocsr()
+    logging.info("try build ppr")
+    ppr = sp.csr_matrix((edge_vals, (edge_rows, edge_cols)),
+                        shape=shape)
 
     concat_time = datetime.now() - concat_start
     logging.info(f"Building csr took {concat_time} seconds")
     logging.info(f'Memory after building ppr: {utils.get_max_memory_bytes() / (1024 ** 3)}')
 
-    return adj
+    return ppr
 
 
 def load_ppr(
