@@ -31,7 +31,6 @@ input_dir = dataset_root + "ppr/papers100M/"
 binary_attr = False
 normalize = "row"
 make_undirected = False
-make_unweighted = True
 dir_name = '_'.join(dataset.split('-'))
 #shape = [169343, 169343]
 shape = [111059956, 111059956]
@@ -62,8 +61,6 @@ else:
 
 if make_undirected is not None:
     dump_suffix += f"_indirect{make_undirected}"
-if make_unweighted is not None:
-    dump_suffix += f"_unweighted{make_unweighted}"
 
 # check whether the precalculated ppr exists, return None if it does not.
 if len(glob.glob(str(Path(input_dir) / ("topk_ppr_" + dump_suffix)) + "*")) == 0:

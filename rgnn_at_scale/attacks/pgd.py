@@ -7,13 +7,10 @@ The Subsequent code build upon the implementation https://github.com/DSE-MSU/Dee
 not intent to unify the code style, programming paradigms, etc. with the rest of the code base.
 
 """
-from typing import Union
-
 import numpy as np
 import torch
 from torch_sparse import SparseTensor
 
-from rgnn_at_scale.models import DenseGCN
 from rgnn_at_scale.attacks.base_attack import DenseAttack
 
 
@@ -42,25 +39,21 @@ class PGD(DenseAttack):
     """
 
     def __init__(self,
-                 adj: Union[SparseTensor, torch.Tensor],
-                 X: torch.Tensor,
-                 labels: torch.Tensor,
-                 idx_attack: np.ndarray,
-                 model: DenseGCN,
-                 device: Union[str, int, torch.device],
-                 loss_type: str = 'CE',
                  epochs: int = 200,
                  epsilon: float = 1e-5,
                  base_lr: float = 1e-2,
                  **kwargs):
+        super().__init__(**kwargs)
 
-        super().__init__(adj, X, labels, idx_attack, model, device=device, loss_type=loss_type, **kwargs)
-        
         assert self.make_undirected, 'Attack only implemented for undirected graphs'
 
         self.epochs = epochs
         self.epsilon = epsilon
         self.base_lr = base_lr
+
+        self.adj = self.adj.to(self.device)
+        self.attr = self.attr.to(self.device)
+        self.attacked_model = self.attacked_model.to(self.device)
 
     def _attack(self, n_perturbations: int, **kwargs):
         """Perform attack (`n_perturbations` is increasing as it was a greedy attack).
@@ -74,10 +67,10 @@ class PGD(DenseAttack):
         self.adj_changes = torch.zeros(int(self.n * (self.n - 1) / 2), dtype=torch.float, device=self.device)
         self.adj_changes.requires_grad = True
 
-        self.surrogate_model.eval()
+        self.attacked_model.eval()
         for t in range(self.epochs):
             modified_adj = self.get_modified_adj()
-            logits = self.surrogate_model(self.X, modified_adj)
+            logits = self.attacked_model(self.attr, modified_adj)
             loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
             adj_grad = torch.autograd.grad(loss, self.adj_changes)[0]
 
@@ -102,7 +95,7 @@ class PGD(DenseAttack):
                         continue
                     self.adj_changes.data.copy_(torch.tensor(sampled))
                     modified_adj = self.get_modified_adj()
-                    logits = self.surrogate_model(self.X, modified_adj)
+                    logits = self.attacked_model(self.attr, modified_adj)
                     loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
                     if best_loss < loss:
                         best_loss = loss

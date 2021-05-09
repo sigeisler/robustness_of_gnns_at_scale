@@ -16,7 +16,6 @@ from sklearn.model_selection import train_test_split
 import torch
 import torch_sparse
 from torch_sparse import SparseTensor
-from torch_geometric.utils import remove_isolated_nodes
 
 from rgnn_at_scale.helper import utils
 from rgnn_at_scale.helper import ppr_utils as ppr
@@ -249,7 +248,6 @@ class SparseGraph:
             Whether to select the largest connected component of the graph.
 
         """
-        # TODO: add warnings / logging
         G = self
         if make_unweighted and G.is_weighted():
             G = G.to_unweighted()
@@ -545,9 +543,7 @@ def split(labels, n_per_class=20, seed=None):
 def prep_cora_citeseer_pubmed(name: str,
                               dataset_root: str,
                               device: Union[int, torch.device] = 0,
-                              normalize: bool = False,
-                              make_undirected: bool = True,
-                              make_unweighted: bool = True) -> Tuple[torch.Tensor, SparseTensor, torch.Tensor]:
+                              make_undirected: bool = True) -> Tuple[torch.Tensor, SparseTensor, torch.Tensor]:
     """Prepares and normalizes the desired dataset
 
     Parameters
@@ -567,26 +563,14 @@ def prep_cora_citeseer_pubmed(name: str,
         dense attribute tensor, sparse adjacency matrix (normalized) and labels tensor
     """
     graph = load_dataset(name, dataset_root).standardize(
-        make_unweighted=make_unweighted,
+        make_unweighted=True,
         make_undirected=make_undirected,
         no_self_loops=True,
         select_lcc=True
     )
 
-    n_vertices, _ = graph.attr_matrix.shape
-
-    adj_matrix = graph.adj_matrix.copy()
-    if normalize:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            adj_matrix[np.arange(n_vertices), np.arange(n_vertices)] = 1
-            deg = sp.diags(np.power(adj_matrix.sum(1).A1, -1 / 2))
-            adj_norm = deg @ adj_matrix @ deg
-    else:
-        adj_norm = adj_matrix
-
     attr = torch.FloatTensor(graph.attr_matrix.toarray()).to(device)
-    adj = utils.sparse_tensor(adj_norm.tocoo()).to(device)
+    adj = utils.sparse_tensor(graph.adj_matrix.tocoo()).to(device)
 
     labels = torch.LongTensor(graph.labels).to(device)
 
@@ -595,10 +579,7 @@ def prep_cora_citeseer_pubmed(name: str,
 
 def prep_graph(name: str,
                device: Union[int, torch.device] = 0,
-               normalize: bool = False,
-               normalize_attr: str = "per_feature",
                make_undirected: bool = True,
-               make_unweighted: bool = True,
                binary_attr: bool = False,
                dataset_root: str = 'datasets',
                return_original_split: bool = False) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -610,8 +591,6 @@ def prep_graph(name: str,
         Name of the data set. One of: `cora_ml`, `citeseer`, `pubmed`
     device : Union[int, torch.device]
         `cpu` or GPU id, by default 0
-    normalize : bool, optional
-        Normalize adjacency matrix with symmetric degree normalization (non-scalable implementation!), by default False
     binary_attr : bool, optional
         If true the attributes are binarized (!=0), by default False
     dataset_root : str, optional
@@ -630,12 +609,7 @@ def prep_graph(name: str,
     logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))
 
     if name in ['cora_ml', 'citeseer', 'pubmed']:
-        attr, adj, labels = prep_cora_citeseer_pubmed(name,
-                                                      dataset_root,
-                                                      device,
-                                                      normalize,
-                                                      make_undirected,
-                                                      make_unweighted)
+        attr, adj, labels = prep_cora_citeseer_pubmed(name, dataset_root, device, make_undirected)
     elif name.startswith('ogbn'):
         pyg_dataset = PygNodePropPredDataset(root=dataset_root, name=name)
 
@@ -672,19 +646,13 @@ def prep_graph(name: str,
         del edge_index
         del edge_weight
 
-        if make_unweighted:
-            adj.data = np.ones_like(adj.data)
+        adj.data = np.ones_like(adj.data)
 
         if make_undirected:
-            adj = utils.to_symmetric_scipy(adj, is_undirected=make_unweighted)
+            adj = utils.to_symmetric_scipy(adj, is_undirected=make_undirected)
 
             logging.debug("Memory Usage after making the graph undirected:")
             logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))
-
-        if normalize == "row":
-            adj = utils.normalize_row(adj)
-        elif normalize:
-            adj = utils.normalize_symmetric(adj)
 
         logging.debug("Memory Usage after normalizing the graph")
         logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))
@@ -692,23 +660,6 @@ def prep_graph(name: str,
         adj = torch_sparse.SparseTensor.from_scipy(adj).coalesce().to(device)
 
         attr_matrix = data.x.cpu().numpy()
-
-        # optional attribute normalization
-        if normalize_attr == 'per_feature':
-            if sp.issparse(attr_matrix):
-                scaler = sklearn.preprocessing.StandardScaler(with_mean=False)
-            else:
-                scaler = sklearn.preprocessing.StandardScaler()
-            attr_matrix = scaler.fit_transform(attr_matrix)
-        elif normalize_attr == 'per_node':
-            if sp.issparse(attr_matrix):
-                attr_norms = sp.linalg.norm(attr_matrix, ord=1, axis=1)
-                attr_invnorms = 1 / np.maximum(attr_norms, 1e-12)
-                attr_matrix = attr_matrix.multiply(attr_invnorms[:, np.newaxis]).tocsr()
-            else:
-                attr_norms = np.linalg.norm(attr_matrix, ord=1, axis=1)
-                attr_invnorms = 1 / np.maximum(attr_norms, 1e-12)
-                attr_matrix = attr_matrix * attr_invnorms[:, np.newaxis]
 
         attr = torch.from_numpy(attr_matrix).to(device)
 
@@ -724,8 +675,6 @@ def prep_graph(name: str,
 
     if return_original_split and split is not None:
         return attr, adj, labels, split
-
-    remove_isolated_nodes
 
     return attr, adj, labels
 
@@ -838,9 +787,7 @@ class CachedPPRMatrix:
                                        topk=self.topk,
                                        split_desc="attack",
                                        ppr_normalization=self.ppr_normalization,
-                                       normalize=self.ppr_cache_params["normalize"],
-                                       make_undirected=self.ppr_cache_params["make_undirected"],
-                                       make_unweighted=self.ppr_cache_params["make_unweighted"])
+                                       make_undirected=self.ppr_cache_params["make_undirected"])
             # late import to avoid circular import issue
             from rgnn_at_scale.helper.io import Storage
             self.storage = Storage(self.ppr_cache_params["data_artifact_dir"])

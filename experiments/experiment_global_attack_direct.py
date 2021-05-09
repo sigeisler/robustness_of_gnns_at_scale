@@ -29,10 +29,7 @@ def config():
     dataset = 'cora_ml'  # Options are 'cora_ml' and 'citeseer' (or with a big GPU 'pubmed')
     data_dir = './datasets'
     binary_attr = False
-    normalize = False
     make_undirected = True
-    make_unweighted = True
-    normalize_attr = False
     seed = 0
 
     attack = 'PRBCD'
@@ -48,31 +45,23 @@ def config():
     device = 0
     data_device = 0
 
-    display_steps = 10
-
 
 @ex.automain
-def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequence[float], binary_attr: bool,
-        make_undirected: bool, make_unweighted: bool,  normalize: bool, normalize_attr: str,  seed: int,
-        artifact_dir: str, pert_adj_storage_type: str, pert_attr_storage_type: str, model_label: str, model_storage_type: str,
-        device: Union[str, int], data_device: Union[str, int], display_steps: int):
+def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequence[float],
+        binary_attr: bool, make_undirected: bool, seed: int, artifact_dir: str, pert_adj_storage_type: str,
+        pert_attr_storage_type: str, model_label: str, model_storage_type: str, device: Union[str, int],
+        data_device: Union[str, int]):
 
     results = []
     surrogate_model_label = False
 
-    (attr, adj, labels,
-     idx_train,
-     idx_val,
-     idx_test,
-     storage,
-     attack_params,
-     pert_params,
-     model_params, m) = prepare_attack_experiment(data_dir, dataset, attack, attack_params,
-                                                  epsilons, binary_attr, make_undirected,
-                                                  make_unweighted,  normalize, normalize_attr, seed,
-                                                  artifact_dir, pert_adj_storage_type, pert_attr_storage_type,
-                                                  model_label, model_storage_type, device,
-                                                  surrogate_model_label, data_device, ex)
+    (
+        attr, adj, labels, _, _, idx_test, storage, attack_params, pert_params, model_params, m
+    ) = prepare_attack_experiment(
+        data_dir, dataset, attack, attack_params, epsilons, binary_attr, make_undirected,  seed, artifact_dir,
+        pert_adj_storage_type, pert_attr_storage_type, model_label, model_storage_type, device, surrogate_model_label,
+        data_device, ex
+    )
 
     if model_label is not None and model_label:
         model_params['label'] = model_label
@@ -81,13 +70,9 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
 
     for model, hyperparams in models_and_hyperparams:
         model_label = hyperparams["label"]
-        try:
-            adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels, model=model,
-                                      idx_attack=idx_test, device=device, data_device=data_device, **attack_params)
-        except Exception as e:
-            logging.exception(e)
-            logging.error(f"Failed to instantiate attack {attack} for model '{model_label}'.")
-            continue
+        adversary = create_attack(attack, attr=attr, adj=adj, labels=labels, model=model, idx_attack=idx_test, 
+                                  device=device, data_device=data_device, binary_attr=binary_attr, 
+                                  make_undirected=make_undirected, **attack_params)
 
         for epsilon in epsilons:
             run_global_attack(epsilon, m, storage, pert_adj_storage_type, pert_attr_storage_type,
@@ -96,7 +81,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
             adj_adversary = adversary.adj_adversary
             attr_adversary = adversary.attr_adversary
 
-            logits, accuracy = Attack.evaluate_global(model.to(device), attr_adversary.to(device), 
+            logits, accuracy = Attack.evaluate_global(model.to(device), attr_adversary.to(device),
                                                       adj_adversary.to(device), labels, idx_test)
 
             results.append({

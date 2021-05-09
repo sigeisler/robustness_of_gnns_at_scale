@@ -17,20 +17,16 @@ class Attack(ABC):
 
     def __init__(self,
                  adj: Union[SparseTensor, torch.Tensor],
-                 X: torch.Tensor,
+                 attr: torch.Tensor,
                  labels: torch.Tensor,
                  idx_attack: np.ndarray,
                  model: MODEL_TYPE,
                  device: Union[str, int, torch.device],
                  data_device: Union[str, int, torch.device],
-                 normalize: Union[str, bool],
-                 normalize_attr: Union[str, bool],
                  make_undirected: bool,
-                 make_unweighted: bool,
                  binary_attr: bool,
                  loss_type: str = 'CE',  # 'CW', 'LeakyCW'  # 'CE', 'MCE', 'Margin'
                  **kwargs):
-
         if not (isinstance(model, GCN) or isinstance(model, DenseGCN) or isinstance(model, RGNN)):
             warnings.warn("The attack will fail if the gradient w.r.t. the adjacency can't be computed.")
 
@@ -51,24 +47,21 @@ class Attack(ABC):
         self.idx_attack = idx_attack
         self.loss_type = loss_type
 
-        self.normalize = normalize
-        self.normalize_attr = normalize_attr
         self.make_undirected = make_undirected
-        self.make_unweighted = make_unweighted
         self.binary_attr = binary_attr
 
-        self.surrogate_model = deepcopy(model).to(self.device)
-        self.surrogate_model.eval()
-        for p in self.surrogate_model.parameters():
+        self.attacked_model = deepcopy(model).to(self.device)
+        self.attacked_model.eval()
+        for p in self.attacked_model.parameters():
             p.requires_grad = False
-        self.eval_model = self.surrogate_model
+        self.eval_model = self.attacked_model
 
         self.labels = labels.to(torch.long).to(self.device)
         self.labels_attack = self.labels[self.idx_attack]
-        self.X = X.to(self.data_device)
+        self.attr = attr.to(self.data_device)
         self.adj = adj.to(self.data_device)
 
-        self.attr_adversary = self.X
+        self.attr_adversary = self.attr
         self.adj_adversary = self.adj
 
     @abstractmethod
@@ -79,7 +72,7 @@ class Attack(ABC):
         if n_perturbations > 0:
             return self._attack(n_perturbations, **kwargs)
         else:
-            self.attr_adversary = self.X
+            self.attr_adversary = self.attr
             self.adj_adversary = self.adj
 
     def set_pertubations(self, adj_perturbed, attr_perturbed):
@@ -233,13 +226,13 @@ class Attack(ABC):
 class SparseAttack(Attack):
     def __init__(self,
                  adj: Union[SparseTensor, torch.Tensor, sp.csr_matrix],
-                 X: torch.Tensor,
+                 attr: torch.Tensor,
                  labels: torch.Tensor,
                  idx_attack: np.ndarray,
                  model: MODEL_TYPE,
                  device: Union[str, int, torch.device],
                  data_device: Union[str, int, torch.device],
-                 loss_type: str = 'CE',  # 'CW', 'LeakyCW'  # 'CE', 'MCE', 'Margin'
+                 loss_type: str = 'CE',
                  **kwargs):
 
         if isinstance(adj, torch.Tensor):
@@ -247,13 +240,13 @@ class SparseAttack(Attack):
         elif isinstance(adj, sp.csr_matrix):
             adj = SparseTensor.from_scipy(adj)
 
-        super().__init__(adj, X, labels, idx_attack, model, device, data_device, loss_type=loss_type, **kwargs)
+        super().__init__(adj, attr, labels, idx_attack, model, device, data_device, loss_type=loss_type, **kwargs)
 
         edge_index_rows, edge_index_cols, edge_weight = adj.coo()
         self.edge_index = torch.stack([edge_index_rows, edge_index_cols], dim=0).to(self.data_device)
         self.edge_weight = edge_weight.to(self.data_device)
         self.n = adj.size(0)
-        self.d = X.shape[1]
+        self.d = attr.shape[1]
 
 
 class SparseLocalAttack(SparseAttack):
@@ -266,7 +259,7 @@ class SparseLocalAttack(SparseAttack):
         pass
 
     def get_surrogate_logits(self, node_idx: int, perturbed_graph: SparseTensor = None) -> torch.Tensor:
-        return self.get_logits(self.surrogate_model, node_idx, perturbed_graph)
+        return self.get_logits(self.attacked_model, node_idx, perturbed_graph)
 
     def get_eval_logits(self, node_idx: int, perturbed_graph: SparseTensor = None) -> torch.Tensor:
         return self.get_logits(self.eval_model, node_idx, perturbed_graph)
@@ -288,20 +281,19 @@ class SparseLocalAttack(SparseAttack):
 class DenseAttack(Attack):
     def __init__(self,
                  adj: Union[SparseTensor, torch.Tensor],
-                 X: torch.Tensor,
+                 attr: torch.Tensor,
                  labels: torch.Tensor,
                  idx_attack: np.ndarray,
                  model: DenseGCN,
                  device: Union[str, int, torch.device],
                  data_device: Union[str, int, torch.device],
-                 loss_type: str = 'CE',  # 'CW', 'LeakyCW'  # 'CE', 'MCE', 'Margin'
+                 loss_type: str = 'CE',
                  **kwargs):
         assert isinstance(model, DenseGCN), "DenseAttacks can only attack the DenseGCN model"
 
         if isinstance(adj, SparseTensor):
             adj = adj.to_dense()
 
-        assert isinstance(adj,  torch.Tensor)
-        super().__init__(adj, X, labels, idx_attack, model, device, data_device, loss_type, **kwargs)
+        super().__init__(adj, attr, labels, idx_attack, model, device, data_device, loss_type=loss_type, **kwargs)
 
         self.n = adj.shape[0]

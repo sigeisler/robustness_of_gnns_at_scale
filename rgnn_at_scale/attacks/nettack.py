@@ -48,25 +48,17 @@ class Nettack(SparseLocalAttack):
         Model to be attacked.
     """
 
-    def __init__(self,
-                 adj: SparseTensor,
-                 X: torch.Tensor,
-                 labels: torch.Tensor,
-                 idx_attack: np.ndarray,
-                 model: GCN,
-                 device: Union[str, int, torch.device],
-                 **kwargs):
-
-        SparseLocalAttack.__init__(self, adj, X, labels, idx_attack, model, device, **kwargs)
+    def __init__(self, **kwargs):
+        SparseLocalAttack.__init__(self, **kwargs)
 
         assert self.make_undirected, 'Attack only implemented for undirected graphs'
-        
-        assert len(self.surrogate_model.layers) == 2, "Nettack supports only 2 Layer Linear GCN as surrogate model"
-        assert isinstance(self.surrogate_model._modules['activation'], Identity), \
+
+        assert len(self.attacked_model.layers) == 2, "Nettack supports only 2 Layer Linear GCN as surrogate model"
+        assert isinstance(self.attacked_model._modules['activation'], Identity), \
             "Nettack only supports Linear GCN as surrogate model"
 
-        self.sp_adj = adj.to_scipy(layout="csr")
-        self.sp_attr = SparseTensor.from_dense(self.X).to_scipy(layout="csr")
+        self.sp_adj = self.adj.to_scipy(layout="csr")
+        self.sp_attr = SparseTensor.from_dense(self.attr).to_scipy(layout="csr")
         self.nettack = None
 
     def _attack(self, n_perturbations: int, node_idx: int, **kwargs):
@@ -75,8 +67,8 @@ class Nettack(SparseLocalAttack):
         self.nettack = OriginalNettack(self.sp_adj,
                                        self.sp_attr,
                                        self.labels.detach().cpu().numpy(),
-                                       self.surrogate_model.layers[0][0].weight.detach().cpu().numpy(),
-                                       self.surrogate_model.layers[1][0].weight.detach().cpu().numpy(),
+                                       self.attacked_model.layers[0][0].weight.detach().cpu().numpy(),
+                                       self.attacked_model.layers[1][0].weight.detach().cpu().numpy(),
                                        node_idx,
                                        verbose=True)
         self.nettack.reset()
@@ -90,7 +82,6 @@ class Nettack(SparseLocalAttack):
         if self.make_undirected:
             A_rows, A_cols, A_vals = self.adj_adversary.coo()
             A_idx = torch.stack([A_rows, A_cols], dim=0)
-            assert self.make_unweighted, "Make undirected ist not implemented for weighted adjacencies"
             A_idx, A_weights = to_symmetric(A_idx, A_vals, self.n, op='max')
             self.adj_adversary = SparseTensor.from_edge_index(A_idx, A_weights, (self.n, self.n))
 
@@ -99,9 +90,9 @@ class Nettack(SparseLocalAttack):
             perturbed_graph = self.adj
 
         if type(model) in BATCHED_PPR_MODELS.__args__:
-            return model.to(self.device).forward(self.X, perturbed_graph, ppr_idx=np.array([node_idx]))
+            return model.forward(self.attr, perturbed_graph, ppr_idx=np.array([node_idx]))
         else:
-            return model.to(self.device)(data=self.X.to(self.device),
+            return model.to(self.device)(data=self.attr.to(self.device),
                                          adj=perturbed_graph.to(self.device))[node_idx:node_idx + 1]
 
     def get_perturbed_edges(self):

@@ -107,8 +107,6 @@ class TestPPRUpdate():
 
         graph = prep_graph("cora_ml", device,  # dataset_root=data_dir,
                            make_undirected=True,
-                           make_unweighted=True,
-                           normalize=False,
                            binary_attr=False,
                            return_original_split=False)
 
@@ -271,8 +269,6 @@ class TestPPRUpdate():
 
         graph = prep_graph("cora_ml", device,  # dataset_root=data_dir,
                            make_undirected=True,
-                           make_unweighted=True,
-                           normalize=False,
                            binary_attr=False,
                            return_original_split=False)
 

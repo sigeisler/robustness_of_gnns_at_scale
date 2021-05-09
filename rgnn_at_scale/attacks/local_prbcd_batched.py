@@ -20,26 +20,22 @@ from rgnn_at_scale.data import CachedPPRMatrix
 
 class LocalBatchedPRBCD(LocalPRBCD):
 
-    def __init__(self,
-                 ppr_recalc_at_end: bool = True,
-                 ppr_cache_params: Dict[str, Any] = None,
-                 ** kwargs):
-
+    def __init__(self, pr_recalc_at_end: bool = True, ppr_cache_params: Dict[str, Any] = None, **kwargs):
         super().__init__(**kwargs)
 
-        assert type(self.surrogate_model) in BATCHED_PPR_MODELS.__args__, "LocalBatchedPRBCD Attack only supports PPRGo models"
+        assert type(self.attacked_model) in BATCHED_PPR_MODELS.__args__, "LocalBatchedPRBCD Attack only supports PPRGo models"
 
         self.ppr_cache_params = ppr_cache_params
         if self.ppr_cache_params is None:
-            self.ppr_cache_params = self.surrogate_model.ppr_cache_params
+            self.ppr_cache_params = self.attacked_model.ppr_cache_params
 
         self.ppr_recalc_at_end = ppr_recalc_at_end
         self.ppr_matrix = CachedPPRMatrix(self.adj,
                                           self.ppr_cache_params,
-                                          self.surrogate_model.alpha,
-                                          self.surrogate_model.eps,
-                                          self.surrogate_model.topk,
-                                          self.surrogate_model.ppr_normalization)
+                                          self.attacked_model.alpha,
+                                          self.attacked_model.eps,
+                                          self.attacked_model.topk,
+                                          self.attacked_model.ppr_normalization)
 
         logging.info(f'self.ppr_matrix is of shape {self.ppr_matrix.shape}')
         logging.info(f'Memory after loading ppr: {utils.get_max_memory_bytes() / (1024 ** 3)}')
@@ -49,9 +45,9 @@ class LocalBatchedPRBCD(LocalPRBCD):
             perturbed_graph = SparseTensor.from_scipy(self.ppr_matrix[node_idx])
 
         if type(model) in BATCHED_PPR_MODELS.__args__:
-            return model.forward(self.X, None, ppr_scores=perturbed_graph)
+            return model.forward(self.attr, None, ppr_scores=perturbed_graph)
         else:
-            return model(data=self.X.to(self.device), adj=perturbed_graph.to(self.device))[node_idx:node_idx + 1]
+            return model(data=self.attr.to(self.device), adj=perturbed_graph.to(self.device))[node_idx:node_idx + 1]
 
     def sample_final_edges(self, node_idx: int, n_perturbations: int):
         perturbed_graph = super().sample_final_edges(node_idx, n_perturbations)
@@ -66,11 +62,11 @@ class LocalBatchedPRBCD(LocalPRBCD):
                                    value=torch.cat((adj.storage.col(), torch.full_like(disconnected_nodes, 1e-9))))
             sp_adj = adj.to_scipy(layout="csr")
             perturbed_graph = ppr.topk_ppr_matrix(sp_adj,
-                                                  self.surrogate_model.alpha,
-                                                  self.surrogate_model.eps,
+                                                  self.attacked_model.alpha,
+                                                  self.attacked_model.eps,
                                                   np.array([node_idx]),
-                                                  self.surrogate_model.topk + n_perturbations,
-                                                  normalization=self.surrogate_model.ppr_normalization)
+                                                  self.attacked_model.topk + n_perturbations,
+                                                  normalization=self.attacked_model.ppr_normalization)
             perturbed_graph = SparseTensor.from_scipy(perturbed_graph)
 
         return perturbed_graph
@@ -86,7 +82,7 @@ class LocalBatchedPRBCD(LocalPRBCD):
                 A_row = SparseTensor.from_scipy(A_row)
             perturbed_graph = calc_ppr_update_sparse_result(self.ppr_matrix, A_row,
                                                             modified_edge_weight_diff,
-                                                            node_idx, self.surrogate_model.alpha)
+                                                            node_idx, self.attacked_model.alpha)
             return perturbed_graph
         else:
             assert n_perturbations is not None, "n_perturbations must be given when only updating adjacency"
@@ -115,7 +111,7 @@ class LocalBatchedPRBCD(LocalPRBCD):
             )
 
             # Works since the attack will always assign at least a small constant the elements in p
-            # A_weights[A_weights > 1] = -A_weights[A_weights > 1] + 2
+            A_weights[A_weights > 1] = -A_weights[A_weights > 1] + 2
 
             if self.make_undirected:
                 A_idx, A_weights = to_symmetric(A_idx, A_weights, self.n, op='max')

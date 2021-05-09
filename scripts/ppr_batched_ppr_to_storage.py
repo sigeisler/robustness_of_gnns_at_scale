@@ -21,9 +21,7 @@ device = 0
 dataset_root = "/nfs/students/schmidtt/datasets/"
 ppr_input_dir = dataset_root + "ppr/papers100M/"
 binary_attr = False
-normalize = "row"
 make_undirected = False
-make_unweighted = True
 dir_name = '_'.join(dataset.split('-'))
 #shape = [169343, 169343]
 shape = [111059956, 111059956]
@@ -46,9 +44,7 @@ for alpha in [0.01]:
                                         topk=topk,
                                         ppr_normalization=ppr_normalization,
                                         split_desc=split_desc,
-                                        normalize=normalize,
                                         make_undirected=make_undirected,
-                                        make_unweighted=make_unweighted,
                                         shape=shape)
 
         logging.info("topk")
@@ -60,9 +56,7 @@ for alpha in [0.01]:
                       topk=topk,
                       ppr_normalization=ppr_normalization,
                       split_desc=split_desc,
-                      normalize=normalize,
-                      make_undirected=make_undirected,
-                      make_unweighted=make_unweighted)
+                      make_undirected=make_undirected)
         if topk_matrix is not None:
             model_path = storage.save_sparse_matrix(model_storage_type, params,
                                                     topk_matrix, ignore_duplicate=True)

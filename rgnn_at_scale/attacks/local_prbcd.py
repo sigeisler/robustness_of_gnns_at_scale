@@ -141,9 +141,9 @@ class LocalPRBCD(SparseLocalAttack):
             perturbed_graph = self.adj
 
         if type(model) in BATCHED_PPR_MODELS.__args__:
-            return model.forward(self.X.to(self.device), perturbed_graph, ppr_idx=np.array([node_idx]))
+            return model.forward(self.attr.to(self.device), perturbed_graph, ppr_idx=np.array([node_idx]))
         else:
-            return model(data=self.X.to(self.device), adj=perturbed_graph.to(self.device))[node_idx:node_idx + 1]
+            return model(data=self.attr.to(self.device), adj=perturbed_graph.to(self.device))[node_idx:node_idx + 1]
 
     def calc_perturbed_edges(self, node_idx: int) -> torch.Tensor:
         source = torch.full_like(self.current_search_space, node_idx).cpu()
@@ -263,41 +263,41 @@ class LocalPRBCD(SparseLocalAttack):
             if self.current_search_space.size(0) > n_perturbations:
                 break
 
+    @torch.no_grad()
     def sample_final_edges(self, node_idx: int, n_perturbations: int) -> SparseTensor:
         best_margin = float('Inf')
-        with torch.no_grad():
-            current_search_space = self.current_search_space.clone()
+        current_search_space = self.current_search_space.clone()
 
-            s = self.modified_edge_weight_diff.abs().detach()
-            s[s == self.eps] = 0
-            while best_margin == float('Inf'):
-                for i in range(self.final_samples):
-                    if best_margin == float('Inf'):
-                        sampled = torch.zeros_like(s)
-                        sampled[torch.topk(s, n_perturbations).indices] = 1
-                    else:
-                        sampled = torch.bernoulli(s).float()
+        s = self.modified_edge_weight_diff.abs().detach()
+        s[s == self.eps] = 0
+        while best_margin == float('Inf'):
+            for i in range(self.final_samples):
+                if best_margin == float('Inf'):
+                    sampled = torch.zeros_like(s)
+                    sampled[torch.topk(s, n_perturbations).indices] = 1
+                else:
+                    sampled = torch.bernoulli(s).float()
 
-                    if sampled.sum() > n_perturbations or sampled.sum() == 0:
-                        continue
+                if sampled.sum() > n_perturbations or sampled.sum() == 0:
+                    continue
 
-                    self.modified_edge_weight_diff = sampled
-                    self.current_search_space = current_search_space[
-                        self.modified_edge_weight_diff == 1
-                    ].to(self.device)
-                    self.modified_edge_weight_diff = self.modified_edge_weight_diff[
-                        self.modified_edge_weight_diff == 1
-                    ].to(self.device)
+                self.modified_edge_weight_diff = sampled
+                self.current_search_space = current_search_space[
+                    self.modified_edge_weight_diff == 1
+                ].to(self.device)
+                self.modified_edge_weight_diff = self.modified_edge_weight_diff[
+                    self.modified_edge_weight_diff == 1
+                ].to(self.device)
 
-                    perturbed_graph = self.perturb_graph(node_idx)
-                    logits = self.get_surrogate_logits(node_idx, perturbed_graph)
-                    margin = LocalPRBCD.classification_statistics(logits, self.labels[node_idx])['margin']
-                    if best_margin > margin:
-                        best_margin = margin
-                        best_weights = self.modified_edge_weight_diff.clone().cpu()
-                        best_search_space = self.current_search_space.clone().cpu()
-            self.modified_edge_weight_diff = best_weights.to(self.device).float()
-            self.current_search_space = best_search_space.to(self.device).long()
+                perturbed_graph = self.perturb_graph(node_idx)
+                logits = self.get_surrogate_logits(node_idx, perturbed_graph)
+                margin = LocalPRBCD.classification_statistics(logits, self.labels[node_idx])['margin']
+                if best_margin > margin:
+                    best_margin = margin
+                    best_weights = self.modified_edge_weight_diff.clone().cpu()
+                    best_search_space = self.current_search_space.clone().cpu()
+        self.modified_edge_weight_diff = best_weights.to(self.device).float()
+        self.current_search_space = best_search_space.to(self.device).long()
 
-            perturbed_graph = self.perturb_graph(node_idx)
+        perturbed_graph = self.perturb_graph(node_idx)
         return perturbed_graph

@@ -336,9 +336,7 @@ class PPRGoWrapperBase():
             data_artifact_dir : str
             data_storage_type : str
             dataset : str
-            normalize : str
-            make_unweighted : bool
-            make_unweighted : bool
+            make_directed : bool
         """
         self.num_features = n_features
         self.num_classes = n_classes
@@ -401,8 +399,7 @@ class PPRGoWrapperBase():
                               topk=self.topk,
                               ppr_normalization=self.ppr_normalization,
                               normalize=self.ppr_cache_params["normalize"],
-                              make_undirected=self.ppr_cache_params["make_undirected"],
-                              make_unweighted=self.ppr_cache_params["make_unweighted"])
+                              make_undirected=self.ppr_cache_params["make_undirected"])
 
                 stored_topk_ppr = storage.find_sparse_matrix(self.ppr_cache_params["data_storage_type"],
                                                              params, find_first=True)
@@ -497,8 +494,7 @@ class PPRGoWrapperBase():
                           topk=self.topk,
                           ppr_normalization=self.ppr_normalization,
                           normalize=self.ppr_cache_params["normalize"],
-                          make_undirected=self.ppr_cache_params["make_undirected"],
-                          make_unweighted=self.ppr_cache_params["make_unweighted"])
+                          make_undirected=self.ppr_cache_params["make_undirected"])
 
             stored_topk_train = storage.find_sparse_matrix(self.ppr_cache_params["data_storage_type"],
                                                            params, find_first=True)

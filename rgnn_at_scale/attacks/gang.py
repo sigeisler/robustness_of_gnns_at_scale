@@ -21,7 +21,6 @@ FEATURE_MODES = ('symmetric_float', 'binary', 'sparse_pos')
 class GANG(SparseAttack):
 
     def __init__(self,
-                 *args,
                  display_step: int = 20,
                  node_budget: int = 500,
                  edge_budget: int = 500,
@@ -38,10 +37,15 @@ class GANG(SparseAttack):
                  edge_with_random_reverse: bool = True,
                  do_synchronize: bool = False,
                  **kwargs):
-
-        super().__init__(*args, **kwargs)
+        super().__init__(**kwargs)
 
         assert self.make_undirected, 'Attack only implemented for undirected graphs'
+
+        if self.binary_attr:
+            feature_mode = 'binary'
+        else:
+            feature_mode = 'symmetric_float'
+        feature_max_abs = self.attr.abs().max().item()
 
         self.display_step = display_step
         self.node_budget = node_budget
@@ -88,11 +92,11 @@ class GANG(SparseAttack):
             node_budget = (n_perturbations // self.edge_budget) + 1
             edge_budget = self.edge_budget
 
-        features = self.X.to(self.device)
+        features = self.attr.to(self.device)
         edge_index = self.edge_index.to(self.device)
         edge_weight = self.edge_weight.to(self.device)
 
-        n_features_avg = int(math.ceil(self.X.bool().sum(0).float().mean().item()))
+        n_features_avg = int(math.ceil(self.attr.bool().sum(0).float().mean().item()))
 
         new_features = None
         for i in tqdm(range(node_budget), desc='Adding nodes'):
@@ -131,8 +135,8 @@ class GANG(SparseAttack):
                     torch.cuda.synchronize()
 
                 if (
-                    not hasattr(self.surrogate_model, 'do_checkpoint')
-                    or not self.surrogate_model.do_checkpoint
+                    not hasattr(self.attacked_model, 'do_checkpoint')
+                    or not self.attacked_model.do_checkpoint
                 ):
                     symmetric_edge_index, symmetric_edge_weight = GANG.fuse_adjacency_matrices(
                         edge_index, edge_weight, new_edge_idx, new_edge_weight, m=next_node, n=next_node, op='mean'
@@ -178,7 +182,7 @@ class GANG(SparseAttack):
 
                 combined_features = torch.cat((features, new_features))
 
-                logits = self.surrogate_model(data=combined_features, adj=(symmetric_edge_index, symmetric_edge_weight))
+                logits = self.attacked_model(data=combined_features, adj=(symmetric_edge_index, symmetric_edge_weight))
                 not_yet_flipped_mask = logits[self.idx_attack].argmax(-1) == self.labels_attack
                 if self.stop_optimizing_if_label_flipped and not_yet_flipped_mask.sum() > 0:
                     loss = F.cross_entropy(logits[self.idx_attack][not_yet_flipped_mask],
@@ -246,7 +250,7 @@ class GANG(SparseAttack):
                     new_features.data.copy_(new_features_projected)
                     combined_features = torch.cat((features, new_features))
 
-                    logits = self.surrogate_model(data=combined_features, adj=(
+                    logits = self.attacked_model(data=combined_features, adj=(
                         symmetric_edge_index, symmetric_edge_weight))
                     loss = F.cross_entropy(logits[self.idx_attack], self.labels_attack)
 
@@ -272,7 +276,7 @@ class GANG(SparseAttack):
                             new_features_projected = torch.tensor(
                                 sampled, dtype=torch.float, device=new_features.device)
                             combined_features = torch.cat((features, new_features_projected))
-                            logits = self.surrogate_model(
+                            logits = self.attacked_model(
                                 data=combined_features,
                                 adj=(symmetric_edge_index, symmetric_edge_weight)
                             )
@@ -286,7 +290,7 @@ class GANG(SparseAttack):
                                 best_features = new_features_projected.clone()
                     new_features = best_features
 
-                logits = self.surrogate_model(
+                logits = self.attacked_model(
                     data=torch.cat((features, new_features)),
                     adj=(symmetric_edge_index, symmetric_edge_weight)
                 )
@@ -317,11 +321,11 @@ class GANG(SparseAttack):
         else:
             self.attr_adversary = features.detach()
 
-        self.X = self.attr_adversary.clone()
+        self.attr = self.attr_adversary.clone()
         self.edge_index = edge_index.clone()
         self.edge_weight = edge_weight.clone()
 
-        assert self.n == self.X.shape[0]
+        assert self.n == self.attr.shape[0]
 
     @staticmethod
     def fuse_adjacency_matrices(edge_index: torch.Tensor, edge_weight: torch.Tensor,
