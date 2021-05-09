@@ -31,20 +31,21 @@ calc_ppr_for_all = True
 
 dataset = "ogbn-papers100M"  # "ogbn-papers100M"  # "ogbn-arxiv"
 device = 0
-dataset_root = "/nfs/students/schmidtt/datasets/"
+dataset_root = "data/"
 output_dir = dataset_root + "ppr/papers100M/"
 binary_attr = False
-normalize = "row"
+normalize = False
+normalize_attr = False
 make_undirected = False
 make_unweighted = True
-topk_batch_size = int(1e5)
+topk_batch_size = int(1e6)
 dir_name = '_'.join(dataset.split('-'))
 
 
 # ppr params
-alpha = 0.01
-eps = 1e-6
-topk = 512
+alpha = 0.001
+eps = 1e-5
+topk = 128
 ppr_normalization = "row"
 alpha_suffix = int(alpha * 100)
 
@@ -53,6 +54,7 @@ graph = prep_graph(dataset, "cpu",
                    make_undirected=make_undirected,
                    make_unweighted=make_unweighted,
                    normalize=normalize,
+                   normalize_attr=normalize_attr,
                    binary_attr=binary_attr,
                    return_original_split=dataset.startswith('ogbn'))
 
@@ -65,6 +67,7 @@ else:
 logging.info("successfully read dataset")
 
 attr, adj, labels = graph[:3]
+adj_sp = adj.to_scipy(layout="csr")
 num_nodes = attr.shape[0]
 train_num_nodes = len(idx_train)
 val_num_nodes = len(idx_val)
@@ -87,11 +90,13 @@ def _save_ppr_topk(topk_batch_size,
                    make_unweighted,
                    normalize,
                    split_desc,
-                   batch_start_idx=0):
+                   batch_start_idx=0,
+                   num_batches=21):
     dump_suffix = f"{dataset}_{split_desc}_alpha{alpha_suffix}_eps{eps:.0e}_topk{topk}_pprnorm{ppr_normalization}_norm{normalize}_indirect{make_undirected}_unweighted{make_unweighted}"
     logging.info(dump_suffix)
     num_nodes = len(ppr_idx)
-    num_batches = math.ceil(num_nodes / topk_batch_size)
+    if num_batches is None:
+        num_batches = math.ceil(num_nodes / topk_batch_size)
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     nnz = 0
     for i in range(batch_start_idx, num_batches):
@@ -127,7 +132,7 @@ def save_ppr_topk(topk_batch_size,
     def save_ppr(ppr_idx, split_desc):
         _save_ppr_topk(topk_batch_size,
                        output_dir,
-                       adj,
+                       adj_sp,
                        ppr_idx,
                        alpha,
                        eps,
@@ -136,8 +141,7 @@ def save_ppr_topk(topk_batch_size,
                        make_undirected,
                        make_unweighted,
                        normalize,
-                       split_desc,
-                       batch_start_idx=1035)
+                       split_desc)
     if calc_ppr_for_all:
         save_ppr(np.arange(adj_sp.shape[0]), "full")
     else:
@@ -148,7 +152,7 @@ def save_ppr_topk(topk_batch_size,
 
 save_ppr_topk(topk_batch_size,
               output_dir,
-              adj,
+              adj_sp,
               alpha,
               eps,
               topk,
