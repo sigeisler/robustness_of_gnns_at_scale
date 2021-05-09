@@ -22,7 +22,6 @@ class LocalPRBCD(SparseLocalAttack):
 
     def __init__(self,
                  loss_type: str = 'Margin',  # 'CW', 'LeakyCW'  # 'CE', 'MCE', 'Margin'
-                 attack_labeled_nodes_only: bool = False,
                  lr_factor: float = 1.0,
                  display_step: int = 20,
                  epochs: int = 150,
@@ -38,7 +37,6 @@ class LocalPRBCD(SparseLocalAttack):
 
         self.loss_type = loss_type
         self.n_possible_edges = self.n * (self.n - 1) // 2
-        self.attack_labeled_nodes_only = attack_labeled_nodes_only
 
         self.display_step = display_step
         self.epochs = epochs
@@ -47,7 +45,6 @@ class LocalPRBCD(SparseLocalAttack):
         self.with_early_stropping = with_early_stropping
         self.eps = eps
         self.do_synchronize = do_synchronize
-        # TODO: Rename
         self.final_samples = final_samples
 
         self.current_search_space: torch.Tensor = None
@@ -82,9 +79,9 @@ class LocalPRBCD(SparseLocalAttack):
             logits = self.get_surrogate_logits(node_idx, perturbed_graph).to(self.device)
             loss = self.calculate_loss(logits, self.labels[node_idx][None])
 
-            classification_statistics = LocalPRBCD.classification_statistics(
-                logits, self.labels[node_idx].to(self.device))
             if epoch == 0:
+                classification_statistics = LocalPRBCD.classification_statistics(
+                    logits, self.labels[node_idx].to(self.device))
                 logging.info(f'Initial: Loss: {loss.item()} Statstics: {classification_statistics}\n')
 
             gradient = grad_with_checkpoint(loss, self.modified_edge_weight_diff)[0]
@@ -148,10 +145,6 @@ class LocalPRBCD(SparseLocalAttack):
         else:
             return model(data=self.X.to(self.device), adj=perturbed_graph.to(self.device))[node_idx:node_idx + 1]
 
-    def sample_final_edges(self, node_idx: int, n_perturbations: int):
-        perturbed_graph = self.sample_edges(node_idx, n_perturbations)
-        return perturbed_graph
-
     def calc_perturbed_edges(self, node_idx: int) -> torch.Tensor:
         source = torch.full_like(self.current_search_space, node_idx).cpu()
         target = self.current_search_space.cpu()
@@ -165,13 +158,8 @@ class LocalPRBCD(SparseLocalAttack):
         return self.perturbed_edges
 
     def perturb_graph(self, node_idx: int) -> SparseTensor:
-
-        if self.attack_labeled_nodes_only:
-            current_search_space = torch.tensor(self.idx_attack, device=self.device)[self.current_search_space]
-        else:
-            current_search_space = self.current_search_space
         modified_edge_weight_diff = SparseTensor(row=torch.zeros_like(self.current_search_space),
-                                                 col=current_search_space,
+                                                 col=self.current_search_space,
                                                  value=self.modified_edge_weight_diff,
                                                  sparse_sizes=(1, self.n))
 
@@ -235,13 +223,8 @@ class LocalPRBCD(SparseLocalAttack):
             self.attack_statistics[key].append(value)
 
     def sample_search_space(self, node_idx: int, n_perturbations: int):
-        if self.attack_labeled_nodes_only:
-            n = len(self.idx_attack)
-        else:
-            n = self.n
-
         while True:
-            self.current_search_space = torch.randint(n, (self.search_space_size,), device=self.device)
+            self.current_search_space = torch.randint(self.n, (self.search_space_size,), device=self.device)
             self.current_search_space = torch.unique(self.current_search_space, sorted=True)
             #self.current_search_space = self.current_search_space[node_idx != self.current_search_space]
             self.modified_edge_weight_diff = torch.full_like(self.current_search_space, self.eps,
@@ -250,25 +233,19 @@ class LocalPRBCD(SparseLocalAttack):
                 break
 
     def resample_search_space(self, node_idx: int, n_perturbations: int, gradient: torch.Tensor):
-        if self.attack_labeled_nodes_only:
-            n = len(self.idx_attack)
-        else:
-            n = self.n
-
         sorted_idx = torch.argsort(self.modified_edge_weight_diff)
-        idx_keep_not = (self.modified_edge_weight_diff <= self.eps).sum().long()
-        if idx_keep_not < sorted_idx.size(0) // 2:
-            idx_keep_not = sorted_idx.size(0) // 2
+        idx_don_not_keep = (self.modified_edge_weight_diff <= self.eps).sum().long()
+        if idx_don_not_keep < sorted_idx.size(0) // 2:
+            idx_don_not_keep = sorted_idx.size(0) // 2
 
-        sorted_idx = sorted_idx[idx_keep_not:]
+        sorted_idx = sorted_idx[idx_don_not_keep:]
         self.current_search_space = self.current_search_space[sorted_idx]
         self.modified_edge_weight_diff = self.modified_edge_weight_diff[sorted_idx]
 
         # Sample until enough edges were drawn
         while True:
-            new_index = torch.randint(n,
-                                      (self.search_space_size - self.current_search_space.size(0),),
-                                      device=self.device)
+            number_new_edges = (self.search_space_size - self.current_search_space.size(0),)
+            new_index = torch.randint(self.n, number_new_edges, device=self.device)
             self.current_search_space = torch.cat((self.current_search_space, new_index))
             #self.current_search_space = self.current_search_space[node_idx != self.current_search_space]
             self.current_search_space, unique_idx = torch.unique(
@@ -286,7 +263,7 @@ class LocalPRBCD(SparseLocalAttack):
             if self.current_search_space.size(0) > n_perturbations:
                 break
 
-    def sample_edges(self, node_idx: int, n_perturbations: int) -> SparseTensor:
+    def sample_final_edges(self, node_idx: int, n_perturbations: int) -> SparseTensor:
         best_margin = float('Inf')
         with torch.no_grad():
             current_search_space = self.current_search_space.clone()

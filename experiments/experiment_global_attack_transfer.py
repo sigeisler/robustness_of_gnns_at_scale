@@ -121,8 +121,8 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
             })
 
             if torch.cuda.is_available():
-                torch.cuda.empty_cache()
                 torch.cuda.synchronize()
+                torch.cuda.empty_cache()
 
     assert len(results) > 0
 

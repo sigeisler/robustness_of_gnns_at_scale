@@ -21,7 +21,6 @@ from rgnn_at_scale.data import CachedPPRMatrix
 class LocalBatchedPRBCD(LocalPRBCD):
 
     def __init__(self,
-                 ppr_matrix: Optional[SparseTensor] = None,
                  ppr_recalc_at_end: bool = True,
                  ppr_cache_params: Dict[str, Any] = None,
                  ** kwargs):
@@ -30,19 +29,9 @@ class LocalBatchedPRBCD(LocalPRBCD):
 
         assert type(self.surrogate_model) in BATCHED_PPR_MODELS.__args__, "LocalBatchedPRBCD Attack only supports PPRGo models"
 
-        # if self.attack_labeled_nodes_only:
-        #     ppr_nodes = self.idx_attack
-        # else:
-        #     ppr_nodes = np.arange(self.n)
-
         self.ppr_cache_params = ppr_cache_params
         if self.ppr_cache_params is None:
             self.ppr_cache_params = self.surrogate_model.ppr_cache_params
-
-        # if self.attack_labeled_nodes_only:
-        #     relabeled_row = torch.from_numpy(ppr_nodes)[self.ppr_matrix.storage.row()]
-        #     self.ppr_matrix = SparseTensor(row=relabeled_row, col=self.ppr_matrix.storage.col(),
-        #                                    value=self.ppr_matrix.storage.value(), sparse_sizes=(self.n, self.n))
 
         self.ppr_recalc_at_end = ppr_recalc_at_end
         self.ppr_matrix = CachedPPRMatrix(self.adj,
@@ -65,6 +54,8 @@ class LocalBatchedPRBCD(LocalPRBCD):
             return model(data=self.X.to(self.device), adj=perturbed_graph.to(self.device))[node_idx:node_idx + 1]
 
     def sample_final_edges(self, node_idx: int, n_perturbations: int):
+        perturbed_graph = super().sample_final_edges()
+
         if self.ppr_recalc_at_end:
             adj = self.perturb_graph(node_idx, only_update_adj=True, n_perturbations=n_perturbations)
             # Handle disconnected nodes
@@ -81,19 +72,12 @@ class LocalBatchedPRBCD(LocalPRBCD):
                                                   self.surrogate_model.topk + n_perturbations,
                                                   normalization=self.surrogate_model.ppr_normalization)
             perturbed_graph = SparseTensor.from_scipy(perturbed_graph)
-        else:
-            perturbed_graph = self.perturb_graph(node_idx)
 
         return perturbed_graph
 
     def perturb_graph(self, node_idx: int, only_update_adj: bool = False, n_perturbations: int = None) -> SparseTensor:
-        if self.attack_labeled_nodes_only:
-            current_search_space = torch.tensor(self.idx_attack, device=self.device)[self.current_search_space]
-        else:
-            current_search_space = self.current_search_space
-
         modified_edge_weight_diff = SparseTensor(row=torch.zeros_like(self.current_search_space),
-                                                 col=current_search_space,
+                                                 col=self.current_search_space,
                                                  value=self.modified_edge_weight_diff,
                                                  sparse_sizes=(1, self.n))
         if not only_update_adj:

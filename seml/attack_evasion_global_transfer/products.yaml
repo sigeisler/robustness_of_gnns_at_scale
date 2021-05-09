@@ -16,8 +16,8 @@ slurm:
 fixed:
   data_dir: datasets/
   artifact_dir: cache
-  pert_adj_storage_type: evasion_transfer_attack_adj
-  pert_attr_storage_type: evasion_transfer_attack_attr
+  pert_adj_storage_type: evasion_global_transfer_adj
+  pert_attr_storage_type: evasion_global_transfer_attr
   model_storage_type: pretrained
   surrogate_model_storage_type: pretrained
   device: 0
@@ -43,7 +43,6 @@ grid:
     - [0, 0.01]
     - [0, 0.05]
     - [0, 0.1]
-    - [0, 0.25]
 
 greedy_rbcd:
   fixed:

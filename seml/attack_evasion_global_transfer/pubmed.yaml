@@ -15,10 +15,10 @@ slurm:
 
 fixed:
   data_dir: datasets/
-  epsilons: [0, 0.01, 0.05, 0.1, 0.25]
+  epsilons: [0, 0.01, 0.05, 0.1]
   artifact_dir: cache
-  pert_adj_storage_type: evasion_transfer_attack_adj
-  pert_attr_storage_type: evasion_transfer_attack_attr
+  pert_adj_storage_type: evasion_global_transfer_adj
+  pert_attr_storage_type: evasion_global_transfer_attr
   model_storage_type: pretrained
   surrogate_model_storage_type: pretrained
   device: 0

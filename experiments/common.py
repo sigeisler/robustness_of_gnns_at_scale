@@ -51,21 +51,22 @@ def prepare_attack_experiment(data_dir: str, dataset: str, attack: str, attack_p
 
     storage = Storage(artifact_dir, experiment=ex)
 
-    tmp_attack_params = dict(attack_params)
-    if "ppr_cache_params" in tmp_attack_params.keys():
-        ppr_cache_params = dict(tmp_attack_params["ppr_cache_params"])
+    attack_params = dict(attack_params)
+    if "ppr_cache_params" in attack_params.keys():
+        ppr_cache_params = dict(attack_params["ppr_cache_params"])
         ppr_cache_params.update(dict(
             dataset=dataset,
             normalize=normalize,
             make_undirected=make_undirected,
             make_unweighted=make_unweighted,
         ))
-        tmp_attack_params["ppr_cache_params"] = ppr_cache_params
-        tmp_attack_params.update(
-            normalize=normalize,
-            normalize_attr=normalize_attr,
-            make_undirected=make_undirected,
-            make_unweighted=make_unweighted)
+        attack_params["ppr_cache_params"] = ppr_cache_params
+
+    attack_params.update(
+        normalize=normalize,
+        normalize_attr=normalize_attr,
+        make_undirected=make_undirected,
+        make_unweighted=make_unweighted)
 
     pert_params = dict(dataset=dataset,
                        binary_attr=binary_attr,
@@ -77,7 +78,7 @@ def prepare_attack_experiment(data_dir: str, dataset: str, attack: str, attack_p
                        attack=attack,
                        model=model_label,
                        surrogate_model=surrogate_model_label,
-                       attack_params=tmp_attack_params)
+                       attack_params=attack_params)
 
     model_params = dict(dataset=dataset,
                         binary_attr=binary_attr,
@@ -95,7 +96,7 @@ def prepare_attack_experiment(data_dir: str, dataset: str, attack: str, attack_p
     else:
         m = adj.nnz()
 
-    return attr, adj, labels, idx_train, idx_val, idx_test, storage, tmp_attack_params, pert_params, model_params, m
+    return attr, adj, labels, idx_train, idx_val, idx_test, storage, attack_params, pert_params, model_params, m
 
 
 def run_global_attack(epsilon, m, storage, pert_adj_storage_type, pert_attr_storage_type,
@@ -145,9 +146,7 @@ def get_local_attack_nodes(attack, binary_attr, attr, adj, labels, surrogate_mod
         surrogate_model = surrogate_model.to(device)
         surrogate_model.eval()
         if type(surrogate_model) in BATCHED_PPR_MODELS.__args__:
-            logits = surrogate_model.forward(attr.to(device),
-                                             adj.to(device),
-                                             ppr_idx=np.array(idx_test))
+            logits = surrogate_model.forward(attr, adj, ppr_idx=np.array(idx_test))
         else:
             logits = surrogate_model(attr.to(device), adj.to(device))[idx_test]
 

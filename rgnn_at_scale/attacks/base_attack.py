@@ -8,9 +8,8 @@ import scipy.sparse as sp
 import torch
 from torch.nn import functional as F
 
-import torch_sparse
 from torch_sparse import SparseTensor
-from rgnn_at_scale.models import MODEL_TYPE, DenseGCN, GCN, BATCHED_PPR_MODELS
+from rgnn_at_scale.models import MODEL_TYPE, DenseGCN, GCN, RGNN, BATCHED_PPR_MODELS
 from rgnn_at_scale.helper.utils import accuracy
 
 
@@ -32,18 +31,20 @@ class Attack(ABC):
                  loss_type: str = 'CE',  # 'CW', 'LeakyCW'  # 'CE', 'MCE', 'Margin'
                  **kwargs):
 
-        # TODO: should this be an assert instead of a warning?
-        if not (isinstance(model, GCN) or isinstance(model, DenseGCN)):
+        if not (isinstance(model, GCN) or isinstance(model, DenseGCN) or isinstance(model, RGNN)):
             warnings.warn("The attack will fail if the gradient w.r.t. the adjacency can't be computed.")
 
-        if isinstance(model, GCN):
+        if isinstance(model, GCN) or isinstance(model, RGNN):
             assert (
                 model.gdc_params is None
                 or 'use_cpu' not in model.gdc_params
                 or not model.gdc_params['use_cpu']
             ), "GDC doesn't support a gradient w.r.t. the adjacency"
-            assert model.svd_params is None, "GDC doesn't support a gradient w.r.t. the adjacency"
-            assert model.jaccard_params is None, "GDC doesn't support a gradient w.r.t. the adjacency"
+            assert model.svd_params is None, "SVD preproc. doesn't support a gradient w.r.t. the adjacency"
+            assert model.jaccard_params is None, "Jaccard preproc. doesn't support a gradient w.r.t. the adjacency"
+        if isinstance(model, RGNN):
+            assert model._mean in ['dimmedian', 'medoid', 'soft_median'],\
+                "Agg. doesn't support a gradient w.r.t. the adjacency"
 
         self.device = device
         self.data_device = data_device

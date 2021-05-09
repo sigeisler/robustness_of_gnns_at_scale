@@ -139,18 +139,17 @@ class DICE(SparseAttack):
         Returns:
             [torch.sparse.FloarTensor]: sparse adjacency matrix
         """
-        indices = []
-        for source, dest in adj_dict.keys():
-            # We make connection both ways, and update the values list that will be used to construct sparse matrix
-            indices.append([source, dest])
-            indices.append([dest, source])
-
+        indices = list(adj_dict.keys())
         values = [1] * len(indices)
-        i = torch.LongTensor(indices)
-        v = torch.FloatTensor(values)
-        return SparseTensor.from_edge_index(edge_index=i.t(),
-                                            edge_attr=v,
-                                            sparse_sizes=torch.Size([self.n, self.n])).to(self.device)
+
+        edge_index = torch.LongTensor(indices).T.to(self.device)
+        edge_attr = torch.FloatTensor(values).to(self.device)
+
+        edge_index, edge_attr = utils.to_symmetric(edge_index, edge_attr, self.n)
+
+        return SparseTensor.from_edge_index(edge_index=edge_index,
+                                            edge_attr=edge_attr,
+                                            sparse_sizes=torch.Size([self.n, self.n]))
 
     def _attack(self,
                 n_perturbations: int,
