@@ -38,6 +38,8 @@ class DICE(SparseAttack):
 
         super().__init__(*args, **kwargs)
 
+        assert self.make_undirected, 'Attack only implemented for undirected graphs'
+
         # Create Symmetric Adjacency Matrix
         adj_symmetric_index, adj_symmetric_weights = utils.to_symmetric(self.edge_index, self.edge_weight, self.n)
         self.adj_dict = self._to_dict(adj_symmetric_index, adj_symmetric_weights)

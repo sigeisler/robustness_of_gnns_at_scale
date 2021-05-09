@@ -20,6 +20,8 @@ class GreedyRBCD(PRBCD):
 
         super().__init__(*args, **kwargs)
 
+        assert self.make_undirected, 'Attack only implemented for undirected graphs'
+
         rows, cols, self.edge_weight = self.adj.coo()
         self.edge_index = torch.stack([rows, cols], dim=0)
 

@@ -55,6 +55,8 @@ class PGD(DenseAttack):
                  **kwargs):
 
         super().__init__(adj, X, labels, idx_attack, model, device=device, loss_type=loss_type, **kwargs)
+        
+        assert self.make_undirected, 'Attack only implemented for undirected graphs'
 
         self.epochs = epochs
         self.epsilon = epsilon

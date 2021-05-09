@@ -31,6 +31,8 @@ class FGSM(DenseAttack):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        
+        assert self.make_undirected, 'Attack only implemented for undirected graphs'
 
         self.adj_perturbed = self.adj.clone().requires_grad_(True)
         self.n_perturbations = 0

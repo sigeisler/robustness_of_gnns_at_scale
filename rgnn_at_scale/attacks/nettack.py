@@ -59,6 +59,8 @@ class Nettack(SparseLocalAttack):
 
         SparseLocalAttack.__init__(self, adj, X, labels, idx_attack, model, device, **kwargs)
 
+        assert self.make_undirected, 'Attack only implemented for undirected graphs'
+        
         assert len(self.surrogate_model.layers) == 2, "Nettack supports only 2 Layer Linear GCN as surrogate model"
         assert isinstance(self.surrogate_model._modules['activation'], Identity), \
             "Nettack only supports Linear GCN as surrogate model"

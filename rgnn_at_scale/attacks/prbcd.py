@@ -50,6 +50,8 @@ class PRBCD(SparseAttack):
 
         super().__init__(adj, X, labels, idx_attack, model, device=device, loss_type=loss_type, **kwargs)
 
+        assert self.make_undirected, 'Attack only implemented for undirected graphs'
+
         self.n_possible_edges = self.n * (self.n - 1) // 2
         self.keep_heuristic = keep_heuristic
         self.keep_weight = keep_weight
@@ -383,7 +385,7 @@ class PRBCD(SparseAttack):
         )
         return torch.stack((row_idx, col_idx))
 
-    def _append_attack_statistics(self, loss: float, accuracy: float, 
+    def _append_attack_statistics(self, loss: float, accuracy: float,
                                   probability_mass: float, probability_mass_projected: float):
         self.attack_statistics['loss'].append(loss)
         self.attack_statistics['accuracy'].append(accuracy)

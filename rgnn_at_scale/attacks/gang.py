@@ -41,6 +41,8 @@ class GANG(SparseAttack):
 
         super().__init__(*args, **kwargs)
 
+        assert self.make_undirected, 'Attack only implemented for undirected graphs'
+
         self.display_step = display_step
         self.node_budget = node_budget
         self.edge_budget = edge_budget
