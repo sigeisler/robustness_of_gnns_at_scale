@@ -54,7 +54,7 @@ class LocalBatchedPRBCD(LocalPRBCD):
             return model(data=self.X.to(self.device), adj=perturbed_graph.to(self.device))[node_idx:node_idx + 1]
 
     def sample_final_edges(self, node_idx: int, n_perturbations: int):
-        perturbed_graph = super().sample_final_edges()
+        perturbed_graph = super().sample_final_edges(node_idx, n_perturbations)
 
         if self.ppr_recalc_at_end:
             adj = self.perturb_graph(node_idx, only_update_adj=True, n_perturbations=n_perturbations)

@@ -61,12 +61,11 @@ def prepare_attack_experiment(data_dir: str, dataset: str, attack: str, attack_p
             make_unweighted=make_unweighted,
         ))
         attack_params["ppr_cache_params"] = ppr_cache_params
-
-    attack_params.update(
-        normalize=normalize,
-        normalize_attr=normalize_attr,
-        make_undirected=make_undirected,
-        make_unweighted=make_unweighted)
+        attack_params.update(
+            normalize=normalize,
+            normalize_attr=normalize_attr,
+            make_undirected=make_undirected,
+            make_unweighted=make_unweighted)
 
     pert_params = dict(dataset=dataset,
                        binary_attr=binary_attr,
@@ -115,9 +114,10 @@ def run_global_attack(epsilon, m, storage, pert_adj_storage_type, pert_attr_stor
             f"No cached perturbations found for model '{model_label}' and eps {epsilon}. Execute attack...")
         adversary.attack(n_perturbations)
         pert_adj, pert_attr = adversary.get_pertubations()
-
-        storage.save_artifact(pert_adj_storage_type, {**pert_params, **{'epsilon': epsilon}}, pert_adj)
-        storage.save_artifact(pert_attr_storage_type, {**pert_params, **{'epsilon': epsilon}}, pert_attr)
+        
+        if n_perturbations > 0:
+            storage.save_artifact(pert_adj_storage_type, {**pert_params, **{'epsilon': epsilon}}, pert_adj)
+            storage.save_artifact(pert_attr_storage_type, {**pert_params, **{'epsilon': epsilon}}, pert_attr)
 
 
 def sample_attack_nodes(logits: torch.Tensor, labels: torch.Tensor, topk: int, nodes_idx):
