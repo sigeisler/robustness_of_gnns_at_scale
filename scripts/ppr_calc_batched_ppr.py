@@ -34,11 +34,8 @@ device = 0
 dataset_root = "data/"
 output_dir = dataset_root + "ppr/papers100M/"
 binary_attr = False
-normalize = False
-normalize_attr = False
 make_undirected = False
-make_unweighted = True
-topk_batch_size = int(1e6)
+topk_batch_size = int(1e5)
 dir_name = '_'.join(dataset.split('-'))
 
 
@@ -52,9 +49,6 @@ alpha_suffix = int(alpha * 100)
 graph = prep_graph(dataset, "cpu",
                    dataset_root=dataset_root,
                    make_undirected=make_undirected,
-                   make_unweighted=make_unweighted,
-                   normalize=normalize,
-                   normalize_attr=normalize_attr,
                    binary_attr=binary_attr,
                    return_original_split=dataset.startswith('ogbn'))
 
@@ -87,12 +81,10 @@ def _save_ppr_topk(topk_batch_size,
                    topk,
                    ppr_normalization,
                    make_undirected,
-                   make_unweighted,
-                   normalize,
                    split_desc,
                    batch_start_idx=0,
-                   num_batches=21):
-    dump_suffix = f"{dataset}_{split_desc}_alpha{alpha_suffix}_eps{eps:.0e}_topk{topk}_pprnorm{ppr_normalization}_norm{normalize}_indirect{make_undirected}_unweighted{make_unweighted}"
+                   num_batches=None):
+    dump_suffix = f"{dataset}_{split_desc}_alpha{alpha_suffix}_eps{eps:.0e}_topk{topk}_pprnorm{ppr_normalization}_indirect{make_undirected}"
     logging.info(dump_suffix)
     num_nodes = len(ppr_idx)
     if num_batches is None:
@@ -124,8 +116,6 @@ def save_ppr_topk(topk_batch_size,
                   topk,
                   ppr_normalization,
                   make_undirected,
-                  make_unweighted,
-                  normalize,
                   calc_ppr_for_all,
                   idx_train, idx_val, idx_test):
 
@@ -139,9 +129,8 @@ def save_ppr_topk(topk_batch_size,
                        topk,
                        ppr_normalization,
                        make_undirected,
-                       make_unweighted,
-                       normalize,
-                       split_desc)
+                       split_desc,
+                       batch_start_idx=1035)
     if calc_ppr_for_all:
         save_ppr(np.arange(adj_sp.shape[0]), "full")
     else:
@@ -158,8 +147,6 @@ save_ppr_topk(topk_batch_size,
               topk,
               ppr_normalization,
               make_undirected,
-              make_unweighted,
-              normalize,
               calc_ppr_for_all,
               idx_train, idx_val, idx_test
               )

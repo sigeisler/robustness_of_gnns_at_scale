@@ -8,8 +8,6 @@ import seml
 from rgnn_at_scale.attacks import create_attack
 from experiments.common import prepare_attack_experiment, get_local_attack_nodes
 
-from rgnn_at_scale.helper import utils
-
 ex = Experiment()
 seml.setup_logger(ex)
 
@@ -40,7 +38,6 @@ def config():
 
     epsilons = [0.5]  # , 0.75, 1]
     seed = 0
-    display_steps = 10
 
     artifact_dir = "cache"
     model_storage_type = 'pretrained'
@@ -48,37 +45,24 @@ def config():
 
     data_dir = './datasets'
     binary_attr = False
-    normalize = False
-    normalize_attr = False
     make_undirected = True
-    make_unweighted = True
 
     data_device = 'cpu'
     device = "cpu"
 
 
 @ex.automain
-def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any], nodes: str, nodes_topk: int, epsilons: Sequence[float],
-        binary_attr: bool, make_undirected: bool, make_unweighted: bool, seed: int, normalize: bool, normalize_attr: str,
-        artifact_dir: str, model_label: str, model_storage_type: str, device: Union[str, int],
-        data_device: Union[str, int], display_steps: int):
+def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any], nodes: str, nodes_topk: int, seed: int,
+        epsilons: Sequence[float], binary_attr: bool, make_undirected: bool, artifact_dir: str, model_label: str,
+        model_storage_type: str, device: Union[str, int], data_device: Union[str, int]):
 
     results = []
     surrogate_model_label = False
 
-    (attr, adj, labels,
-     idx_train,
-     idx_val,
-     idx_test,
-     storage,
-     attack_params,
-     _,
-     model_params, _) = prepare_attack_experiment(data_dir, dataset, attack, attack_params,
-                                                  epsilons, binary_attr, make_undirected,
-                                                  make_unweighted,  normalize, normalize_attr, seed,
-                                                  artifact_dir, None, None,
-                                                  model_label, model_storage_type, device,
-                                                  surrogate_model_label, data_device, ex)
+    (attr, adj, labels, _, _, idx_test, storage, attack_params, _, model_params, _) = prepare_attack_experiment(
+        data_dir, dataset, attack, attack_params, epsilons, binary_attr, make_undirected, seed, artifact_dir,
+        None, None, model_label, model_storage_type, device, surrogate_model_label, data_device, ex
+    )
 
     if model_label is not None and model_label:
         model_params['label'] = model_label
@@ -89,8 +73,9 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
         model_label = hyperparams["label"]
 
         try:
-            adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels, model=model,
-                                      idx_attack=idx_test, device=device, data_device=data_device, **attack_params)
+            adversary = create_attack(attack, attr=attr, adj=adj, labels=labels, model=model, idx_attack=idx_test, 
+                                      device=device, data_device=data_device, binary_attr=binary_attr, 
+                                      make_undirected=make_undirected, **attack_params)
 
             if hasattr(adversary, "ppr_matrix"):
                 adversary.ppr_matrix.save_to_storage()

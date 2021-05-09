@@ -20,23 +20,13 @@ class DICE(SparseAttack):
 
     Parameters
     ----------
-    adj : torch.Tensor
-        [n, n] adjacency matrix.
-    X : torch.Tensor
-        [n, d] feature matrix.
-    labels : torch.Tensor
-        Labels vector of shape [n].
     add_ratio : float
         ratio of the attack budget that is used to add new edges
 
     """
 
-    def __init__(self,
-                 *args,
-                 add_ratio: float = 0.6,
-                 **kwargs):
-
-        super().__init__(*args, **kwargs)
+    def __init__(self, add_ratio: float = 0.6, **kwargs):
+        super().__init__(**kwargs)
 
         assert self.make_undirected, 'Attack only implemented for undirected graphs'
 

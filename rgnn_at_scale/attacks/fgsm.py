@@ -29,13 +29,17 @@ class FGSM(DenseAttack):
         Model to be attacked.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
         assert self.make_undirected, 'Attack only implemented for undirected graphs'
 
-        self.adj_perturbed = self.adj.clone().requires_grad_(True)
+        self.adj_perturbed = self.adj.clone().requires_grad_(True).to(self.device)
         self.n_perturbations = 0
+
+        self.adj = self.adj.to(self.device)
+        self.attr = self.attr.to(self.device)
+        self.attacked_model = self.attacked_model.to(self.device)
 
     def _attack(self, n_perturbations: int):
         """Perform attack
@@ -53,7 +57,7 @@ class FGSM(DenseAttack):
         self.n_perturbations += n_perturbations
 
         for i in range(n_perturbations):
-            logits = self.surrogate_model.to(self.device)(self.X, self.adj_perturbed)
+            logits = self.attacked_model(self.attr, self.adj_perturbed)
 
             loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
 
@@ -72,5 +76,5 @@ class FGSM(DenseAttack):
                 self.adj_perturbed[edge_pert[0][0], edge_pert[0][1]] = new_edge_value
                 self.adj_perturbed[edge_pert[0][1], edge_pert[0][0]] = new_edge_value
 
-        self.attr_adversary = self.X
+        self.attr_adversary = self.attr
         self.adj_adversary = SparseTensor.from_dense(self.adj_perturbed.detach())

@@ -27,13 +27,6 @@ class PRBCD(SparseAttack):
     """
 
     def __init__(self,
-                 adj: SparseTensor,
-                 X: torch.Tensor,
-                 labels: torch.Tensor,
-                 idx_attack: np.ndarray,
-                 model: MODEL_TYPE,
-                 device: Union[str, int, torch.device],
-                 loss_type: str = 'CE',  # 'CW', 'LeakyCW'  # 'CE', 'MCE', 'Margin'
                  keep_heuristic: str = 'WeightOnly',  # 'InvWeightGradient' 'Gradient', 'WeightOnly'
                  keep_weight: float = .1,
                  lr_factor: float = 100,
@@ -47,8 +40,7 @@ class PRBCD(SparseAttack):
                  eps: float = 1e-7,
                  final_samples: int = 20,
                  **kwargs):
-
-        super().__init__(adj, X, labels, idx_attack, model, device=device, loss_type=loss_type, **kwargs)
+        super().__init__(**kwargs)
 
         assert self.make_undirected, 'Attack only implemented for undirected graphs'
 
@@ -95,7 +87,7 @@ class PRBCD(SparseAttack):
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
 
-            logits = self.surrogate_model(data=self.X.to(self.device), adj=(edge_index, edge_weight))
+            logits = self.attacked_model(data=self.attr.to(self.device), adj=(edge_index, edge_weight))
             loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
 
             gradient = utils.grad_with_checkpoint(loss, self.modified_edge_weight_diff)[0]
@@ -110,7 +102,7 @@ class PRBCD(SparseAttack):
                 probability_mass, probability_mass_projected = self.projection(n_perturbations, edge_index, edge_weight)
 
                 edge_index, edge_weight = self.get_modified_adj()
-                logits = self.surrogate_model(data=self.X.to(self.device), adj=(edge_index, edge_weight))
+                logits = self.attacked_model(data=self.attr.to(self.device), adj=(edge_index, edge_weight))
                 accuracy = (
                     logits.argmax(-1)[self.idx_attack] == self.labels[self.idx_attack]
                 ).float().mean().item()
@@ -144,51 +136,51 @@ class PRBCD(SparseAttack):
             self.modified_edge_index = best_edge_index.to(self.device)
             self.modified_edge_weight_diff = best_edge_weight_diff.to(self.device)
 
-        edge_index = self.sample_edges(n_perturbations)[0]
+        edge_index = self.sample_final_edges(n_perturbations)[0]
 
         self.adj_adversary = SparseTensor.from_edge_index(
             edge_index,
             torch.ones_like(edge_index[0], dtype=torch.float32),
             (self.n, self.n)
         ).coalesce().detach()
-        self.attr_adversary = self.X
+        self.attr_adversary = self.attr
 
-    def sample_edges(self, n_perturbations: int) -> Tuple[torch.Tensor, torch.Tensor]:
+    @torch.no_grad()
+    def sample_final_edges(self, n_perturbations: int) -> Tuple[torch.Tensor, torch.Tensor]:
         best_accuracy = float('Inf')
-        with torch.no_grad():
-            s = self.modified_edge_weight_diff.abs().detach()
-            s[s == self.eps] = 0
-            while best_accuracy == float('Inf'):
-                for i in range(self.final_samples):
-                    if best_accuracy == float('Inf'):
-                        sampled = torch.zeros_like(s)
-                        sampled[torch.topk(s, n_perturbations).indices] = 1
-                    else:
-                        sampled = torch.bernoulli(s).float()
+        s = self.modified_edge_weight_diff.abs().detach()
+        s[s == self.eps] = 0
+        while best_accuracy == float('Inf'):
+            for i in range(self.final_samples):
+                if best_accuracy == float('Inf'):
+                    sampled = torch.zeros_like(s)
+                    sampled[torch.topk(s, n_perturbations).indices] = 1
+                else:
+                    sampled = torch.bernoulli(s).float()
 
-                    if sampled.sum() > n_perturbations:
-                        n_samples = sampled.sum()
-                        logging.info(f'{i}-th sampling: too many samples {n_samples}')
-                        continue
-                    pos_modified_edge_weight_diff = sampled
-                    self.modified_edge_weight_diff = torch.where(
-                        self.modified_edge_weight_diff > 0,
-                        pos_modified_edge_weight_diff,
-                        -pos_modified_edge_weight_diff
-                    ).float()
-                    edge_index, edge_weight = self.get_modified_adj()
-                    logits = self.surrogate_model(data=self.X.to(self.device), adj=(edge_index, edge_weight))
-                    accuracy = (
-                        logits.argmax(-1)[self.idx_attack] == self.labels[self.idx_attack]
-                    ).float().mean().item()
-                    if best_accuracy > accuracy:
-                        best_accuracy = accuracy
-                        best_s = self.modified_edge_weight_diff.clone().cpu()
-            self.modified_edge_weight_diff.data.copy_(best_s.to(self.device))
-            edge_index, edge_weight = self.get_modified_adj(is_final=True)
-            is_edge_set = torch.isclose(edge_weight, torch.tensor(1.))
-            edge_index = edge_index[:, is_edge_set]
-            edge_weight = edge_weight[is_edge_set]
+                if sampled.sum() > n_perturbations:
+                    n_samples = sampled.sum()
+                    logging.info(f'{i}-th sampling: too many samples {n_samples}')
+                    continue
+                pos_modified_edge_weight_diff = sampled
+                self.modified_edge_weight_diff = torch.where(
+                    self.modified_edge_weight_diff > 0,
+                    pos_modified_edge_weight_diff,
+                    -pos_modified_edge_weight_diff
+                ).float()
+                edge_index, edge_weight = self.get_modified_adj()
+                logits = self.attacked_model(data=self.attr.to(self.device), adj=(edge_index, edge_weight))
+                accuracy = (
+                    logits.argmax(-1)[self.idx_attack] == self.labels[self.idx_attack]
+                ).float().mean().item()
+                if best_accuracy > accuracy:
+                    best_accuracy = accuracy
+                    best_s = self.modified_edge_weight_diff.clone().cpu()
+        self.modified_edge_weight_diff.data.copy_(best_s.to(self.device))
+        edge_index, edge_weight = self.get_modified_adj(is_final=True)
+        is_edge_set = torch.isclose(edge_weight, torch.tensor(1.))
+        edge_index = edge_index[:, is_edge_set]
+        edge_weight = edge_weight[is_edge_set]
         return edge_index, edge_weight
 
     def match_search_space_on_edges(
@@ -241,8 +233,8 @@ class PRBCD(SparseAttack):
 
         if (
             not self.modified_edge_weight_diff.requires_grad
-            or not hasattr(self.surrogate_model, 'do_checkpoint')
-            or not self.surrogate_model.do_checkpoint
+            or not hasattr(self.attacked_model, 'do_checkpoint')
+            or not self.attacked_model.do_checkpoint
         ):
             modified_edge_index, modified_edge_weight = utils.to_symmetric(
                 self.modified_edge_index, self.modified_edge_weight_diff, self.n

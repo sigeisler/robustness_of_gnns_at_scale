@@ -21,10 +21,7 @@ device = 0
 dataset_root = "data/"
 ppr_input_dir = dataset_root + "ppr/papers100M/"
 binary_attr = False
-normalize = False
-normalize_attr = False
 make_undirected = False
-make_unweighted = True
 dir_name = '_'.join(dataset.split('-'))
 #shape = [169343, 169343]
 shape = [111059956, 111059956]
@@ -37,45 +34,32 @@ alpha = 0.001
 eps = 1e-5
 topk = 128
 ppr_normalization = "row"
-split_desc = "attack"  # "train", "val", "test"
-logging.info(f"start {alpha} {split_desc}")
-topk_matrix, ppr_idx = load_ppr(input_dir=ppr_input_dir,
-                                dataset=dataset,
-                                alpha=alpha,
-                                eps=eps,
-                                topk=topk,
-                                ppr_normalization=ppr_normalization,
-                                split_desc="full",
-                                normalize=normalize,
-                                make_undirected=make_undirected,
-                                make_unweighted=make_unweighted,
-                                shape=shape)
+for alpha in [0.01]:
+    for split_desc in ["full"]:  # , "train", "val", "test"]:
+        logging.info(f"start {alpha} {split_desc}")
+        topk_matrix, ppr_idx = load_ppr(input_dir=ppr_input_dir,
+                                        dataset=dataset,
+                                        alpha=alpha,
+                                        eps=eps,
+                                        topk=topk,
+                                        ppr_normalization=ppr_normalization,
+                                        split_desc=split_desc,
+                                        make_undirected=make_undirected,
+                                        shape=shape)
 
+        logging.info("topk")
+        storage = Storage(artifact_dir, experiment=ex)
+        params = dict(dataset=dataset,
+                      alpha=alpha,
+                      ppr_idx=ppr_idx,
+                      eps=eps,
+                      topk=topk,
+                      ppr_normalization=ppr_normalization,
+                      split_desc=split_desc,
+                      make_undirected=make_undirected)
+        if topk_matrix is not None:
+            model_path = storage.save_sparse_matrix(model_storage_type, params,
+                                                    topk_matrix, ignore_duplicate=True)
 
-logging.info("topk")
-storage = Storage(artifact_dir, experiment=ex)
-params = dict(dataset=dataset,
-              alpha=alpha,
-              ppr_idx=ppr_idx,
-              eps=eps,
-              topk=topk,
-              ppr_normalization=ppr_normalization,
-              split_desc=split_desc,
-              normalize=normalize,
-              normalize_attr=normalize_attr,
-              make_undirected=make_undirected,
-              make_unweighted=make_unweighted)
-if topk_matrix is not None:
-    params["ppr_idx"] = np.unique(topk_matrix.nonzero()[0])
-    logging.info("trying to save sparse_matrix")
-    model_path = storage.save_sparse_matrix(model_storage_type, params,
-                                            topk_matrix, ignore_duplicate=True)
-
-    logging.info("saved sparse_matrix")
-    loaded_topk_train = storage.find_sparse_matrix(model_storage_type, params)
-
-    logging.info("find_sparse_matrix")
-    logging.info(loaded_topk_train.nnz)
-    logging.info(loaded_topk_train.shape)
 
 logging.info("done")

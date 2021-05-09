@@ -5,17 +5,10 @@ from typing import Any, Dict, Sequence, Union
 import numpy as np
 from sacred import Experiment
 import seml
-import torch
 
-from rgnn_at_scale.data import prep_graph, split
-from rgnn_at_scale.attacks import create_attack, SPARSE_ATTACKS
+from rgnn_at_scale.attacks import create_attack
 from rgnn_at_scale.helper.io import Storage
-from rgnn_at_scale.models import DenseGCN, GCN
-from rgnn_at_scale.train import train
-from rgnn_at_scale.helper.utils import accuracy
 from experiments.common import prepare_attack_experiment, get_local_attack_nodes
-
-from rgnn_at_scale.helper import utils
 
 ex = Experiment()
 seml.setup_logger(ex)
@@ -41,7 +34,6 @@ def config():
 
     epsilons = [0.5, 0.75, 1]
     seed = 0
-    display_steps = 10
 
     artifact_dir = "/nfs/students/schmidtt/cache/cache"
 
@@ -49,24 +41,21 @@ def config():
     model_label = None
 
     surrogate_model_storage_type = "surrogate_cora"
-    surrogate_model_label = 'Linear GCN'  # 'Vanilla GCN'
+    surrogate_model_label = 'Linear GCN'
 
     data_dir = "/nfs/students/schmidtt/datasets/"
     binary_attr = False
-    normalize = False
-    normalize_attr = False
     make_undirected = True
-    make_unweighted = True
 
     data_device = 'cpu'
     device = "cpu"
 
 
 @ex.automain
-def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any], nodes: str, epsilons: Sequence[float],
-        binary_attr: bool, make_undirected: bool, make_unweighted: bool, seed: int, normalize: bool, normalize_attr: str,
-        artifact_dir: str, model_label: str, model_storage_type: str, device: Union[str, int],
-        surrogate_model_storage_type: str, surrogate_model_label: str, data_device: Union[str, int], display_steps: int):
+def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any], nodes: str, seed: int,
+        epsilons: Sequence[float], binary_attr: bool, make_undirected: bool, artifact_dir: str,
+        model_label: str, model_storage_type: str, device: Union[str, int], surrogate_model_storage_type: str,
+        surrogate_model_label: str, data_device: Union[str, int]):
 
     assert sorted(epsilons) == epsilons, 'argument `epsilons` must be a sorted list'
     assert len(np.unique(epsilons)) == len(epsilons),\
@@ -74,19 +63,12 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
     assert all([eps >= 0 for eps in epsilons]), 'all elements in `epsilons` must be greater than 0'
     results = []
 
-    (attr, adj, labels,
-     idx_train,
-     idx_val,
-     idx_test,
-     storage,
-     attack_params,
-     _,
-     model_params, _) = prepare_attack_experiment(data_dir, dataset, attack, attack_params,
-                                                  epsilons, binary_attr, make_undirected,
-                                                  make_unweighted,  normalize, normalize_attr, seed,
-                                                  artifact_dir, None, None,
-                                                  model_label, model_storage_type, device,
-                                                  surrogate_model_label, data_device, ex)
+    (
+        attr, adj, labels, _, _, idx_test, storage, attack_params, _, model_params, _
+    ) = prepare_attack_experiment(
+        data_dir, dataset, attack, attack_params, epsilons, binary_attr, make_undirected, seed, artifact_dir,
+        None, None, model_label, model_storage_type, device, surrogate_model_label, data_device, ex
+    )
 
     storage = Storage(artifact_dir, experiment=ex)
 
@@ -114,8 +96,9 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
         #tmp_epsilons.insert(0, 0)
         for eps in tmp_epsilons:
             try:
-                adversary = create_attack(attack, binary_attr, attr, adj=adj, labels=labels, model=surrogate_model,
-                                          idx_attack=idx_test, device=device, data_device=data_device, **attack_params)
+                adversary = create_attack(attack, attr=attr, adj=adj, labels=labels, model=surrogate_model,
+                                          idx_attack=idx_test, device=device,  data_device=data_device,
+                                          binary_attr=binary_attr, make_undirected=make_undirected, **attack_params)
             except Exception as e:
                 logging.exception(e)
                 logging.error(f"Failed to instantiate attack {attack} for model '{surrogate_model}'.")

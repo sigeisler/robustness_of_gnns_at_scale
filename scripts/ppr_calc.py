@@ -28,9 +28,7 @@ dataset = "ogbn-papers100M"  # "ogbn-papers100M"  # "ogbn-arxiv"
 device = 0
 dataset_root = "/nfs/students/schmidtt/datasets/"
 binary_attr = False
-normalize = "row"
 make_undirected = False
-make_unweighted = True
 
 
 # ppr params
@@ -43,8 +41,6 @@ alpha_suffix = int(alpha * 100)
 graph = prep_graph(dataset, "cpu",
                    dataset_root=dataset_root,
                    make_undirected=make_undirected,
-                   make_unweighted=make_unweighted,
-                   normalize=normalize,
                    binary_attr=binary_attr,
                    return_original_split=dataset.startswith('ogbn'))
 
@@ -79,10 +75,8 @@ def _save_ppr_topk(artifact_dir,
                    topk,
                    ppr_normalization,
                    make_undirected,
-                   make_unweighted,
-                   normalize,
                    split_desc):
-    dump_suffix = f"{dataset}_{split_desc}_alpha{alpha_suffix}_eps{eps:.0e}_topk{topk}_pprnorm{ppr_normalization}_norm{normalize}_indirect{make_undirected}_unweighted{make_unweighted}"
+    dump_suffix = f"{dataset}_{split_desc}_alpha{alpha_suffix}_eps{eps:.0e}_topk{topk}_pprnorm{ppr_normalization}_indirect{make_undirected}"
     logging.info(dump_suffix)
 
     params = dict(dataset=dataset,
@@ -93,9 +87,7 @@ def _save_ppr_topk(artifact_dir,
                   num_nodes=num_nodes,
                   ppr_normalization=ppr_normalization,
                   split_desc=split_desc,
-                  normalize=normalize,
-                  make_undirected=make_undirected,
-                  make_unweighted=make_unweighted)
+                  make_undirected=make_undirected)
 
     logging.info(f'Memory before calculating ppr: {utils.get_max_memory_bytes() / (1024 ** 3)}')
     topk_ppr = ppr.topk_ppr_matrix(adj_sp, alpha, eps, ppr_idx,
@@ -118,8 +110,6 @@ def save_ppr_topk(artifact_dir,
                   topk,
                   ppr_normalization,
                   make_undirected,
-                  make_unweighted,
-                  normalize,
                   calc_ppr_for_all,
                   idx_train, idx_val, idx_test):
 
@@ -133,8 +123,6 @@ def save_ppr_topk(artifact_dir,
                        topk,
                        ppr_normalization,
                        make_undirected,
-                       make_unweighted,
-                       normalize,
                        split_desc)
 
     if calc_ppr_for_all:
@@ -153,8 +141,6 @@ save_ppr_topk(artifact_dir,
               topk,
               ppr_normalization,
               make_undirected,
-              make_unweighted,
-              normalize,
               calc_ppr_for_all,
               idx_train, idx_val, idx_test
               )

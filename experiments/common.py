@@ -13,16 +13,14 @@ from rgnn_at_scale.helper.utils import accuracy
 
 def prepare_attack_experiment(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                               epsilons: Sequence[float], binary_attr: bool, make_undirected: bool,
-                              make_unweighted: bool,  normalize: bool, normalize_attr: str, seed: int,
-                              artifact_dir: str, pert_adj_storage_type: str, pert_attr_storage_type: str,
+                              seed: int, artifact_dir: str, pert_adj_storage_type: str, pert_attr_storage_type: str,
                               model_label: str, model_storage_type: str, device: Union[str, int],
                               surrogate_model_label: str, data_device: Union[str, int], ex: Experiment):
     logging.info({
         'dataset': dataset, 'attack': attack, 'attack_params': attack_params, 'epsilons': epsilons,
-        'make_undirected': make_undirected, 'make_unweighted': make_unweighted, 'normalize': normalize,
-        'normalize_attr': normalize_attr, 'binary_attr': binary_attr,
-        'seed': seed, 'artifact_dir': artifact_dir, 'pert_adj_storage_type': pert_adj_storage_type,
-        'pert_attr_storage_type': pert_attr_storage_type, 'model_label': model_label,
+        'make_undirected': make_undirected, 'binary_attr': binary_attr, 'seed': seed, 
+        'artifact_dir':  artifact_dir, 'pert_adj_storage_type': pert_adj_storage_type, 
+        'pert_attr_storage_type': pert_attr_storage_type, 'model_label': model_label, 
         'model_storage_type': model_storage_type, 'device': device
     })
 
@@ -35,13 +33,8 @@ def prepare_attack_experiment(data_dir: str, dataset: str, attack: str, attack_p
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    graph = prep_graph(dataset, data_device, dataset_root=data_dir,
-                       normalize=normalize,
-                       normalize_attr=normalize_attr,
-                       make_undirected=make_undirected,
-                       make_unweighted=make_unweighted,
-                       binary_attr=binary_attr,
-                       return_original_split=dataset.startswith('ogbn'))
+    graph = prep_graph(dataset, data_device, dataset_root=data_dir, make_undirected=make_undirected,
+                       binary_attr=binary_attr, return_original_split=dataset.startswith('ogbn'))
 
     attr, adj, labels = graph[:3]
     if len(graph) == 3:
@@ -54,25 +47,12 @@ def prepare_attack_experiment(data_dir: str, dataset: str, attack: str, attack_p
     attack_params = dict(attack_params)
     if "ppr_cache_params" in attack_params.keys():
         ppr_cache_params = dict(attack_params["ppr_cache_params"])
-        ppr_cache_params.update(dict(
-            dataset=dataset,
-            normalize=normalize,
-            make_undirected=make_undirected,
-            make_unweighted=make_unweighted,
-        ))
+        ppr_cache_params['dataset'] = dataset
         attack_params["ppr_cache_params"] = ppr_cache_params
-        attack_params.update(
-            normalize=normalize,
-            normalize_attr=normalize_attr,
-            make_undirected=make_undirected,
-            make_unweighted=make_unweighted)
 
     pert_params = dict(dataset=dataset,
                        binary_attr=binary_attr,
-                       normalize=normalize,
-                       normalize_attr=normalize_attr,
                        make_undirected=make_undirected,
-                       make_unweighted=make_unweighted,
                        seed=seed,
                        attack=attack,
                        model=model_label,
@@ -81,10 +61,7 @@ def prepare_attack_experiment(data_dir: str, dataset: str, attack: str, attack_p
 
     model_params = dict(dataset=dataset,
                         binary_attr=binary_attr,
-                        normalize=normalize,
-                        normalize_attr=normalize_attr,
                         make_undirected=make_undirected,
-                        make_unweighted=make_unweighted,
                         seed=seed)
 
     if model_label is not None and model_label:
@@ -110,8 +87,7 @@ def run_global_attack(epsilon, m, storage, pert_adj_storage_type, pert_attr_stor
             f"Found cached perturbed adjacency and attribute matrix for model '{model_label}' and eps {epsilon}")
         adversary.set_pertubations(pert_adj, pert_attr)
     else:
-        logging.info(
-            f"No cached perturbations found for model '{model_label}' and eps {epsilon}. Execute attack...")
+        logging.info(f"No cached perturbations found for model '{model_label}' and eps {epsilon}. Execute attack...")
         adversary.attack(n_perturbations)
         pert_adj, pert_attr = adversary.get_pertubations()
         

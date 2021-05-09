@@ -13,12 +13,8 @@ class GreedyRBCD(PRBCD):
     """Sampled and hence scalable PGD attack for graph data.
     """
 
-    def __init__(self,
-                 *args,
-                 epochs: int = 500,
-                 **kwargs):
-
-        super().__init__(*args, **kwargs)
+    def __init__(self, epochs: int = 500, **kwargs):
+        super().__init__(**kwargs)
 
         assert self.make_undirected, 'Attack only implemented for undirected graphs'
 
@@ -27,7 +23,7 @@ class GreedyRBCD(PRBCD):
 
         self.edge_index = self.edge_index.to(self.data_device)
         self.edge_weight = self.edge_weight.float().to(self.data_device)
-        self.X = self.X.to(self.data_device)
+        self.attr = self.attr.to(self.data_device)
         self.epochs = epochs
 
         self.n_perturbations = 0
@@ -90,9 +86,7 @@ class GreedyRBCD(PRBCD):
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
 
-            # print(f'Cuda after sampling: {torch.cuda.memory_summary()}')
-
-            logits = self.surrogate_model(data=self.X.to(self.device), adj=(edge_index, edge_weight))
+            logits = self.attacked_model(data=self.attr.to(self.device), adj=(edge_index, edge_weight))
             loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
 
             gradient = utils.grad_with_checkpoint(loss, self.modified_edge_weight_diff)[0]
@@ -100,8 +94,6 @@ class GreedyRBCD(PRBCD):
             if self.do_synchronize:
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
-
-            # print(f'Cuda after gradient update: {torch.cuda.memory_summary()}')
 
             with torch.no_grad():
                 self._greedy_update(step_size, edge_index, edge_weight, gradient)
@@ -116,4 +108,4 @@ class GreedyRBCD(PRBCD):
         self.adj_adversary = SparseTensor.from_edge_index(
             edge_index[:, edge_mask], edge_weight[edge_mask], (self.n, self.n)
         ).coalesce().detach()
-        self.attr_adversary = self.X
+        self.attr_adversary = self.attr

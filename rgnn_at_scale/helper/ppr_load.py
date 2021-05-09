@@ -148,9 +148,7 @@ def load_ppr(
     topk=64,
     ppr_normalization="row",
     split_desc=None,
-    normalize=None,
     make_undirected=None,
-    make_unweighted=None,
     shape=None,
 ):
     if input_dir is None:
@@ -160,16 +158,10 @@ def load_ppr(
         dump_suffix += f"_{split_desc}"
 
     dump_suffix += f"_alpha{int(alpha * 100)}_eps{eps:.0e}_topk{topk}"
-    if normalize is not None:
-        dump_suffix += f"_pprnorm{ppr_normalization}_norm{normalize}"
-    else:
-        # for backward compatibility:
-        dump_suffix += f"_norm{ppr_normalization}"
+    dump_suffix += f"_norm{ppr_normalization}"
 
     if make_undirected is not None:
         dump_suffix += f"_indirect{make_undirected}"
-    if make_unweighted is not None:
-        dump_suffix += f"_unweighted{make_unweighted}"
 
     # check whether the precalculated ppr exists, return None if it does not.
     if len(glob.glob(str(Path(input_dir) / ("topk_ppr_" + dump_suffix)) + "*")) == 0:
@@ -233,9 +225,7 @@ def load_ppr_csr(
 #                       topk=256,
 #                       ppr_normalization="row",
 #                       split_desc="train",
-#                       normalize="row",
-#                       make_undirected=False,
-#                       make_unweighted=True)
+#                       make_undirected=False)
 # print()
 # print(topk_train)
 # print(train_idx)
