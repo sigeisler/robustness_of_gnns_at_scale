@@ -23,7 +23,6 @@ fixed:
   model_storage_type: pretrained
   device: 0
   data_device: 0 
-  make_unweighted: True
   make_undirected: True
   binary_attr: False
 
@@ -37,31 +36,34 @@ grid:
       - 1
       - 5
 
-gcn:
-  fixed:
-    model_params:
-      label: Vanilla GCN
-      model: GCN
-      dropout: 0.5
-      n_filters: [256, 256]
-      gdc_params: None
-      svd_params: None
-      jaccard_params: None
-      do_checkpoint: True
-      n_chunks: 64
+# gcn:
+#   fixed:
+#     model_params:
+#       label: Vanilla GCN
+#       model: GCN
+#       dropout: 0.5
+#       n_filters: [256, 256]
+#       gdc_params: None
+#       svd_params: None
+#       jaccard_params: None
+#       do_checkpoint: True
+#       n_chunks: 64
+#       do_normalize_adj_once: True
 
-gcn_surrogate:
-  fixed:
-    model_params:
-      label: Vanilla GCN (surrogate)
-      model: GCN
-      dropout: 0.5
-      n_filters: 64
-      gdc_params: None
-      svd_params: None
-      jaccard_params: None
-      do_checkpoint: True
-      n_chunks: 64
+
+# gcn_surrogate:
+#   fixed:
+#     model_params:
+#       label: Vanilla GCN (surrogate)
+#       model: GCN
+#       dropout: 0.5
+#       n_filters: 64
+#       gdc_params: None
+#       svd_params: None
+#       jaccard_params: None
+#       do_checkpoint: True
+#       n_chunks: 64
+#       do_normalize_adj_once: True
 
 gdc:
   fixed:
@@ -75,6 +77,7 @@ gdc:
           use_cpu: True
       svd_params: None
       jaccard_params: None
+      do_normalize_adj_once: True
   grid: 
     model_params:
       type: parameter_collection

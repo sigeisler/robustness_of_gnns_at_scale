@@ -22,10 +22,7 @@ fixed:
   model_storage_type: pretrained
   device: 0
   data_device: cpu
-  make_unweighted: True
   binary_attr: False
-  normalize: False
-  normalize_attr: False
   dataset: cora_ml
 
 grid:

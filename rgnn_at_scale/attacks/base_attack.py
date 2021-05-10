@@ -89,19 +89,19 @@ class Attack(ABC):
         return self.adj_adversary, self.attr_adversary
 
     @staticmethod
+    @torch.no_grad()
     def evaluate_global(model, attr, adj, labels: torch.Tensor, eval_idx: List[int]):
-        with torch.no_grad():
-            model.eval()
-            if hasattr(model, 'release_cache'):
-                model.release_cache()
+        model.eval()
+        if hasattr(model, 'release_cache'):
+            model.release_cache()
 
-            if type(model) in BATCHED_PPR_MODELS.__args__:
-                pred_logits_target = model.forward(attr, adj, ppr_idx=np.array(eval_idx))
-            else:
-                pred_logits_target = model(attr, adj)[eval_idx]
+        if type(model) in BATCHED_PPR_MODELS.__args__:
+            pred_logits_target = model.forward(attr, adj, ppr_idx=np.array(eval_idx))
+        else:
+            pred_logits_target = model(attr, adj)[eval_idx]
 
-            acc_test_target = accuracy(pred_logits_target.cpu(), labels.cpu()[eval_idx],
-                                       np.arange(pred_logits_target.shape[0]))
+        acc_test_target = accuracy(pred_logits_target.cpu(), labels.cpu()[eval_idx],
+                                   np.arange(pred_logits_target.shape[0]))
 
         return pred_logits_target, acc_test_target
 

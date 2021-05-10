@@ -22,10 +22,7 @@ fixed:
   model_storage_type: pretrained
   device: 0
   data_device: 0
-  make_unweighted: True
   make_undirected: True
-  normalize: False
-  normalize_attr: False
   binary_attr: False
 
 grid:
@@ -81,7 +78,6 @@ gdc:
       gdc_params:
           alpha: 0.15
           k: 64
-          # use_cpu: False
 
 # soft_medoid_gdc_t1_0:
 #   fixed:
