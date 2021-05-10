@@ -34,28 +34,28 @@ class PRBCD(SparseAttack):
                  epochs: int = 400,
                  fine_tune_epochs: int = 100,
                  search_space_size: int = 1_000_000,
-                 search_space_dropout: float = 0,
                  with_early_stropping: bool = True,
                  do_synchronize: bool = False,
                  eps: float = 1e-7,
-                 final_samples: int = 20,
+                 max_resamples: int = 20,
                  **kwargs):
         super().__init__(**kwargs)
 
-        assert self.make_undirected, 'Attack only implemented for undirected graphs'
+        if self.make_undirected:
+            self.n_possible_edges = self.n * (self.n - 1) // 2
+        else:
+            self.n_possible_edges = self.n ** 2  # We filter self-loops later
 
-        self.n_possible_edges = self.n * (self.n - 1) // 2
         self.keep_heuristic = keep_heuristic
         self.keep_weight = keep_weight
         self.display_step = display_step
         self.epochs = epochs
         self.fine_tune_epochs = fine_tune_epochs
         self.search_space_size = search_space_size
-        self.search_space_dropout = search_space_dropout
         self.with_early_stropping = with_early_stropping
         self.eps = eps
         self.do_synchronize = do_synchronize
-        self.final_samples = final_samples
+        self.max_resamples = max_resamples
 
         self.current_search_space: torch.Tensor = None
         self.modified_edge_index: torch.Tensor = None
@@ -151,7 +151,7 @@ class PRBCD(SparseAttack):
         s = self.modified_edge_weight_diff.abs().detach()
         s[s == self.eps] = 0
         while best_accuracy == float('Inf'):
-            for i in range(self.final_samples):
+            for i in range(self.max_resamples):
                 if best_accuracy == float('Inf'):
                     sampled = torch.zeros_like(s)
                     sampled[torch.topk(s, n_perturbations).indices] = 1
@@ -188,7 +188,10 @@ class PRBCD(SparseAttack):
         edge_index: torch.Tensor,
         edge_weight: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        is_in_search_space = (edge_weight != 1) & (edge_index[0] < edge_index[1])
+        if self.make_undirected:
+            is_in_search_space = (edge_weight != 1) & (edge_index[0] < edge_index[1])
+        else:
+            is_in_search_space = (edge_weight != 1) & (edge_index[0] != edge_index[1])
         assert is_in_search_space.sum() == self.current_search_space.size(0), \
             f'search space size mismatch: {is_in_search_space.sum()} vs. {self.current_search_space.size(0)}'
         modified_edge_weight = edge_weight[is_in_search_space]
@@ -225,9 +228,6 @@ class PRBCD(SparseAttack):
         self.modified_edge_weight_diff.data[self.modified_edge_weight_diff <= -1 + self.eps] = -1 + self.eps
 
     def get_modified_adj(self, is_final: bool = False):
-        if self.search_space_dropout > 0 and not is_final:
-            self.modified_edge_weight_diff.data = F.dropout(self.modified_edge_weight_diff.data)
-
         if not is_final:
             self.handle_zeros_and_ones()
 
@@ -236,9 +236,12 @@ class PRBCD(SparseAttack):
             or not hasattr(self.attacked_model, 'do_checkpoint')
             or not self.attacked_model.do_checkpoint
         ):
-            modified_edge_index, modified_edge_weight = utils.to_symmetric(
-                self.modified_edge_index, self.modified_edge_weight_diff, self.n
-            )
+            if self.make_undirected:
+                modified_edge_index, modified_edge_weight = utils.to_symmetric(
+                    self.modified_edge_index, self.modified_edge_weight_diff, self.n
+                )
+            else:
+                modified_edge_index, modified_edge_weight = self.modified_edge_index, self.modified_edge_weight_diff
             edge_index = torch.cat((self.edge_index.to(self.device), modified_edge_index), dim=-1)
             edge_weight = torch.cat((self.edge_weight.to(self.device), modified_edge_weight))
 
@@ -250,16 +253,20 @@ class PRBCD(SparseAttack):
                 op='sum'
             )
         else:
+            # Currently (1.6.0) PyTorch does not support return arguments of `checkpoint` that do not require gradient.
+            # For this reason we need this extra code and to execute it twice (due to checkpointing in fact 3 times...)
             from torch.utils import checkpoint
 
             def fuse_edges_run(modified_edge_weight_diff: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-                modified_edge_index, modified_edge_weight = utils.to_symmetric(
-                    self.modified_edge_index, modified_edge_weight_diff, self.n
-                )
+                if self.make_undirected:
+                    modified_edge_index, modified_edge_weight = utils.to_symmetric(
+                        self.modified_edge_index, modified_edge_weight_diff, self.n
+                    )
+                else:
+                    modified_edge_index, modified_edge_weight = self.modified_edge_index, self.modified_edge_weight_diff
                 edge_index = torch.cat((self.edge_index.to(self.device), modified_edge_index), dim=-1)
                 edge_weight = torch.cat((self.edge_weight.to(self.device), modified_edge_weight))
 
-                # FIXME: This seems to be the current bottle neck. Maybe change to merge of sorted lists
                 edge_index, edge_weight = torch_sparse.coalesce(
                     edge_index,
                     edge_weight,
@@ -279,8 +286,6 @@ class PRBCD(SparseAttack):
                 self.modified_edge_index = self.modified_edge_index.to(self.device)
                 return edge_index.to(self.device), edge_weight.to(self.device)
 
-            # Currently (1.6.0) PyTorch does not support return arguments of `checkpoint` that do not require gradient.
-            # For this reason we need to execute the code twice (due to checkpointing in fact three times...)
             with torch.no_grad():
                 edge_index = fuse_edges_run(self.modified_edge_weight_diff)[0]
 
@@ -291,7 +296,26 @@ class PRBCD(SparseAttack):
 
         return edge_index, edge_weight
 
-    def update_edge_weights(self, n_perturbations: int, epoch: int, gradient: torch.Tensor):
+    def update_edge_weights(self, n_perturbations: int, epoch: int,
+                            gradient: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Updates the edge weights and adaptively, heuristically refined the learning rate such that (1) it is
+        independent of the number of perturbations (assuming an undirected adjacency matrix) and (2) to decay learning
+        rate during fine-tuning (i.e. fixed search space).
+
+        Parameters
+        ----------
+        n_perturbations : int
+            Number of perturbations.
+        epoch : int
+            Number of epochs until fine tuning.
+        gradient : torch.Tensor
+            The current gradient.
+
+        Returns
+        -------
+        Tuple[torch.Tensor, torch.Tensor]
+            Updated edge indices and weights.
+        """
         lr_factor = n_perturbations / self.n / 2 * self.lr_factor
         lr = lr_factor / np.sqrt(max(0, epoch - self.epochs) + 1)
         self.modified_edge_weight_diff.data.add_(lr * gradient)
@@ -299,43 +323,33 @@ class PRBCD(SparseAttack):
         return self.get_modified_adj()
 
     def sample_search_space(self, n_perturbations: int = 0):
-        while True:
+        for i in range(self.max_resamples):
             self.current_search_space = torch.randint(
                 self.n_possible_edges, (self.search_space_size,), device=self.device)
             self.current_search_space = torch.unique(self.current_search_space, sorted=True)
-            self.modified_edge_index = PRBCD.linear_to_triu_idx(self.n, self.current_search_space)
-            self.modified_edge_weight_diff = torch.ones_like(
-                self.current_search_space, dtype=torch.float32, requires_grad=True)
-            self.modified_edge_weight_diff.data.mul_(self.eps)
+            if self.make_undirected:
+                self.modified_edge_index = PRBCD.linear_to_triu_idx(self.n, self.current_search_space)
+            else:
+                self.modified_edge_index = PRBCD.linear_to_full_idx(self.n, self.current_search_space)
+                is_not_self_loop = self.modified_edge_index[0] != self.modified_edge_index[1]
+                self.current_search_space = self.current_search_space[is_not_self_loop]
+                self.modified_edge_index = self.modified_edge_index[:, is_not_self_loop]
+
+            self.modified_edge_weight_diff = torch.full_like(
+                self.current_search_space, self.eps, dtype=torch.float32, requires_grad=True
+            )
             if self.current_search_space.size(0) >= n_perturbations:
                 break
 
     def resample_search_space(self, n_perturbations: int, edge_index: torch.Tensor,
                               edge_weight: torch.Tensor, gradient: torch.Tensor):
-        does_original_edge_exist = self.match_search_space_on_edges(edge_index, edge_weight)[0]
         if self.keep_heuristic == 'WeightOnly':
             sorted_idx = torch.argsort(self.modified_edge_weight_diff.abs())
             idx_keep = (self.modified_edge_weight_diff <= self.eps).sum().long()
             if idx_keep < sorted_idx.size(0) // 2:
                 idx_keep = sorted_idx.size(0) // 2
         else:
-            if self.keep_heuristic == 'InvWeightGradient':
-                gradient = gradient * 1 / self.modified_edge_weight_diff.abs()
-
-            attack_gradient = torch.where(does_original_edge_exist, -gradient, gradient)
-
-            keep_edges = self.modified_edge_weight_diff.abs() > self.keep_weight
-            if self.keep_weight is not None and self.keep_weight > 0 and keep_edges.sum() > 0:
-                if keep_edges.sum() < keep_edges.size(0):
-                    sorted_idx = torch.cat((keep_edges.nonzero().reshape(-1),
-                                            torch.argsort(attack_gradient[~keep_edges])))
-                else:
-                    sorted_idx = keep_edges.nonzero().squeeze()
-                n_keep_edges = keep_edges.sum()
-                idx_keep = (self.modified_edge_weight_diff.size(0) - n_keep_edges) // 2 + n_keep_edges
-            else:
-                sorted_idx = torch.argsort(attack_gradient)
-                idx_keep = sorted_idx.size(0) // 2
+            raise NotImplementedError('Only keep_heuristic=`WeightOnly` supported')
 
         sorted_idx = sorted_idx[idx_keep:]
         self.current_search_space = self.current_search_space[sorted_idx]
@@ -343,21 +357,30 @@ class PRBCD(SparseAttack):
         self.modified_edge_weight_diff = self.modified_edge_weight_diff[sorted_idx]
 
         # Sample until enough edges were drawn
-        while True:
-            lin_index = torch.randint(self.n_possible_edges, (self.search_space_size -
-                                                              self.current_search_space.size(0),), device=self.device)
+        for i in range(self.max_resamples):
+            n_edges_resample = self.search_space_size - self.current_search_space.size(0)
+            lin_index = torch.randint(self.n_possible_edges, (n_edges_resample,), device=self.device)
             self.current_search_space, unique_idx = torch.unique(
                 torch.cat((self.current_search_space, lin_index)),
                 sorted=True,
                 return_inverse=True
             )
-            self.modified_edge_index = PRBCD.linear_to_triu_idx(self.n, self.current_search_space)
+            if self.make_undirected:
+                self.modified_edge_index = PRBCD.linear_to_triu_idx(self.n, self.current_search_space)
+            else:
+                self.modified_edge_index = PRBCD.linear_to_full_idx(self.n, self.current_search_space)
             # Merge existing weights with new edge weights
             modified_edge_weight_diff_old = self.modified_edge_weight_diff.clone()
             self.modified_edge_weight_diff = self.eps * torch.ones_like(self.current_search_space, dtype=torch.float32)
             self.modified_edge_weight_diff[
                 unique_idx[:modified_edge_weight_diff_old.size(0)]
             ] = modified_edge_weight_diff_old
+
+            if not self.make_undirected:
+                is_not_self_loop = self.modified_edge_index[0] != self.modified_edge_index[1]
+                self.current_search_space = self.current_search_space[is_not_self_loop]
+                self.modified_edge_index = self.modified_edge_index[:, is_not_self_loop]
+                self.modified_edge_weight_diff = self.modified_edge_weight_diff[is_not_self_loop]
 
             if self.current_search_space.size(0) > n_perturbations:
                 break
@@ -375,6 +398,12 @@ class PRBCD(SparseAttack):
             + 1 - n * (n - 1) // 2
             + (n - row_idx) * ((n - row_idx) - 1) // 2
         )
+        return torch.stack((row_idx, col_idx))
+
+    @staticmethod
+    def linear_to_full_idx(n: int, lin_idx: torch.Tensor) -> torch.Tensor:
+        row_idx = lin_idx // n
+        col_idx = lin_idx % n
         return torch.stack((row_idx, col_idx))
 
     def _append_attack_statistics(self, loss: float, accuracy: float,
