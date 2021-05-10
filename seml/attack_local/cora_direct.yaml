@@ -21,10 +21,7 @@ fixed:
   model_storage_type: pretrained
   device: 0
   data_device: 0
-  make_unweighted: True
   make_undirected: True
-  normalize: False
-  normalize_attr: False
   attack_params.epochs: 200
   attack_params.fine_tune_epochs: 50
   attack_params.do_synchronize: True

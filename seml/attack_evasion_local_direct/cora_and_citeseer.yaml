@@ -22,9 +22,6 @@ fixed:
   device: 0
   data_device: cpu
   binary_attr: False
-  normalize: False
-  normalize_attr: False
-  make_unweighted: True
   make_undirected: True
 
 grid:

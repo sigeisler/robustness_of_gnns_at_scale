@@ -22,7 +22,6 @@ fixed:
   model_storage_type: pretrained
   device: 0
   data_device: cpu
-  make_unweighted: True
   make_undirected: True
   binary_attr: False
   dataset: citeseer
