@@ -261,8 +261,10 @@ class GCN(nn.Module):
         if self.gdc_params is not None:
             n = x.shape[0]
             if 'use_cpu' in self.gdc_params and self.gdc_params['use_cpu']:
+                device = edge_idx.device
                 edge_idx, _ = add_remaining_self_loops(edge_idx.cpu(), None, 1., n)
                 edge_idx, edge_weight = get_approx_topk_ppr_matrix(edge_idx, n, **self.gdc_params)
+                edge_idx, edge_weight = edge_idx.to(device), edge_weight.to(device)
             else:
                 edge_idx, edge_weight = GCN.normalize(edge_idx, n, edge_weight, self.add_self_loops)
                 adj = get_ppr_matrix(torch.sparse.FloatTensor(edge_idx, edge_weight), **self.gdc_params)
