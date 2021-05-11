@@ -30,7 +30,7 @@ class LocalPRBCD(SparseLocalAttack):
                  with_early_stropping: bool = True,
                  do_synchronize: bool = False,
                  eps: float = 1e-14,
-                 final_samples: int = 20,
+                 max_resamples: int = 20,
                  **kwargs):
 
         super().__init__(**kwargs)
@@ -45,7 +45,7 @@ class LocalPRBCD(SparseLocalAttack):
         self.with_early_stropping = with_early_stropping
         self.eps = eps
         self.do_synchronize = do_synchronize
-        self.final_samples = final_samples
+        self.max_resamples = max_resamples
 
         self.current_search_space: torch.Tensor = None
         self.modified_edge_weight_diff: torch.Tensor = None
@@ -223,7 +223,7 @@ class LocalPRBCD(SparseLocalAttack):
             self.attack_statistics[key].append(value)
 
     def sample_search_space(self, node_idx: int, n_perturbations: int):
-        while True:
+        for _ in range(self.max_resamples):
             self.current_search_space = torch.randint(self.n, (self.search_space_size,), device=self.device)
             self.current_search_space = torch.unique(self.current_search_space, sorted=True)
             #self.current_search_space = self.current_search_space[node_idx != self.current_search_space]
@@ -243,7 +243,7 @@ class LocalPRBCD(SparseLocalAttack):
         self.modified_edge_weight_diff = self.modified_edge_weight_diff[sorted_idx]
 
         # Sample until enough edges were drawn
-        while True:
+        for _ in range(self.max_resamples):
             number_new_edges = (self.search_space_size - self.current_search_space.size(0),)
             new_index = torch.randint(self.n, number_new_edges, device=self.device)
             self.current_search_space = torch.cat((self.current_search_space, new_index))
@@ -271,7 +271,7 @@ class LocalPRBCD(SparseLocalAttack):
         s = self.modified_edge_weight_diff.abs().detach()
         s[s == self.eps] = 0
         while best_margin == float('Inf'):
-            for i in range(self.final_samples):
+            for i in range(self.max_resamples):
                 if best_margin == float('Inf'):
                     sampled = torch.zeros_like(s)
                     sampled[torch.topk(s, n_perturbations).indices] = 1

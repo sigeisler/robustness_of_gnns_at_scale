@@ -16,8 +16,6 @@ class GreedyRBCD(PRBCD):
     def __init__(self, epochs: int = 500, **kwargs):
         super().__init__(**kwargs)
 
-        assert self.make_undirected, 'Attack only implemented for undirected graphs'
-
         rows, cols, self.edge_weight = self.adj.coo()
         self.edge_index = torch.stack([rows, cols], dim=0)
 
@@ -41,14 +39,18 @@ class GreedyRBCD(PRBCD):
         add_edge_weight = edge_weight_factor[topk_edge_index]
         n_newly_added = int(add_edge_weight.sum().item())
 
-        add_edge_index, add_edge_weight = utils.to_symmetric(add_edge_index, add_edge_weight, self.n)
+        if self.make_undirected:
+            add_edge_index, add_edge_weight = utils.to_symmetric(add_edge_index, add_edge_weight, self.n)
         add_edge_index = torch.cat((self.edge_index, add_edge_index.to(self.data_device)), dim=-1)
         add_edge_weight = torch.cat((self.edge_weight, add_edge_weight.to(self.data_device)))
         edge_index, edge_weight = torch_sparse.coalesce(
             add_edge_index, add_edge_weight, m=self.n, n=self.n, op='sum'
         )
 
-        assert torch.isclose(self.edge_weight.sum() + 2 * n_newly_added, edge_weight.sum())
+        if self.make_undirected:
+            assert torch.isclose(self.edge_weight.sum() + 2 * n_newly_added, edge_weight.sum())
+        else:
+            assert torch.isclose(self.edge_weight.sum() + n_newly_added, edge_weight.sum())
         is_one_mask = torch.isclose(edge_weight, torch.tensor(1.))
         self.edge_index = edge_index[:, is_one_mask]
         self.edge_weight = edge_weight[is_one_mask]
