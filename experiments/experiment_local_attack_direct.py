@@ -45,23 +45,24 @@ def config():
 
     data_dir = './datasets'
     binary_attr = False
-    make_undirected = True
+    make_undirected = False
 
     data_device = 'cpu'
     device = "cpu"
+    debug_level = "debug"
 
 
 @ex.automain
 def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any], nodes: str, nodes_topk: int, seed: int,
         epsilons: Sequence[float], binary_attr: bool, make_undirected: bool, artifact_dir: str, model_label: str,
-        model_storage_type: str, device: Union[str, int], data_device: Union[str, int]):
+        model_storage_type: str, device: Union[str, int], data_device: Union[str, int], debug_level: str):
 
     results = []
     surrogate_model_label = False
 
     (attr, adj, labels, _, _, idx_test, storage, attack_params, _, model_params, _) = prepare_attack_experiment(
         data_dir, dataset, attack, attack_params, epsilons, binary_attr, make_undirected, seed, artifact_dir,
-        None, None, model_label, model_storage_type, device, surrogate_model_label, data_device, ex
+        None, None, model_label, model_storage_type, device, surrogate_model_label, data_device, debug_level, ex
     )
 
     if model_label is not None and model_label:
@@ -73,8 +74,8 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
         model_label = hyperparams["label"]
 
         try:
-            adversary = create_attack(attack, attr=attr, adj=adj, labels=labels, model=model, idx_attack=idx_test, 
-                                      device=device, data_device=data_device, binary_attr=binary_attr, 
+            adversary = create_attack(attack, attr=attr, adj=adj, labels=labels, model=model, idx_attack=idx_test,
+                                      device=device, data_device=data_device, binary_attr=binary_attr,
                                       make_undirected=make_undirected, **attack_params)
 
             if hasattr(adversary, "ppr_matrix"):

@@ -15,12 +15,25 @@ def prepare_attack_experiment(data_dir: str, dataset: str, attack: str, attack_p
                               epsilons: Sequence[float], binary_attr: bool, make_undirected: bool,
                               seed: int, artifact_dir: str, pert_adj_storage_type: str, pert_attr_storage_type: str,
                               model_label: str, model_storage_type: str, device: Union[str, int],
-                              surrogate_model_label: str, data_device: Union[str, int], ex: Experiment):
+                              surrogate_model_label: str, data_device: Union[str, int], debug_level: str,
+                              ex: Experiment):
+
+    if debug_level is not None and isinstance(debug_level, str):
+        logger = logging.getLogger()
+        if debug_level.lower() == "info":
+            logger.setLevel(logging.INFO)
+        if debug_level.lower() == "debug":
+            logger.setLevel(logging.DEBUG)
+        if debug_level.lower() == "critical":
+            logger.setLevel(logging.CRITICAL)
+        if debug_level.lower() == "error":
+            logger.setLevel(logging.ERROR)
+
     logging.info({
         'dataset': dataset, 'attack': attack, 'attack_params': attack_params, 'epsilons': epsilons,
-        'make_undirected': make_undirected, 'binary_attr': binary_attr, 'seed': seed, 
-        'artifact_dir':  artifact_dir, 'pert_adj_storage_type': pert_adj_storage_type, 
-        'pert_attr_storage_type': pert_attr_storage_type, 'model_label': model_label, 
+        'make_undirected': make_undirected, 'binary_attr': binary_attr, 'seed': seed,
+        'artifact_dir':  artifact_dir, 'pert_adj_storage_type': pert_adj_storage_type,
+        'pert_attr_storage_type': pert_attr_storage_type, 'model_label': model_label,
         'model_storage_type': model_storage_type, 'device': device
     })
 
@@ -90,7 +103,7 @@ def run_global_attack(epsilon, m, storage, pert_adj_storage_type, pert_attr_stor
         logging.info(f"No cached perturbations found for model '{model_label}' and eps {epsilon}. Execute attack...")
         adversary.attack(n_perturbations)
         pert_adj, pert_attr = adversary.get_pertubations()
-        
+
         if n_perturbations > 0:
             storage.save_artifact(pert_adj_storage_type, {**pert_params, **{'epsilon': epsilon}}, pert_adj)
             storage.save_artifact(pert_attr_storage_type, {**pert_params, **{'epsilon': epsilon}}, pert_attr)

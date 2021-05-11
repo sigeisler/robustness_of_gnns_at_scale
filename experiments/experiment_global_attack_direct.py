@@ -44,13 +44,14 @@ def config():
 
     device = 0
     data_device = 0
+    debug_level = "info"
 
 
 @ex.automain
 def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any], epsilons: Sequence[float],
         binary_attr: bool, make_undirected: bool, seed: int, artifact_dir: str, pert_adj_storage_type: str,
         pert_attr_storage_type: str, model_label: str, model_storage_type: str, device: Union[str, int],
-        data_device: Union[str, int]):
+        data_device: Union[str, int], debug_level: str):
 
     results = []
     surrogate_model_label = False
@@ -60,7 +61,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
     ) = prepare_attack_experiment(
         data_dir, dataset, attack, attack_params, epsilons, binary_attr, make_undirected,  seed, artifact_dir,
         pert_adj_storage_type, pert_attr_storage_type, model_label, model_storage_type, device, surrogate_model_label,
-        data_device, ex
+        data_device, debug_level, ex
     )
 
     if model_label is not None and model_label:
@@ -70,8 +71,8 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
 
     for model, hyperparams in models_and_hyperparams:
         model_label = hyperparams["label"]
-        adversary = create_attack(attack, attr=attr, adj=adj, labels=labels, model=model, idx_attack=idx_test, 
-                                  device=device, data_device=data_device, binary_attr=binary_attr, 
+        adversary = create_attack(attack, attr=attr, adj=adj, labels=labels, model=model, idx_attack=idx_test,
+                                  device=device, data_device=data_device, binary_attr=binary_attr,
                                   make_undirected=make_undirected, **attack_params)
 
         for epsilon in epsilons:

@@ -256,7 +256,7 @@ class SparseGraph:
         if no_self_loops and G.has_self_loops():
             G = remove_self_loops(G)
         if select_lcc and not G.is_connected():
-            G = largest_connected_components(G, 1)
+            G = largest_connected_components(G, 1, make_undirected)
         self._adopt_graph(G)
         return G
 
@@ -300,7 +300,7 @@ class SparseGraph:
         return SparseGraph(**init_dict)
 
 
-def largest_connected_components(sparse_graph: SparseGraph, n_components: int = 1) -> SparseGraph:
+def largest_connected_components(sparse_graph: SparseGraph, n_components: int = 1, make_undirected=True) -> SparseGraph:
     """Select the largest connected components in the graph.
 
     Changes are returned in a partially new SparseGraph.
@@ -318,7 +318,7 @@ def largest_connected_components(sparse_graph: SparseGraph, n_components: int = 
         Subgraph of the input graph where only the nodes in largest n_components are kept.
 
     """
-    _, component_indices = sp.csgraph.connected_components(sparse_graph.adj_matrix)
+    _, component_indices = sp.csgraph.connected_components(sparse_graph.adj_matrix, directed=make_undirected)
     component_sizes = np.bincount(component_indices)
     components_to_keep = np.argsort(component_sizes)[::-1][:n_components]  # reverse order to sort descending
     nodes_to_keep = [
@@ -646,10 +646,11 @@ def prep_graph(name: str,
         del edge_index
         del edge_weight
 
+        # make unweighted
         adj.data = np.ones_like(adj.data)
 
         if make_undirected:
-            adj = utils.to_symmetric_scipy(adj, is_undirected=make_undirected)
+            adj = utils.to_symmetric_scipy(adj, is_unweighted=make_undirected)
 
             logging.debug("Memory Usage after making the graph undirected:")
             logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))
@@ -795,22 +796,21 @@ class CachedPPRMatrix:
                                                               self.storage_params, find_first=True)
 
             self.csr_ppr, _ = stored_topk_ppr[0] if len(stored_topk_ppr) == 1 else (None, None)
-            logging.info("Memory Usage after loading 'Attack' CachedPPRMatrix from storage:")
-            logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
+            logging.info(f"Memory after  loading 'Attack' CachedPPRMatrix from storage:{utils.get_max_memory_bytes() / (1024 ** 3)}")
 
         if self.csr_ppr is None and use_train_val_ppr and self.storage is not None:
             stored_pprs = self._load_partial_pprs()
             self.coo_ppr = sp.coo_matrix(self.shape, dtype=self.adj.dtype)
             self._join_partial_pprs_with_base(stored_pprs)
-            self._sync_pprs()
+            self.csr_ppr = self.coo_ppr.tocsr()
+            logging.info(f'Memory after building ppr from train/val/test ppr: {utils.get_max_memory_bytes() / (1024 ** 3)}')
 
         if self.csr_ppr is None:
             self.csr_ppr = sp.csr_matrix(self.shape, dtype=self.adj.dtype)
 
         if self.coo_ppr is None and self.ppr_values_on_demand:
             self.coo_ppr = self.csr_ppr.tocoo()
-            logging.info("Memory Usage after initalizing coo_ppr:")
-            logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
+            logging.info(f'Memory after initalizing coo_ppr: {utils.get_max_memory_bytes() / (1024 ** 3)}')
 
         rows, _ = self.csr_ppr.nonzero()
         # make this look up table
@@ -824,6 +824,7 @@ class CachedPPRMatrix:
             if len(missing_ppr_idx) > 0:
                 self._calc_ppr(missing_ppr_idx)
                 self.save_to_storage()
+                logging.info(f"Memory after computing all missing ppr values:{utils.get_max_memory_bytes() / (1024 ** 3)}")
 
         logging.info("Memory after loading CachedPPRMatrix from storage:")
         logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
@@ -904,6 +905,7 @@ class CachedPPRMatrix:
                 self.csr_ppr = self.coo_ppr.tocsr()
             elif len(self.csr_ppr.data) > len(self.coo_ppr.data):
                 self.coo_ppr = self.csr_ppr.tocoo()
+            logging.info(f"Memory after syncing csr and coo ppr representation :{utils.get_max_memory_bytes() / (1024 ** 3)}")
 
     def save_to_storage(self):
         self._sync_pprs()
@@ -915,8 +917,7 @@ class CachedPPRMatrix:
             self.storage.save_sparse_matrix(self.ppr_cache_params["data_storage_type"],
                                             self.storage_params,
                                             self.csr_ppr, ignore_duplicate=True)
-            logging.info("Memory after saving CachedPPRMatrix to storage:")
-            logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
+            logging.info(f"Memory after  saving CachedPPRMatrix to storage:{utils.get_max_memory_bytes() / (1024 ** 3)}")
 
     def _calc_ppr(self, new_ppr_idx: np.ndarray):
         if len(new_ppr_idx) > 0:

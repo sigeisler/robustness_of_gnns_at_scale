@@ -5,7 +5,6 @@ import logging
 import numpy as np
 import torch
 import torch_sparse
-from torch.nn import functional as F
 from torch_sparse import SparseTensor
 
 from rgnn_at_scale.helper.utils import calc_ppr_update_sparse_result
@@ -20,14 +19,14 @@ from rgnn_at_scale.data import CachedPPRMatrix
 
 class LocalBatchedPRBCD(LocalPRBCD):
 
-    def __init__(self, pr_recalc_at_end: bool = True, ppr_cache_params: Dict[str, Any] = None, **kwargs):
+    def __init__(self, ppr_recalc_at_end: bool = True, ppr_cache_params: Dict[str, Any] = None, **kwargs):
         super().__init__(**kwargs)
 
         assert type(self.attacked_model) in BATCHED_PPR_MODELS.__args__, "LocalBatchedPRBCD Attack only supports PPRGo models"
 
         self.ppr_cache_params = ppr_cache_params
-        if self.ppr_cache_params is None:
-            self.ppr_cache_params = self.attacked_model.ppr_cache_params
+        if self.ppr_cache_params is not None:
+            self.ppr_cache_params.update(dict(make_undirected=self.make_undirected))
 
         self.ppr_recalc_at_end = ppr_recalc_at_end
         self.ppr_matrix = CachedPPRMatrix(self.adj,
@@ -38,7 +37,7 @@ class LocalBatchedPRBCD(LocalPRBCD):
                                           self.attacked_model.ppr_normalization)
 
         logging.info(f'self.ppr_matrix is of shape {self.ppr_matrix.shape}')
-        logging.info(f'Memory after loading ppr: {utils.get_max_memory_bytes() / (1024 ** 3)}')
+        logging.info(f'Memory after initalizing attack: {utils.get_max_memory_bytes() / (1024 ** 3)}')
 
     def get_logits(self, model: MODEL_TYPE, node_idx: int, perturbed_graph: SparseTensor = None) -> torch.Tensor:
         if perturbed_graph is None:
@@ -86,7 +85,7 @@ class LocalBatchedPRBCD(LocalPRBCD):
             return perturbed_graph
         else:
             assert n_perturbations is not None, "n_perturbations must be given when only updating adjacency"
-            v_rows, v_cols, v_vals = modified_edge_weight_diff.coo()
+            v_rows, v_cols, v_vals = modified_edge_weight_diff.to(self.adj.device()).coo()
             v_rows += node_idx
 
             # projection
@@ -96,7 +95,7 @@ class LocalBatchedPRBCD(LocalPRBCD):
             v_vals = v_vals[pertubations]
             v_idx = torch.stack([v_rows, v_cols], dim=0)
 
-            A_rows, A_cols, A_vals = self.adj.to(v_vals.device).coo()
+            A_rows, A_cols, A_vals = self.adj.coo()
             A_idx = torch.stack([A_rows, A_cols], dim=0)
 
             # sparse addition: row = A[i] + v

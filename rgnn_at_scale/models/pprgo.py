@@ -398,7 +398,6 @@ class PPRGoWrapperBase():
                               eps=self.eps,
                               topk=self.topk,
                               ppr_normalization=self.ppr_normalization,
-                              normalize=self.ppr_cache_params["normalize"],
                               make_undirected=self.ppr_cache_params["make_undirected"])
 
                 stored_topk_ppr = storage.find_sparse_matrix(self.ppr_cache_params["data_storage_type"],
@@ -493,7 +492,6 @@ class PPRGoWrapperBase():
                           eps=self.eps,
                           topk=self.topk,
                           ppr_normalization=self.ppr_normalization,
-                          normalize=self.ppr_cache_params["normalize"],
                           make_undirected=self.ppr_cache_params["make_undirected"])
 
             stored_topk_train = storage.find_sparse_matrix(self.ppr_cache_params["data_storage_type"],
