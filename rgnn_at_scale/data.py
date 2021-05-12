@@ -650,7 +650,7 @@ def prep_graph(name: str,
         adj.data = np.ones_like(adj.data)
 
         if make_undirected:
-            adj = utils.to_symmetric_scipy(adj, is_unweighted=make_undirected)
+            adj = utils.to_symmetric_scipy(adj)
 
             logging.debug("Memory Usage after making the graph undirected:")
             logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))
