@@ -24,7 +24,7 @@ fixed:
   model_storage_type: pretrained_papers100M
   device: 0
   data_device: cpu
-  debug_level: debug
+  debug_level: info
   make_undirected: False
   attack_params.epochs: 30
   attack_params.display_step: 1

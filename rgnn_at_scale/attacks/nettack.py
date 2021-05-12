@@ -2,7 +2,7 @@
 from typing import Dict,  Union
 
 import math
-from torch_sparse import SparseTensor
+from torch_sparse import SparseTensor, coalesce
 import numpy as np
 from numba import jit
 import scipy.sparse as sp
@@ -62,8 +62,7 @@ class Nettack(SparseLocalAttack):
         self.nettack = None
 
     def _attack(self, n_perturbations: int, node_idx: int, **kwargs):
-        if self.make_undirected:
-            n_perturbations = int(math.ceil(n_perturbations / 2))
+
         self.nettack = OriginalNettack(self.sp_adj,
                                        self.sp_attr,
                                        self.labels.detach().cpu().numpy(),
@@ -77,13 +76,32 @@ class Nettack(SparseLocalAttack):
                                       perturb_features=False,
                                       direct=True)
 
-        self.adj_adversary = self.nettack.adj_adversary.to(self.device)
+        #self.adj_adversary = self.nettack.adj_adversary.to(self.data_device)
+        perturbed_idx = self.get_perturbed_edges().T
 
         if self.make_undirected:
-            A_rows, A_cols, A_vals = self.adj_adversary.coo()
-            A_idx = torch.stack([A_rows, A_cols], dim=0)
-            A_idx, A_weights = to_symmetric(A_idx, A_vals, self.n, op='max')
-            self.adj_adversary = SparseTensor.from_edge_index(A_idx, A_weights, (self.n, self.n))
+            perturbed_idx = torch.cat((perturbed_idx, perturbed_idx.flip(0)), dim=-1)
+
+        A_rows, A_cols, A_vals = self.adj.coo()
+        A_idx = torch.stack([A_rows, A_cols], dim=0)
+
+        pert_vals = torch.where(
+            torch.diag(self.adj[perturbed_idx[0].tolist(), perturbed_idx[1].tolist()].to_dense()) == 0,
+            torch.ones_like(perturbed_idx[0]),
+            -torch.ones_like(perturbed_idx[0]))
+
+        # sparse addition: A + pert
+        A_idx = torch.cat((A_idx, perturbed_idx), dim=-1)
+        A_vals = torch.cat((A_vals, pert_vals))
+        A_idx, A_vals = coalesce(
+            A_idx,
+            A_vals,
+            m=self.n,
+            n=self.n,
+            op='sum'
+        )
+
+        self.adj_adversary = SparseTensor.from_edge_index(A_idx, A_vals, (self.n, self.n))
 
     def get_logits(self, model: MODEL_TYPE, node_idx: int, perturbed_graph: SparseTensor = None) -> torch.Tensor:
         if perturbed_graph is None:
@@ -597,6 +615,7 @@ class OriginalNettack:
 
                 self.adj[tuple(best_edge)] = self.adj[tuple(
                     best_edge[::-1])] = 1 - self.adj[tuple(best_edge)]
+
                 self.adj_preprocessed = preprocess_graph(self.adj)
 
                 self.structure_perturbations.append(tuple(best_edge))

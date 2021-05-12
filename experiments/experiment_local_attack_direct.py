@@ -100,9 +100,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
 
                 # In case the model is non-deterministic to get the results either after attacking or after loading
                 try:
-                    import torch
-                    with torch.autograd.set_detect_anomaly(True):
-                        adversary.attack(n_perturbations, node_idx=node)
+                    adversary.attack(n_perturbations, node_idx=node)
                 except Exception as e:
                     logging.exception(e)
                     logging.error(

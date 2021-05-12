@@ -54,8 +54,6 @@ class LocalPRBCD(SparseLocalAttack):
         self.lr_factor *= max(math.sqrt(self.n / self.search_space_size), 1.)
 
     def _attack(self, n_perturbations: int, node_idx: int, **kwargs):
-        if self.make_undirected:
-            n_perturbations = int(math.ceil(n_perturbations / 2))
 
         self.sample_search_space(node_idx, n_perturbations)
         best_margin = float('Inf')

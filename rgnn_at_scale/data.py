@@ -796,14 +796,16 @@ class CachedPPRMatrix:
                                                               self.storage_params, find_first=True)
 
             self.csr_ppr, _ = stored_topk_ppr[0] if len(stored_topk_ppr) == 1 else (None, None)
-            logging.info(f"Memory after  loading 'Attack' CachedPPRMatrix from storage:{utils.get_max_memory_bytes() / (1024 ** 3)}")
+            logging.info(
+                f"Memory after  loading 'Attack' CachedPPRMatrix from storage:{utils.get_max_memory_bytes() / (1024 ** 3)}")
 
         if self.csr_ppr is None and use_train_val_ppr and self.storage is not None:
             stored_pprs = self._load_partial_pprs()
             self.coo_ppr = sp.coo_matrix(self.shape, dtype=self.adj.dtype)
             self._join_partial_pprs_with_base(stored_pprs)
             self.csr_ppr = self.coo_ppr.tocsr()
-            logging.info(f'Memory after building ppr from train/val/test ppr: {utils.get_max_memory_bytes() / (1024 ** 3)}')
+            logging.info(
+                f'Memory after building ppr from train/val/test ppr: {utils.get_max_memory_bytes() / (1024 ** 3)}')
 
         if self.csr_ppr is None:
             self.csr_ppr = sp.csr_matrix(self.shape, dtype=self.adj.dtype)
@@ -812,9 +814,10 @@ class CachedPPRMatrix:
             self.coo_ppr = self.csr_ppr.tocoo()
             logging.info(f'Memory after initalizing coo_ppr: {utils.get_max_memory_bytes() / (1024 ** 3)}')
 
-        rows, _ = self.csr_ppr.nonzero()
-        # make this look up table
-        self.cached_csr_rows = np.array(np.unique(rows))
+        if self.ppr_values_on_demand:
+            rows, _ = self.csr_ppr.nonzero()
+            # make this look up table
+            self.cached_csr_rows = np.array(np.unique(rows))
 
         if not self.ppr_values_on_demand:
             # calculate all ppr scores beforehand, instead of calculating them on demand
@@ -824,7 +827,8 @@ class CachedPPRMatrix:
             if len(missing_ppr_idx) > 0:
                 self._calc_ppr(missing_ppr_idx)
                 self.save_to_storage()
-                logging.info(f"Memory after computing all missing ppr values:{utils.get_max_memory_bytes() / (1024 ** 3)}")
+                logging.info(
+                    f"Memory after computing all missing ppr values:{utils.get_max_memory_bytes() / (1024 ** 3)}")
 
         logging.info("Memory after loading CachedPPRMatrix from storage:")
         logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
@@ -905,7 +909,8 @@ class CachedPPRMatrix:
                 self.csr_ppr = self.coo_ppr.tocsr()
             elif len(self.csr_ppr.data) > len(self.coo_ppr.data):
                 self.coo_ppr = self.csr_ppr.tocoo()
-            logging.info(f"Memory after syncing csr and coo ppr representation :{utils.get_max_memory_bytes() / (1024 ** 3)}")
+            logging.info(
+                f"Memory after syncing csr and coo ppr representation :{utils.get_max_memory_bytes() / (1024 ** 3)}")
 
     def save_to_storage(self):
         self._sync_pprs()
@@ -917,7 +922,8 @@ class CachedPPRMatrix:
             self.storage.save_sparse_matrix(self.ppr_cache_params["data_storage_type"],
                                             self.storage_params,
                                             self.csr_ppr, ignore_duplicate=True)
-            logging.info(f"Memory after  saving CachedPPRMatrix to storage:{utils.get_max_memory_bytes() / (1024 ** 3)}")
+            logging.info(
+                f"Memory after  saving CachedPPRMatrix to storage:{utils.get_max_memory_bytes() / (1024 ** 3)}")
 
     def _calc_ppr(self, new_ppr_idx: np.ndarray):
         if len(new_ppr_idx) > 0:

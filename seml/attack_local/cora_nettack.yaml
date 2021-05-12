@@ -1,0 +1,62 @@
+seml:
+  name: cora_nettack
+  executable: experiments/experiment_local_attack_transfer.py
+  project_root_dir: ../..
+  output_dir: seml/attack_local/output
+
+slurm:
+  experiments_per_job: 1
+  sbatch_options:
+    gres: gpu:1       # num GPUs
+    mem: 8G          # memory
+    cpus-per-task: 4  # num cores
+    time: 1-00:00     # max time, D-HH:MM
+    qos: studentprio
+    #qos: interactive
+
+fixed:
+  data_dir: datasets
+  epsilons: [0.5, 0.75, 1.0]
+  artifact_dir: cache
+  model_storage_type: pretrained
+  surrogate_model_storage_type: pretrained_linear
+  device: 0
+  data_device: 0
+  attack_params.ppr_cache_params:
+    data_artifact_dir: cache
+    data_storage_type: ppr
+
+
+grid:
+  seed:
+    type: choice
+    options:
+      - 0
+      - 1
+      - 5
+      # - 42
+      # - 100
+  make_undirected:
+    type: choice
+    options:
+      - True
+      - False
+
+
+# localprbcd_gcn:
+#   fixed:
+#     dataset: cora_ml
+#     binary_attr: False
+#     attack: LocalPRBCD
+#     model_label: Vanilla GCN
+
+
+
+nettack_vanilla_gcn:
+  fixed:
+    dataset: cora_ml
+    nodes_topk: 40
+    binary_attr: False
+    attack: Nettack
+    surrogate_model_label: Linear GCN
+
