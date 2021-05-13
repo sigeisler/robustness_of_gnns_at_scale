@@ -1,12 +1,10 @@
 from tqdm import tqdm
-import numpy as np
 import torch
 import torch_sparse
 from torch_sparse import SparseTensor
 
 from rgnn_at_scale.helper import utils
 from rgnn_at_scale.attacks.prbcd import PRBCD
-from rgnn_at_scale.models import MODEL_TYPE
 
 
 class GreedyRBCD(PRBCD):
@@ -84,7 +82,7 @@ class GreedyRBCD(PRBCD):
             self.sample_search_space(step_size)
             edge_index, edge_weight = self.get_modified_adj()
 
-            if self.do_synchronize:
+            if torch.cuda.is_available() and self.do_synchronize:
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
 
@@ -93,7 +91,7 @@ class GreedyRBCD(PRBCD):
 
             gradient = utils.grad_with_checkpoint(loss, self.modified_edge_weight_diff)[0]
 
-            if self.do_synchronize:
+            if torch.cuda.is_available() and self.do_synchronize:
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
 

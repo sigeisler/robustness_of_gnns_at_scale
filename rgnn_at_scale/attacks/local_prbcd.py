@@ -54,8 +54,6 @@ class LocalPRBCD(SparseLocalAttack):
         self.lr_factor *= max(math.sqrt(self.n / self.search_space_size), 1.)
 
     def _attack(self, n_perturbations: int, node_idx: int, **kwargs):
-        if self.make_undirected:
-            n_perturbations = int(math.ceil(n_perturbations / 2))
 
         self.sample_search_space(node_idx, n_perturbations)
         best_margin = float('Inf')
@@ -72,7 +70,7 @@ class LocalPRBCD(SparseLocalAttack):
             self.modified_edge_weight_diff.requires_grad = True
             perturbed_graph = self.perturb_graph(node_idx)
 
-            if self.do_synchronize:
+            if torch.cuda.is_available() and self.do_synchronize:
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
 
@@ -86,7 +84,7 @@ class LocalPRBCD(SparseLocalAttack):
 
             gradient = grad_with_checkpoint(loss, self.modified_edge_weight_diff)[0]
 
-            if self.do_synchronize:
+            if torch.cuda.is_available() and self.do_synchronize:
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
 
@@ -127,7 +125,9 @@ class LocalPRBCD(SparseLocalAttack):
         # For the case that the attack was not successfull
         if best_margin > statistics_orig['margin']:
             self.perturbed_edges = torch.tensor([])
-            return logits_orig, logits_orig
+            self.adj_adversary = self.adj
+            self.attr_adversary = self.attr
+            return None
 
         if self.with_early_stropping:
             self.current_search_space = best_search_space.to(self.device)
@@ -195,24 +195,6 @@ class LocalPRBCD(SparseLocalAttack):
         lr_factor = n_perturbations * self.lr_factor
         lr = lr_factor / np.sqrt(max(0, epoch - self.epochs) + 1)
         self.modified_edge_weight_diff.data.add_(lr * gradient)
-
-    @ staticmethod
-    def classification_statistics(logits, label) -> Dict[str, float]:
-        logits, label = F.log_softmax(logits.cpu(), dim=-1), label.cpu()
-        logits = logits[0]
-        logit_target = logits[label].item()
-        sorted = logits.argsort()
-        logit_best_non_target = (logits[sorted[sorted != label][-1]]).item()
-        confidence_target = np.exp(logit_target)
-        confidence_non_target = np.exp(logit_best_non_target)
-        margin = confidence_target - confidence_non_target
-        return {
-            'logit_target': logit_target,
-            'logit_best_non_target': logit_best_non_target,
-            'confidence_target': confidence_target,
-            'confidence_non_target': confidence_non_target,
-            'margin': margin
-        }
 
     def _append_attack_statistics(self, loss, statistics):
         self.attack_statistics['loss'].append(loss)

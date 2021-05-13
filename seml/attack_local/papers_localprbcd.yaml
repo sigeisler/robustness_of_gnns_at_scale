@@ -8,25 +8,28 @@ slurm:
   experiments_per_job: 1
   sbatch_options:
     gres: gpu:1       # num GPUs
-    mem: 400G          # memory
+    mem: 420G          # memory
     cpus-per-task: 4  # num cores
-    time: 1-00:00     # max time, D-HH:MM
-    qos: interactive
+    time: 2-00:00     # max time, D-HH:MM
+    #qos: interactive
     #qos: studentpriocpu
-    #qos: studentprio
+    qos: studentprio
     #partition: cpu
     
 
 fixed:
   data_dir: datasets
-  epsilons: [0.5, 0.75, 1.0]
+  dataset: ogbn-papers100M
+  binary_attr: False
+  epsilons: [0.5, 1.0]
+  nodes_topk: 40
   artifact_dir: cache
   model_storage_type: pretrained_papers100M
   device: 0
   data_device: cpu
   debug_level: info
   make_undirected: False
-  attack_params.epochs: 30
+  attack_params.epochs: 80
   attack_params.display_step: 1
   attack_params.fine_tune_epochs: 20
   attack_params.do_synchronize: True
@@ -44,22 +47,22 @@ grid:
       # - 5
       # - 42
       # - 100
-  # nodes:
-  #   type: choice
-  #   options:
-  #     - [108314722, 110233607, 110217627, 108954723, 108959209, 105706451, 105468029, 105660562, 105448813, 110366715] # random
-      #- [110289474, 110660700, 109021716, 108069073, 108916789, 109924932, 110184237, 103091492, 109356512, 85534475] # max confidence
-      #- [103282593, 105252778, 105873164, 106139520, 105455064, 101492572, 110438437, 103158917, 105363392, 110559350] # min confidence
-      # - 42
-      # - 100
 
 
 localprbcd_pprgo:
   fixed:
-    nodes_topk: 40
-    dataset: ogbn-papers100M
-    binary_attr: False
     attack: LocalBatchedPRBCD
     model_label: Vanilla PPRGo Diffusion Embedding
     attack_params.loss_type: Margin
+    attack_params.search_space_size: 20_000
+    attack_params.lr_factor: 0.1
+
+
+localprbcd_pprgo_median:
+  fixed:
+    attack: LocalBatchedPRBCD
+    model_label: Soft Median PPRGo Diffusion (T=0.5)
+    attack_params.loss_type: Margin
+    attack_params.search_space_size: 20_000
+    attack_params.lr_factor: 0.1
 

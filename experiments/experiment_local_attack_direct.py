@@ -25,7 +25,7 @@ def config():
         ex.observers.append(seml.create_mongodb_observer(db_collection, overwrite=overwrite))
 
     # default params
-    dataset = 'cora_ml'  # Options are 'cora_ml' and 'citeseer' (or with a big GPU 'pubmed')
+    dataset = 'citeseer'  # Options are 'cora_ml' and 'citeseer' (or with a big GPU 'pubmed')
     attack = 'LocalBatchedPRBCD'
     attack_params = {
         "ppr_cache_params": {
@@ -37,7 +37,7 @@ def config():
     nodes_topk = 40
 
     epsilons = [0.5]  # , 0.75, 1]
-    seed = 0
+    seed = 1
 
     artifact_dir = "cache"
     model_storage_type = 'pretrained'
@@ -49,7 +49,7 @@ def config():
 
     data_device = 'cpu'
     device = "cpu"
-    debug_level = "debug"
+    debug_level = "info"
 
 
 @ex.automain
@@ -68,6 +68,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
     if model_label is not None and model_label:
         model_params['label'] = model_label
     models_and_hyperparams = storage.find_models(model_storage_type, model_params)
+    logging.error(f"Found {len(models_and_hyperparams)} models with label '{model_label}' to attack.")
 
     for model, hyperparams in models_and_hyperparams:
         model.to(device)
@@ -87,22 +88,23 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
 
         tmp_nodes = np.array(nodes)
         if nodes is None:
-            tmp_nodes = get_local_attack_nodes(adversary, binary_attr, attr, adj, labels,
-                                               model, idx_test, device, attack_params, topk=int(nodes_topk / 4))
+            tmp_nodes = get_local_attack_nodes(attr, adj, labels, model,
+                                               idx_test, device,  topk=int(nodes_topk / 4), min_node_degree=int(1 / min(epsilons)))
         tmp_nodes = [int(i) for i in tmp_nodes]
 
+        assert all(np.unique(tmp_nodes) == np.sort(tmp_nodes)), "Attacked node list contains duplicates"
         for node in tmp_nodes:
             degree = adj[node].sum()
             for eps in epsilons:
                 n_perturbations = int((eps * degree).round().item())
                 if n_perturbations == 0:
+                    logging.error(
+                        f"Skipping attack for model '{model}' using {attack} with eps {eps} at node {node}.")
                     continue
 
                 # In case the model is non-deterministic to get the results either after attacking or after loading
                 try:
-                    import torch
-                    with torch.autograd.set_detect_anomaly(True):
-                        adversary.attack(n_perturbations, node_idx=node)
+                    adversary.attack(n_perturbations, node_idx=node)
                 except Exception as e:
                     logging.exception(e)
                     logging.error(
@@ -111,18 +113,18 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                 logits, initial_logits = adversary.evaluate_local(node)
 
                 logging.info(
-                    f'Evaluated model {model_label} using {attack} with pert. edges for node {node} and budget {n_perturbations}: {adversary.get_perturbed_edges()}')
+                    f'Evaluated model {model_label} using {attack} with pert. edges for node {node} and budget {n_perturbations}: ')
 
                 results.append({
                     'label': model_label,
                     'epsilon': eps,
                     'n_perturbations': n_perturbations,
                     'degree': int(degree.item()),
-                    'logits': logits.cpu(),
-                    'initial_logits': initial_logits.cpu(),
+                    'logits': logits.cpu().numpy().tolist(),
+                    'initial_logits': initial_logits.cpu().numpy().tolist(),
                     'larget': labels[node].item(),
                     'node_id': node,
-                    'perturbed_edges': adversary.get_perturbed_edges().cpu().numpy()
+                    'perturbed_edges': adversary.get_perturbed_edges().cpu().numpy().tolist()
                 })
 
                 results[-1].update(adversary.classification_statistics(logits.cpu(), labels[node].long().cpu()))

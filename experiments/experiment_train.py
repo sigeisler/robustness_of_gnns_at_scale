@@ -34,15 +34,12 @@ def config():
     # default params
     dataset = 'ogbn-arxiv'  # 'cora_ml'
     model_params = {
-        'label': 'Vanilla PPRGo Diffusion Embedding',
+        'label': 'Vanilla GCN',
         'model': 'GCN',
         'dropout': 0.5,
         'n_filters': 64,
         'hidden_size': 64,
         'nlayers': 3,
-        'ppr_normalization': 'row',
-        'topk': 64, 'alpha': 0.1, 'eps': 1e-03,
-        'skip_connection': True,
         'gdc_params': None,
         'svd_params': None,
         'batch_norm': False,
@@ -69,7 +66,7 @@ def config():
     display_steps = 10
     data_dir = './datasets'
     data_device = 0
-    debug_level = "debug"
+    debug_level = "info"
 
 
 @ex.automain
@@ -156,8 +153,8 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
 
     model = create_model(hyperparams).to(device)
 
-    logging.debug("Memory Usage after loading the dataset:")
-    logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))
+    logging.info("Memory Usage after loading the dataset:")
+    logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
 
     if hasattr(model, 'fit'):
         trace = model.fit(adj, attr,

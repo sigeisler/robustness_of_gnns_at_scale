@@ -4,6 +4,7 @@ import logging
 import numpy as np
 import torch
 from sacred import Experiment
+from torch_sparse import SparseTensor
 
 from rgnn_at_scale.data import prep_graph, split
 from rgnn_at_scale.helper.io import Storage
@@ -34,7 +35,7 @@ def prepare_attack_experiment(data_dir: str, dataset: str, attack: str, attack_p
         'make_undirected': make_undirected, 'binary_attr': binary_attr, 'seed': seed,
         'artifact_dir':  artifact_dir, 'pert_adj_storage_type': pert_adj_storage_type,
         'pert_attr_storage_type': pert_attr_storage_type, 'model_label': model_label,
-        'model_storage_type': model_storage_type, 'device': device
+        'model_storage_type': model_storage_type, 'device': device, 'data_device': data_device
     })
 
     assert sorted(epsilons) == epsilons, 'argument `epsilons` must be a sorted list'
@@ -109,10 +110,19 @@ def run_global_attack(epsilon, m, storage, pert_adj_storage_type, pert_attr_stor
             storage.save_artifact(pert_attr_storage_type, {**pert_params, **{'epsilon': epsilon}}, pert_attr)
 
 
-def sample_attack_nodes(logits: torch.Tensor, labels: torch.Tensor, topk: int, nodes_idx):
+def sample_attack_nodes(logits: torch.Tensor, labels: torch.Tensor, nodes_idx, adj: SparseTensor, topk: int, min_node_degree: int):
     assert logits.shape[0] == labels.shape[0]
-    labels = labels.cpu()
-    logits = logits.cpu()
+
+    node_degrees = adj[nodes_idx.tolist()].to(torch.int).sum(-1)
+    suitable_nodes_mask = node_degrees >= min_node_degree
+
+    logging.info(
+        f"Found {sum(suitable_nodes_mask)} suitable '{min_node_degree}+ degree' nodes out of {len(nodes_idx)} candidate nodes to be sampled from for the attack")
+    assert sum(suitable_nodes_mask) >= (topk * 4), \
+        f"There are not enough suitable nodes to sample {(topk*4)} nodes from"
+
+    labels = labels.cpu()[suitable_nodes_mask]
+    logits = logits.cpu()[suitable_nodes_mask]
 
     correctly_classifed = logits.max(-1).indices == labels
 
@@ -124,12 +134,12 @@ def sample_attack_nodes(logits: torch.Tensor, labels: torch.Tensor, topk: int, n
     rand_nodes_idx = np.setdiff1d(rand_nodes_idx, min_confidence_nodes_idx)
     rand_nodes_idx = np.random.choice(rand_nodes_idx, size=(topk * 2), replace=False)
 
-    return (np.array(nodes_idx[correctly_classifed][max_confidence_nodes_idx])[None].flatten(),
-            np.array(nodes_idx[correctly_classifed][min_confidence_nodes_idx])[None].flatten(),
-            np.array(nodes_idx[correctly_classifed][rand_nodes_idx])[None].flatten())
+    return (np.array(nodes_idx[suitable_nodes_mask][correctly_classifed][max_confidence_nodes_idx])[None].flatten(),
+            np.array(nodes_idx[suitable_nodes_mask][correctly_classifed][min_confidence_nodes_idx])[None].flatten(),
+            np.array(nodes_idx[suitable_nodes_mask][correctly_classifed][rand_nodes_idx])[None].flatten())
 
 
-def get_local_attack_nodes(attack, binary_attr, attr, adj, labels, surrogate_model, idx_test, device, attack_params, topk=10):
+def get_local_attack_nodes(attr, adj, labels, surrogate_model, idx_test, device, topk=10, min_node_degree=2):
 
     with torch.no_grad():
         surrogate_model = surrogate_model.to(device)
@@ -144,7 +154,7 @@ def get_local_attack_nodes(attack, binary_attr, attr, adj, labels, surrogate_mod
     logging.info(f"Sample Attack Nodes for model with accuracy {acc:.4}")
 
     max_confidence_nodes_idx, min_confidence_nodes_idx, rand_nodes_idx = sample_attack_nodes(
-        logits, labels[idx_test], topk, idx_test)
+        logits, labels[idx_test], idx_test, adj, topk,  min_node_degree)
     tmp_nodes = np.concatenate((max_confidence_nodes_idx, min_confidence_nodes_idx, rand_nodes_idx))
     logging.info(
         f"Sample the following attack nodes:\n{max_confidence_nodes_idx}\n{min_confidence_nodes_idx}\n{rand_nodes_idx}")

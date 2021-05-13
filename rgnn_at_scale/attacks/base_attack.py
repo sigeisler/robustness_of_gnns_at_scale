@@ -1,7 +1,7 @@
 import warnings
 from abc import ABC, abstractmethod
 from copy import deepcopy
-from typing import Union, List
+from typing import Union, List, Dict
 
 import numpy as np
 import scipy.sparse as sp
@@ -276,6 +276,24 @@ class SparseLocalAttack(SparseAttack):
 
     def set_eval_model(self, model):
         self.eval_model = deepcopy(model).to(self.device)
+
+    @ staticmethod
+    def classification_statistics(logits, label) -> Dict[str, float]:
+        logits, label = F.log_softmax(logits.cpu(), dim=-1), label.cpu()
+        logits = logits[0]
+        logit_target = logits[label].item()
+        sorted = logits.argsort()
+        logit_best_non_target = (logits[sorted[sorted != label][-1]]).item()
+        confidence_target = np.exp(logit_target)
+        confidence_non_target = np.exp(logit_best_non_target)
+        margin = confidence_target - confidence_non_target
+        return {
+            'logit_target': logit_target,
+            'logit_best_non_target': logit_best_non_target,
+            'confidence_target': confidence_target,
+            'confidence_non_target': confidence_non_target,
+            'margin': margin
+        }
 
 
 class DenseAttack(Attack):

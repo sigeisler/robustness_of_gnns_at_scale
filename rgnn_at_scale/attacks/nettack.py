@@ -1,8 +1,9 @@
 
 from typing import Dict,  Union
+import logging
 
 import math
-from torch_sparse import SparseTensor
+from torch_sparse import SparseTensor, coalesce
 import numpy as np
 from numba import jit
 import scipy.sparse as sp
@@ -51,7 +52,7 @@ class Nettack(SparseLocalAttack):
     def __init__(self, **kwargs):
         SparseLocalAttack.__init__(self, **kwargs)
 
-        assert self.make_undirected, 'Attack only implemented for undirected graphs'
+        # assert self.make_undirected, 'Attack only implemented for undirected graphs'
 
         assert len(self.attacked_model.layers) == 2, "Nettack supports only 2 Layer Linear GCN as surrogate model"
         assert isinstance(self.attacked_model._modules['activation'], Identity), \
@@ -62,8 +63,7 @@ class Nettack(SparseLocalAttack):
         self.nettack = None
 
     def _attack(self, n_perturbations: int, node_idx: int, **kwargs):
-        if self.make_undirected:
-            n_perturbations = int(math.ceil(n_perturbations / 2))
+
         self.nettack = OriginalNettack(self.sp_adj,
                                        self.sp_attr,
                                        self.labels.detach().cpu().numpy(),
@@ -77,13 +77,32 @@ class Nettack(SparseLocalAttack):
                                       perturb_features=False,
                                       direct=True)
 
-        self.adj_adversary = self.nettack.adj_adversary.to(self.device)
+        #self.adj_adversary = self.nettack.adj_adversary.to(self.data_device)
+        perturbed_idx = self.get_perturbed_edges().T
 
         if self.make_undirected:
-            A_rows, A_cols, A_vals = self.adj_adversary.coo()
-            A_idx = torch.stack([A_rows, A_cols], dim=0)
-            A_idx, A_weights = to_symmetric(A_idx, A_vals, self.n, op='max')
-            self.adj_adversary = SparseTensor.from_edge_index(A_idx, A_weights, (self.n, self.n))
+            perturbed_idx = torch.cat((perturbed_idx, perturbed_idx.flip(0)), dim=-1)
+
+        A_rows, A_cols, A_vals = self.adj.coo()
+        A_idx = torch.stack([A_rows, A_cols], dim=0)
+
+        pert_vals = torch.where(
+            torch.diag(self.adj[perturbed_idx[0].tolist(), perturbed_idx[1].tolist()].to_dense()) == 0,
+            torch.ones_like(perturbed_idx[0]),
+            -torch.ones_like(perturbed_idx[0]))
+
+        # sparse addition: A + pert
+        A_idx = torch.cat((A_idx, perturbed_idx), dim=-1)
+        A_vals = torch.cat((A_vals, pert_vals))
+        A_idx, A_vals = coalesce(
+            A_idx,
+            A_vals,
+            m=self.n,
+            n=self.n,
+            op='sum'
+        )
+
+        self.adj_adversary = SparseTensor.from_edge_index(A_idx, A_vals, (self.n, self.n))
 
     def get_logits(self, model: MODEL_TYPE, node_idx: int, perturbed_graph: SparseTensor = None) -> torch.Tensor:
         if perturbed_graph is None:
@@ -101,22 +120,22 @@ class Nettack(SparseLocalAttack):
 
         return torch.tensor(self.nettack.structure_perturbations)
 
-    @ staticmethod
-    def classification_statistics(logits, label) -> Dict[str, float]:
-        logits = logits[0]
-        logit_target = logits[label].item()
-        sorted = logits.argsort()
-        logit_best_non_target = logits[sorted[sorted != label][-1]].item()
-        confidence_target = np.exp(logit_target)
-        confidence_non_target = np.exp(logit_best_non_target)
-        margin = confidence_target - confidence_non_target
-        return {
-            'logit_target': logit_target,
-            'logit_best_non_target': logit_best_non_target,
-            'confidence_target': confidence_target,
-            'confidence_non_target': confidence_non_target,
-            'margin': margin
-        }
+    # @ staticmethod
+    # def classification_statistics(logits, label) -> Dict[str, float]:
+    #     logits, label = F.log_softmax(logits.cpu(), dim=-1), label.cpu()
+    #     logit_target = logits[label].item()
+    #     sorted = logits.argsort()
+    #     logit_best_non_target = logits[sorted[sorted != label][-1]].item()
+    #     confidence_target = F.softmax(logit_target)
+    #     confidence_non_target = F.softmax(logit_best_non_target)
+    #     margin = confidence_target - confidence_non_target
+    #     return {
+    #         'logit_target': logit_target,
+    #         'logit_best_non_target': logit_best_non_target,
+    #         'confidence_target': confidence_target,
+    #         'confidence_non_target': confidence_non_target,
+    #         'margin': margin
+    #     }
 
 
 class OriginalNettack:
@@ -471,20 +490,20 @@ class OriginalNettack:
                             logits_start[best_wrong_class]]
 
         if self.verbose:
-            print("##### Starting attack #####")
+            logging.info("##### Starting attack #####")
             if perturb_structure and perturb_features:
-                print(
+                logging.info(
                     "##### Attack node with ID {} using structure and feature perturbations #####".format(self.u))
             elif perturb_features:
-                print("##### Attack only using feature perturbations #####")
+                logging.info("##### Attack only using feature perturbations #####")
             elif perturb_structure:
-                print("##### Attack only using structure perturbations #####")
+                logging.info("##### Attack only using structure perturbations #####")
             if direct:
-                print("##### Attacking the node directly #####")
+                logging.info("##### Attacking the node directly #####")
             else:
-                print("##### Attacking the node indirectly via {} influencer nodes #####".format(
+                logging.info("##### Attacking the node indirectly via {} influencer nodes #####".format(
                     n_influencers))
-            print("##### Performing {} perturbations #####".format(n_perturbations))
+            logging.info("##### Performing {} perturbations #####".format(n_perturbations))
 
         if perturb_structure:
 
@@ -516,7 +535,7 @@ class OriginalNettack:
                                                                                    np.array([self.u, infl]))
                                                                       )) for infl in self.influencer_nodes])
                 if self.verbose:
-                    print("Influencer nodes: {}".format(self.influencer_nodes))
+                    logging.info("Influencer nodes: {}".format(self.influencer_nodes))
             else:
                 # direct attack
                 influencers = [self.u]
@@ -530,7 +549,7 @@ class OriginalNettack:
             ]
         for _ in range(n_perturbations):
             if self.verbose:
-                print(
+                logging.info(
                     "##### ...{}/{} perturbations ... #####".format(_ + 1, n_perturbations))
             if perturb_structure:
 
@@ -581,11 +600,11 @@ class OriginalNettack:
                 # decide whether to choose an edge or feature to change
                 if best_edge_score < best_feature_score:
                     if self.verbose:
-                        print("Edge perturbation: {}".format(best_edge))
+                        logging.info("Edge perturbation: {}".format(best_edge))
                     change_structure = True
                 else:
                     if self.verbose:
-                        print("Feature perturbation: {}".format(best_feature_ix))
+                        logging.info("Feature perturbation: {}".format(best_feature_ix))
                     change_structure = False
             elif perturb_structure:
                 change_structure = True
@@ -597,6 +616,7 @@ class OriginalNettack:
 
                 self.adj[tuple(best_edge)] = self.adj[tuple(
                     best_edge[::-1])] = 1 - self.adj[tuple(best_edge)]
+
                 self.adj_preprocessed = preprocess_graph(self.adj)
 
                 self.structure_perturbations.append(tuple(best_edge))
