@@ -85,6 +85,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
 
     surrogate_model = surrogate_models_and_hyperparams[0][0]
 
+    logging.error(f"Found {len(models_and_hyperparams)} models with label '{model_label}' to attack.")
     for model, hyperparams in models_and_hyperparams:
         eval_model_label = hyperparams['label']
         try:
@@ -101,7 +102,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
 
         tmp_nodes = np.array(nodes)
         if nodes is None:
-            tmp_nodes = get_local_attack_nodes(attr, adj, labels, surrogate_model,
+            tmp_nodes = get_local_attack_nodes(attr, adj, labels, model,
                                                idx_test, device,  topk=int(nodes_topk / 4), min_node_degree=int(1 / min(epsilons)))
         tmp_nodes = [int(i) for i in tmp_nodes]
         for node in tmp_nodes:

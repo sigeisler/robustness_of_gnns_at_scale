@@ -113,7 +113,7 @@ def run_global_attack(epsilon, m, storage, pert_adj_storage_type, pert_attr_stor
 def sample_attack_nodes(logits: torch.Tensor, labels: torch.Tensor, nodes_idx, adj: SparseTensor, topk: int, min_node_degree: int):
     assert logits.shape[0] == labels.shape[0]
 
-    node_degrees = adj[nodes_idx.tolist()].sum(-1)
+    node_degrees = adj[nodes_idx.tolist()].to(torch.int).sum(-1)
     suitable_nodes_mask = node_degrees >= min_node_degree
 
     logging.info(

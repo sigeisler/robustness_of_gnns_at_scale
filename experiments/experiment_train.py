@@ -34,15 +34,12 @@ def config():
     # default params
     dataset = 'ogbn-arxiv'  # 'cora_ml'
     model_params = {
-        'label': 'Vanilla PPRGo Diffusion Embedding',
+        'label': 'Vanilla GCN',
         'model': 'GCN',
         'dropout': 0.5,
         'n_filters': 64,
         'hidden_size': 64,
         'nlayers': 3,
-        'ppr_normalization': 'row',
-        'topk': 64, 'alpha': 0.1, 'eps': 1e-03,
-        'skip_connection': True,
         'gdc_params': None,
         'svd_params': None,
         'batch_norm': False,

@@ -25,7 +25,7 @@ def config():
         ex.observers.append(seml.create_mongodb_observer(db_collection, overwrite=overwrite))
 
     # default params
-    dataset = 'cora_ml'  # Options are 'cora_ml' and 'citeseer' (or with a big GPU 'pubmed')
+    dataset = 'citeseer'  # Options are 'cora_ml' and 'citeseer' (or with a big GPU 'pubmed')
     attack = 'LocalBatchedPRBCD'
     attack_params = {
         "ppr_cache_params": {
@@ -37,7 +37,7 @@ def config():
     nodes_topk = 40
 
     epsilons = [0.5]  # , 0.75, 1]
-    seed = 0
+    seed = 1
 
     artifact_dir = "cache"
     model_storage_type = 'pretrained'
@@ -68,6 +68,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
     if model_label is not None and model_label:
         model_params['label'] = model_label
     models_and_hyperparams = storage.find_models(model_storage_type, model_params)
+    logging.error(f"Found {len(models_and_hyperparams)} models with label '{model_label}' to attack.")
 
     for model, hyperparams in models_and_hyperparams:
         model.to(device)

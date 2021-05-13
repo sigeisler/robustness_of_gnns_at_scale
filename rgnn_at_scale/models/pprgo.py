@@ -434,12 +434,14 @@ class PPRGoWrapperBase():
             logits = torch.zeros(num_predictions, self.num_classes, device="cpu", dtype=torch.float32)
 
             num_batches = len(data_loader)
+            display_step = max(int(num_batches / 10), 1)
             for batch_id, (idx, xbs, _) in enumerate(data_loader):
 
-                logging.info(f"Memory Usage before inference batch {batch_id}/{num_batches}:")
-                logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
-                if device.type == "cuda":
-                    logging.info(torch.cuda.max_memory_allocated() / (1024 ** 3))
+                if batch_id % display_step == 0:
+                    logging.info(f"Memory Usage before inference batch {batch_id}/{num_batches}:")
+                    logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
+                    if device.type == "cuda":
+                        logging.info(torch.cuda.max_memory_allocated() / (1024 ** 3))
 
                 xbs = [xb.to(device) for xb in xbs]
                 start = batch_id * self.forward_batch_size

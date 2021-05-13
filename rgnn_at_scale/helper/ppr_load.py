@@ -158,7 +158,7 @@ def load_ppr(
         dump_suffix += f"_{split_desc}"
 
     dump_suffix += f"_alpha{int(alpha * 100)}_eps{eps:.0e}_topk{topk}"
-    dump_suffix += f"_norm{ppr_normalization}"
+    dump_suffix += f"_pprnorm{ppr_normalization}"
 
     if make_undirected is not None:
         dump_suffix += f"_indirect{make_undirected}"
