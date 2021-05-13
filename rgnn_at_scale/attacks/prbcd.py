@@ -178,10 +178,10 @@ class PRBCD(SparseAttack):
                     best_s = self.modified_edge_weight_diff.clone().cpu()
         self.modified_edge_weight_diff.data.copy_(best_s.to(self.device))
         edge_index, edge_weight = self.get_modified_adj(is_final=True)
-        is_edge_set = torch.isclose(edge_weight, torch.tensor(1.))
-        edge_index = edge_index[:, is_edge_set]
-        edge_weight = edge_weight[is_edge_set]
-        return edge_index, edge_weight
+
+        edge_weight = edge_weight.round()
+        edge_mask = edge_weight == 1
+        return edge_index[:, edge_mask], edge_weight[edge_mask]
 
     def match_search_space_on_edges(
         self,
@@ -245,13 +245,7 @@ class PRBCD(SparseAttack):
             edge_index = torch.cat((self.edge_index.to(self.device), modified_edge_index), dim=-1)
             edge_weight = torch.cat((self.edge_weight.to(self.device), modified_edge_weight))
 
-            edge_index, edge_weight = torch_sparse.coalesce(
-                edge_index,
-                edge_weight,
-                m=self.n,
-                n=self.n,
-                op='sum'
-            )
+            edge_index, edge_weight = torch_sparse.coalesce(edge_index, edge_weight, m=self.n, n=self.n, op='sum')
         else:
             # Currently (1.6.0) PyTorch does not support return arguments of `checkpoint` that do not require gradient.
             # For this reason we need this extra code and to execute it twice (due to checkpointing in fact 3 times...)
@@ -267,13 +261,7 @@ class PRBCD(SparseAttack):
                 edge_index = torch.cat((self.edge_index.to(self.device), modified_edge_index), dim=-1)
                 edge_weight = torch.cat((self.edge_weight.to(self.device), modified_edge_weight))
 
-                edge_index, edge_weight = torch_sparse.coalesce(
-                    edge_index,
-                    edge_weight,
-                    m=self.n,
-                    n=self.n,
-                    op='sum'
-                )
+                edge_index, edge_weight = torch_sparse.coalesce(edge_index, edge_weight, m=self.n, n=self.n, op='sum')
                 return edge_index, edge_weight
 
             # Due to bottleneck...

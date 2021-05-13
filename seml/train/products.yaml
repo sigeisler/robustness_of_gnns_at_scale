@@ -36,34 +36,34 @@ grid:
       - 1
       - 5
 
-# gcn:
-#   fixed:
-#     model_params:
-#       label: Vanilla GCN
-#       model: GCN
-#       dropout: 0.5
-#       n_filters: [256, 256]
-#       gdc_params: None
-#       svd_params: None
-#       jaccard_params: None
-#       do_checkpoint: True
-#       n_chunks: 64
-#       do_normalize_adj_once: True
+gcn:
+  fixed:
+    model_params:
+      label: Vanilla GCN
+      model: GCN
+      dropout: 0.5
+      n_filters: [256, 256]
+      gdc_params: None
+      svd_params: None
+      jaccard_params: None
+      do_checkpoint: True
+      n_chunks: 64
+      do_normalize_adj_once: True
 
 
-# gcn_surrogate:
-#   fixed:
-#     model_params:
-#       label: Vanilla GCN (surrogate)
-#       model: GCN
-#       dropout: 0.5
-#       n_filters: 64
-#       gdc_params: None
-#       svd_params: None
-#       jaccard_params: None
-#       do_checkpoint: True
-#       n_chunks: 64
-#       do_normalize_adj_once: True
+gcn_surrogate:
+  fixed:
+    model_params:
+      label: Vanilla GCN (surrogate)
+      model: GCN
+      dropout: 0.5
+      n_filters: 64
+      gdc_params: None
+      svd_params: None
+      jaccard_params: None
+      do_checkpoint: True
+      n_chunks: 64
+      do_normalize_adj_once: True
 
 gdc:
   fixed:
@@ -158,4 +158,3 @@ soft_median_gdc_t10_0_k32:
             # - [128, 128]
             - 128
             # - [128, 64]
-

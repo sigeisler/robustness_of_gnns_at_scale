@@ -77,9 +77,9 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
     assert len(models_and_hyperparams) > 0, "No evaluation models found!"
     assert len(surrogate_models_and_hyperparams) > 0, "No surrogate model found!"
     if len(surrogate_models_and_hyperparams) > 1:
-        warnings.warn("More than one matching surrogate model found. Choose first one by default.")
+        warnings.warn("More than one matching surrogate model found. Choose last one by default.")
 
-    surrogate_model = surrogate_models_and_hyperparams[0][0]
+    surrogate_model = surrogate_models_and_hyperparams[-1][0]
 
     for epsilon in epsilons:
         adversary = create_attack(attack, attr=attr, adj=adj, labels=labels, model=surrogate_model,

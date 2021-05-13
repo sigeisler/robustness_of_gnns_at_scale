@@ -189,3 +189,100 @@ soft_median_gdc_t5_0:
       svd_params: None
       jaccard_params: None
       with_batch_norm: True
+
+pprgo:
+  fixed:
+    data_device: 'cpu'
+    model_params:
+      label: Vanilla PPRGo
+      model: PPRGo
+      ppr_normalization: 'row' 
+      batch_norm: True
+      topk: 64
+      hidden_size: 256
+      nlayers: 3
+      alpha: 0.1
+      eps: 1e-4
+      dropout: 0.25
+    train_params:
+      lr: 1e-3
+
+soft_median_rpprgo_t5_0:
+  fixed:
+    data_device: 'cpu'
+    model_params:
+      label: Soft Median RPPRGo (T=5.0)
+      model: RobustPPRGo
+      ppr_normalization: 'row' 
+      batch_norm: True
+      topk: 64
+      hidden_size: 256
+      nlayers: 3
+      alpha: 0.1
+      eps: 1e-4
+      dropout: 0.25
+      mean: soft_median
+      mean_kwargs: 
+        temperature: 5.0
+    train_params:
+      lr: 1e-3
+
+soft_median_rpprgo_t1_0:
+  fixed:
+    data_device: 'cpu'
+    model_params:
+      label: Soft Median RPPRGo (T=1.0)
+      model: RobustPPRGo
+      ppr_normalization: 'row' 
+      batch_norm: True
+      topk: 64
+      hidden_size: 256
+      nlayers: 3
+      alpha: 0.1
+      eps: 1e-4
+      dropout: 0.25
+      mean: soft_median
+      mean_kwargs: 
+        temperature: 1.0
+    train_params:
+      lr: 1e-3
+
+soft_median_rpprgo_t0_5:
+  fixed:
+    data_device: 'cpu'
+    model_params:
+      label: Soft Median RPPRGo (T=0.5)
+      model: RobustPPRGo
+      ppr_normalization: 'row' 
+      batch_norm: True
+      topk: 64
+      hidden_size: 256
+      nlayers: 3
+      alpha: 0.1
+      eps: 1e-4
+      dropout: 0.25
+      mean: soft_median
+      mean_kwargs: 
+        temperature: 0.5
+    train_params:
+      lr: 1e-3
+
+soft_median_rpprgo_t0_2:
+  fixed:
+    data_device: 'cpu'
+    model_params:
+      label: Soft Median RPPRGo (T=0.2)
+      model: RobustPPRGo
+      ppr_normalization: 'row' 
+      batch_norm: False
+      topk: 64
+      hidden_size: 256
+      nlayers: 3
+      alpha: 0.1
+      eps: 1e-4
+      dropout: 0.25
+      mean: soft_median
+      mean_kwargs: 
+        temperature: 0.2
+    train_params:
+      lr: 1e-3

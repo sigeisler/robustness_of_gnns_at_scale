@@ -127,6 +127,7 @@ class GCN(nn.Module):
                  add_self_loops: bool = True,
                  do_use_sparse_tensor: bool = True,
                  do_checkpoint: bool = False,  # TODO: Doc string
+                 row_norm: bool = False,  # TODO: Doc string
                  n_chunks: int = 8,
                  **kwargs):
         super().__init__()
@@ -155,6 +156,7 @@ class GCN(nn.Module):
         self.add_self_loops = add_self_loops
         self.do_use_sparse_tensor = do_use_sparse_tensor
         self.do_checkpoint = do_checkpoint
+        self.row_norm = row_norm
         self.n_chunks = n_chunks
         self.adj_preped = None
         self.layers = self._build_layers()
@@ -164,6 +166,7 @@ class GCN(nn.Module):
                                 do_chunk=self.do_checkpoint, n_chunks=self.n_chunks, bias=self.bias)
 
     def _build_layers(self):
+        filter_dimensions = [self.n_features] + self.n_filters
         modules = nn.ModuleList([
             nn.Sequential(collections.OrderedDict(
                 [(f'gcn_{idx}', self._build_conv_layer(in_channels=in_channels, out_channels=out_channels))]
@@ -172,11 +175,11 @@ class GCN(nn.Module):
                    (f'dropout_{idx}', nn.Dropout(p=self.dropout))]
             ))
             for idx, (in_channels, out_channels)
-            in enumerate(zip([self.n_features] + self.n_filters[:-1], self.n_filters))
+            in enumerate(zip(filter_dimensions[:-1], self.n_filters))
         ])
         idx = len(modules)
         modules.append(nn.Sequential(collections.OrderedDict([
-            (f'gcn_{idx}', self._build_conv_layer(in_channels=self.n_filters[-1], out_channels=self.n_classes)),
+            (f'gcn_{idx}', self._build_conv_layer(in_channels=filter_dimensions[-1], out_channels=self.n_classes)),
         ])))
         return modules
 
@@ -266,7 +269,7 @@ class GCN(nn.Module):
                 edge_idx, edge_weight = get_approx_topk_ppr_matrix(edge_idx, n, **self.gdc_params)
                 edge_idx, edge_weight = edge_idx.to(device), edge_weight.to(device)
             else:
-                edge_idx, edge_weight = GCN.normalize(edge_idx, n, edge_weight, self.add_self_loops)
+                edge_idx, edge_weight = GCN.normalize(edge_idx, n, edge_weight, self.add_self_loops, self.row_norm)
                 adj = get_ppr_matrix(torch.sparse.FloatTensor(edge_idx, edge_weight), **self.gdc_params)
                 edge_idx, edge_weight = adj.indices(), adj.values()
                 del adj
@@ -334,7 +337,8 @@ class GCN(nn.Module):
         if self.do_normalize_adj_once:
             self._deactivate_normalization()
 
-            edge_idx, edge_weight = GCN.normalize(edge_idx, x.shape[0], edge_weight, self.add_self_loops)
+            n = x.shape[0]
+            edge_idx, edge_weight = GCN.normalize(edge_idx, n, edge_weight, self.add_self_loops, self.row_norm)
 
         if self.do_use_sparse_tensor:
             if hasattr(SparseTensor, 'from_edge_index'):
@@ -350,7 +354,8 @@ class GCN(nn.Module):
             layer[0].normalize = False
 
     @staticmethod
-    def normalize(edge_idx: torch.Tensor, n: int, edge_weight: Optional[torch.Tensor] = None, add_self_loops=True):
+    def normalize(edge_idx: torch.Tensor, n: int, edge_weight: Optional[torch.Tensor] = None,
+                  add_self_loops=True, row_norm: bool = False):
         if edge_weight is None:
             edge_weight = torch.ones((edge_idx.size(1), ), dtype=torch.float32, device=edge_idx.device)
 
@@ -360,10 +365,15 @@ class GCN(nn.Module):
             edge_weight = tmp_edge_weight
 
         row, col = edge_idx
-        deg = scatter_add(edge_weight, col, dim=0, dim_size=n)
-        deg_inv_sqrt = deg.pow_(-0.5)
-        deg_inv_sqrt.masked_fill_(deg_inv_sqrt == float('inf'), 0)
-        edge_weight = deg_inv_sqrt[row] * edge_weight * deg_inv_sqrt[col]
+        if row_norm:
+            deg = scatter_add(edge_weight, row, dim=0, dim_size=n)  # Row sum
+            deg.masked_fill_(deg == 0, 1)
+            edge_weight /= deg[row]
+        else:
+            deg = scatter_add(edge_weight, col, dim=0, dim_size=n)  # Column sum
+            deg_inv_sqrt = deg.pow_(-0.5)
+            deg_inv_sqrt.masked_fill_(deg_inv_sqrt == float('inf'), 0)
+            edge_weight = deg_inv_sqrt[row] * edge_weight * deg_inv_sqrt[col]
 
         return edge_idx, edge_weight
 
