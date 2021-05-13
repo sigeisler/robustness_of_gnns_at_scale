@@ -2,7 +2,7 @@
 
 import math
 import random
-from typing import Union, Tuple
+from typing import Tuple
 
 from tqdm.auto import tqdm
 import numpy as np
@@ -13,7 +13,6 @@ from torch_sparse import SparseTensor
 
 from rgnn_at_scale.helper import utils
 from rgnn_at_scale.attacks.base_attack import Attack, SparseAttack
-from rgnn_at_scale.models import MODEL_TYPE
 
 FEATURE_MODES = ('symmetric_float', 'binary', 'sparse_pos')
 
@@ -130,7 +129,7 @@ class GANG(SparseAttack):
                 n_steps += 2
 
             for j in range(n_steps):
-                if self.do_synchronize:
+                if torch.cuda.is_available() and self.do_synchronize:
                     torch.cuda.empty_cache()
                     torch.cuda.synchronize()
 
@@ -228,7 +227,7 @@ class GANG(SparseAttack):
                 edge_index, edge_weight, new_edge_idx, new_edge_weight.detach(), m=next_node, n=next_node, op='max'
             )
 
-            if self.do_synchronize:
+            if torch.cuda.is_available() and self.do_synchronize:
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
 
@@ -308,7 +307,7 @@ class GANG(SparseAttack):
             edge_index = symmetric_edge_index.detach()
             edge_weight = symmetric_edge_weight.detach()
 
-            if self.do_synchronize:
+            if torch.cuda.is_available() and self.do_synchronize:
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
 

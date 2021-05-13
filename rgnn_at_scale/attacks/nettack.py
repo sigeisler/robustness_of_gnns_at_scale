@@ -1,5 +1,6 @@
 
 from typing import Dict,  Union
+import logging
 
 import math
 from torch_sparse import SparseTensor, coalesce
@@ -119,22 +120,22 @@ class Nettack(SparseLocalAttack):
 
         return torch.tensor(self.nettack.structure_perturbations)
 
-    @ staticmethod
-    def classification_statistics(logits, label) -> Dict[str, float]:
-        logits = logits[0]
-        logit_target = logits[label].item()
-        sorted = logits.argsort()
-        logit_best_non_target = logits[sorted[sorted != label][-1]].item()
-        confidence_target = np.exp(logit_target)
-        confidence_non_target = np.exp(logit_best_non_target)
-        margin = confidence_target - confidence_non_target
-        return {
-            'logit_target': logit_target,
-            'logit_best_non_target': logit_best_non_target,
-            'confidence_target': confidence_target,
-            'confidence_non_target': confidence_non_target,
-            'margin': margin
-        }
+    # @ staticmethod
+    # def classification_statistics(logits, label) -> Dict[str, float]:
+    #     logits, label = F.log_softmax(logits.cpu(), dim=-1), label.cpu()
+    #     logit_target = logits[label].item()
+    #     sorted = logits.argsort()
+    #     logit_best_non_target = logits[sorted[sorted != label][-1]].item()
+    #     confidence_target = F.softmax(logit_target)
+    #     confidence_non_target = F.softmax(logit_best_non_target)
+    #     margin = confidence_target - confidence_non_target
+    #     return {
+    #         'logit_target': logit_target,
+    #         'logit_best_non_target': logit_best_non_target,
+    #         'confidence_target': confidence_target,
+    #         'confidence_non_target': confidence_non_target,
+    #         'margin': margin
+    #     }
 
 
 class OriginalNettack:
@@ -489,20 +490,20 @@ class OriginalNettack:
                             logits_start[best_wrong_class]]
 
         if self.verbose:
-            print("##### Starting attack #####")
+            logging.info("##### Starting attack #####")
             if perturb_structure and perturb_features:
-                print(
+                logging.info(
                     "##### Attack node with ID {} using structure and feature perturbations #####".format(self.u))
             elif perturb_features:
-                print("##### Attack only using feature perturbations #####")
+                logging.info("##### Attack only using feature perturbations #####")
             elif perturb_structure:
-                print("##### Attack only using structure perturbations #####")
+                logging.info("##### Attack only using structure perturbations #####")
             if direct:
-                print("##### Attacking the node directly #####")
+                logging.info("##### Attacking the node directly #####")
             else:
-                print("##### Attacking the node indirectly via {} influencer nodes #####".format(
+                logging.info("##### Attacking the node indirectly via {} influencer nodes #####".format(
                     n_influencers))
-            print("##### Performing {} perturbations #####".format(n_perturbations))
+            logging.info("##### Performing {} perturbations #####".format(n_perturbations))
 
         if perturb_structure:
 
@@ -534,7 +535,7 @@ class OriginalNettack:
                                                                                    np.array([self.u, infl]))
                                                                       )) for infl in self.influencer_nodes])
                 if self.verbose:
-                    print("Influencer nodes: {}".format(self.influencer_nodes))
+                    logging.info("Influencer nodes: {}".format(self.influencer_nodes))
             else:
                 # direct attack
                 influencers = [self.u]
@@ -548,7 +549,7 @@ class OriginalNettack:
             ]
         for _ in range(n_perturbations):
             if self.verbose:
-                print(
+                logging.info(
                     "##### ...{}/{} perturbations ... #####".format(_ + 1, n_perturbations))
             if perturb_structure:
 
@@ -599,11 +600,11 @@ class OriginalNettack:
                 # decide whether to choose an edge or feature to change
                 if best_edge_score < best_feature_score:
                     if self.verbose:
-                        print("Edge perturbation: {}".format(best_edge))
+                        logging.info("Edge perturbation: {}".format(best_edge))
                     change_structure = True
                 else:
                     if self.verbose:
-                        print("Feature perturbation: {}".format(best_feature_ix))
+                        logging.info("Feature perturbation: {}".format(best_feature_ix))
                     change_structure = False
             elif perturb_structure:
                 change_structure = True

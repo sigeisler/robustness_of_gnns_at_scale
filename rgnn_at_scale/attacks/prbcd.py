@@ -2,16 +2,14 @@ import logging
 
 from collections import defaultdict
 import math
-from typing import Tuple, Union
+from typing import Tuple
 
 from tqdm import tqdm
-from torch.nn import functional as F
 import numpy as np
 import torch
 import torch_sparse
 from torch_sparse import SparseTensor
 from rgnn_at_scale.helper import utils
-from rgnn_at_scale.models import MODEL_TYPE
 from rgnn_at_scale.attacks.base_attack import Attack, SparseAttack
 
 """
@@ -83,7 +81,7 @@ class PRBCD(SparseAttack):
             self.modified_edge_weight_diff.requires_grad = True
             edge_index, edge_weight = self.get_modified_adj()
 
-            if self.do_synchronize:
+            if torch.cuda.is_available() and self.do_synchronize:
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
 
@@ -92,7 +90,7 @@ class PRBCD(SparseAttack):
 
             gradient = utils.grad_with_checkpoint(loss, self.modified_edge_weight_diff)[0]
 
-            if self.do_synchronize:
+            if torch.cuda.is_available() and self.do_synchronize:
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
 

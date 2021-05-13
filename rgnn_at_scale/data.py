@@ -814,10 +814,9 @@ class CachedPPRMatrix:
             self.coo_ppr = self.csr_ppr.tocoo()
             logging.info(f'Memory after initalizing coo_ppr: {utils.get_max_memory_bytes() / (1024 ** 3)}')
 
-        if self.ppr_values_on_demand:
-            rows, _ = self.csr_ppr.nonzero()
-            # make this look up table
-            self.cached_csr_rows = np.array(np.unique(rows))
+        rows, _ = self.csr_ppr.nonzero()
+        # make this look up table
+        self.cached_csr_rows = np.array(np.unique(rows))
 
         if not self.ppr_values_on_demand:
             # calculate all ppr scores beforehand, instead of calculating them on demand

@@ -436,10 +436,10 @@ class PPRGoWrapperBase():
             num_batches = len(data_loader)
             for batch_id, (idx, xbs, _) in enumerate(data_loader):
 
-                logging.debug(f"Memory Usage before inference batch {batch_id}/{num_batches}:")
-                logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))
+                logging.info(f"Memory Usage before inference batch {batch_id}/{num_batches}:")
+                logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
                 if device.type == "cuda":
-                    logging.debug(torch.cuda.max_memory_allocated() / (1024 ** 3))
+                    logging.info(torch.cuda.max_memory_allocated() / (1024 ** 3))
 
                 xbs = [xb.to(device) for xb in xbs]
                 start = batch_id * self.forward_batch_size
@@ -508,8 +508,8 @@ class PPRGoWrapperBase():
                 storage.save_sparse_matrix(self.ppr_cache_params["data_storage_type"], params,
                                            topk_train, ignore_duplicate=True)
 
-        logging.debug(f"Memory Usage after calculating/loading topk ppr for train:")
-        logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))
+        logging.info(f"Memory Usage after calculating/loading topk ppr for train:")
+        logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
 
         # try to read topk train from disk:
         topk_val = None
@@ -529,8 +529,8 @@ class PPRGoWrapperBase():
                 storage.save_sparse_matrix(self.ppr_cache_params["data_storage_type"], params,
                                            topk_val, ignore_duplicate=True)
 
-        logging.debug(f"Memory Usage after calculating/loading topk ppr for validation:")
-        logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))
+        logging.info(f"Memory Usage after calculating/loading topk ppr for validation:")
+        logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
 
         train_set = RobustPPRDataset(attr_matrix_all=attr,
                                      ppr_matrix=topk_train,
@@ -585,10 +585,10 @@ class PPRGoWrapperBase():
             for batch_train_idx, xbs, yb in batch_pbar:
                 xbs, yb = [xb.to(device) for xb in xbs], yb.to(device)
 
-                logging.debug(f"Memory Usage before training batch {step}:")
-                logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))
+                logging.info(f"Memory Usage before training batch {step}:")
+                logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
                 if device.type == "cuda":
-                    logging.debug(torch.cuda.max_memory_allocated() / (1024 ** 3))
+                    logging.info(torch.cuda.max_memory_allocated() / (1024 ** 3))
 
                 loss_train, ncorrect_train = self.__run_batch(xbs, yb, optimizer, train=True)
 
