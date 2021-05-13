@@ -119,11 +119,11 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                     'epsilon': eps,
                     'n_perturbations': n_perturbations,
                     'degree': int(degree.item()),
-                    'logits': logits.cpu(),
-                    'initial_logits': initial_logits.cpu(),
+                    'logits': logits.cpu().numpy().tolist(),
+                    'initial_logits': initial_logits.cpu().numpy().tolist(),
                     'larget': labels[node].item(),
                     'node_id': node,
-                    'perturbed_edges': adversary.get_perturbed_edges().cpu().numpy()
+                    'perturbed_edges': adversary.get_perturbed_edges().cpu().numpy().tolist()
                 })
 
                 results[-1].update(adversary.classification_statistics(logits.cpu(), labels[node].long().cpu()))
