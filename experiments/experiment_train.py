@@ -69,7 +69,7 @@ def config():
     display_steps = 10
     data_dir = './datasets'
     data_device = 0
-    debug_level = "debug"
+    debug_level = "info"
 
 
 @ex.automain
@@ -156,8 +156,8 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
 
     model = create_model(hyperparams).to(device)
 
-    logging.debug("Memory Usage after loading the dataset:")
-    logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))
+    logging.info("Memory Usage after loading the dataset:")
+    logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
 
     if hasattr(model, 'fit'):
         trace = model.fit(adj, attr,

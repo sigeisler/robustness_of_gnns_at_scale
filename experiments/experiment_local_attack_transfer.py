@@ -39,7 +39,7 @@ def config():
     artifact_dir = "cache"
 
     model_storage_type = 'pretrained'
-    model_label = None
+    model_label = "Vanilla GCN"
 
     surrogate_model_storage_type = "pretrained_linear"
     surrogate_model_label = 'Linear GCN'
@@ -101,14 +101,16 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
 
         tmp_nodes = np.array(nodes)
         if nodes is None:
-            tmp_nodes = get_local_attack_nodes(attack, binary_attr, attr, adj, labels,
-                                               model, idx_test, device, attack_params, topk=int(nodes_topk / 4))
+            tmp_nodes = get_local_attack_nodes(attr, adj, labels, surrogate_model,
+                                               idx_test, device,  topk=int(nodes_topk / 4), min_node_degree=int(1 / min(epsilons)))
         tmp_nodes = [int(i) for i in tmp_nodes]
         for node in tmp_nodes:
             degree = adj[node].sum()
             for eps in epsilons:
                 n_perturbations = int((eps * degree).round().item())
                 if n_perturbations == 0:
+                    logging.error(
+                        f"Skipping attack for model '{surrogate_model}' using {attack} with eps {eps} at node {node}.")
                     continue
 
                 try:
@@ -121,9 +123,6 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
 
                 try:
                     logits, initial_logits = adversary.evaluate_local(node)
-
-                    logging.info(
-                        f'Evaluated model {eval_model_label} using {attack} with pert. edges for node {node} and budget {n_perturbations}: {adversary.get_perturbed_edges()}')
 
                     results.append({
                         'label': eval_model_label,
@@ -143,6 +142,11 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                         for key, value
                         in adversary.classification_statistics(initial_logits.cpu(), labels[node].long().cpu()).items()
                     })
+
+                    logging.info(
+                        f'Evaluated model {eval_model_label} using {attack} with pert. edges for node {node} and budget {n_perturbations}:')
+                    logging.info(results[-1])
+
                 except Exception as e:
                     logging.exception(e)
                     logging.error(

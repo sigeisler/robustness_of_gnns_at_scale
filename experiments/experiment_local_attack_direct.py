@@ -49,7 +49,7 @@ def config():
 
     data_device = 'cpu'
     device = "cpu"
-    debug_level = "debug"
+    debug_level = "info"
 
 
 @ex.automain
@@ -87,15 +87,18 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
 
         tmp_nodes = np.array(nodes)
         if nodes is None:
-            tmp_nodes = get_local_attack_nodes(adversary, binary_attr, attr, adj, labels,
-                                               model, idx_test, device, attack_params, topk=int(nodes_topk / 4))
+            tmp_nodes = get_local_attack_nodes(attr, adj, labels, model,
+                                               idx_test, device,  topk=int(nodes_topk / 4), min_node_degree=int(1 / min(epsilons)))
         tmp_nodes = [int(i) for i in tmp_nodes]
 
+        assert all(np.unique(tmp_nodes) == np.sort(tmp_nodes)), "Attacked node list contains duplicates"
         for node in tmp_nodes:
             degree = adj[node].sum()
             for eps in epsilons:
                 n_perturbations = int((eps * degree).round().item())
                 if n_perturbations == 0:
+                    logging.error(
+                        f"Skipping attack for model '{model}' using {attack} with eps {eps} at node {node}.")
                     continue
 
                 # In case the model is non-deterministic to get the results either after attacking or after loading
@@ -109,7 +112,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                 logits, initial_logits = adversary.evaluate_local(node)
 
                 logging.info(
-                    f'Evaluated model {model_label} using {attack} with pert. edges for node {node} and budget {n_perturbations}: {adversary.get_perturbed_edges()}')
+                    f'Evaluated model {model_label} using {attack} with pert. edges for node {node} and budget {n_perturbations}: ')
 
                 results.append({
                     'label': model_label,
