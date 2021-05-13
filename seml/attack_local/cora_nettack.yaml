@@ -7,21 +7,26 @@ seml:
 slurm:
   experiments_per_job: 1
   sbatch_options:
-    gres: gpu:1       # num GPUs
+    #gres: gpu:1       # num GPUs
     mem: 8G          # memory
     cpus-per-task: 4  # num cores
     time: 1-00:00     # max time, D-HH:MM
-    qos: studentprio
+    partition: cpu
+    #qos: studentprio
     #qos: interactive
+    qos: studentpriocpu
 
 fixed:
   data_dir: datasets
+  dataset: cora_ml
   epsilons: [0.5, 0.75, 1.0]
   artifact_dir: cache
   model_storage_type: pretrained
   surrogate_model_storage_type: pretrained_linear
-  device: 0
-  data_device: 0
+  device: cpu
+  data_device: cpu
+  binary_attr: False
+  nodes_topk: 40
   attack_params.ppr_cache_params:
     data_artifact_dir: cache
     data_storage_type: ppr
@@ -40,23 +45,26 @@ grid:
     type: choice
     options:
       - True
-      - False
-
-
-# localprbcd_gcn:
-#   fixed:
-#     dataset: cora_ml
-#     binary_attr: False
-#     attack: LocalPRBCD
-#     model_label: Vanilla GCN
-
+      # - False
 
 
 nettack_vanilla_gcn:
   fixed:
-    dataset: cora_ml
-    nodes_topk: 40
-    binary_attr: False
     attack: Nettack
+    model_label: Vanilla GCN
     surrogate_model_label: Linear GCN
 
+
+nettack_vanilla_ppro:
+  fixed:
+    attack: Nettack
+    model_label: Vanilla PPRGo
+    surrogate_model_label: Linear GCN
+
+# nettack_robust_ppro:
+#   fixed:
+#     attack: Nettack
+#     model_label: Soft Median RPPRGo (T=0.5)
+#     surrogate_model_label: Linear GCN
+
+    
