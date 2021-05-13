@@ -21,7 +21,7 @@ fixed:
   model_storage_type: pretrained
   surrogate_model_storage_type: pretrained
   device: 0
-  data_device: 0 
+  data_device: 'cpu' 
   make_undirected: True
 
   dataset: ogbn-products
@@ -38,8 +38,8 @@ grid:
     type: choice
     options:
     - [0, 0.01]
-    - [0, 0.05]
-    - [0, 0.1]
+    - [0.05]
+    - [0.1]
 
 greedy_rbcd:
   fixed:
