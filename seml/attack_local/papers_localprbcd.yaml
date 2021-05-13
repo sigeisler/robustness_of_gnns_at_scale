@@ -1,0 +1,68 @@
+seml:
+  name: papers_localprbcd
+  executable: experiments/experiment_local_attack_direct.py
+  project_root_dir: ../..
+  output_dir: seml/attack_local/output
+
+slurm:
+  experiments_per_job: 1
+  sbatch_options:
+    gres: gpu:1       # num GPUs
+    mem: 420G          # memory
+    cpus-per-task: 4  # num cores
+    time: 2-00:00     # max time, D-HH:MM
+    #qos: interactive
+    #qos: studentpriocpu
+    qos: studentprio
+    #partition: cpu
+    
+
+fixed:
+  data_dir: datasets
+  dataset: ogbn-papers100M
+  binary_attr: False
+  epsilons: [0.5, 1.0]
+  nodes_topk: 40
+  artifact_dir: cache
+  model_storage_type: pretrained_papers100M
+  device: 0
+  data_device: cpu
+  debug_level: info
+  make_undirected: False
+  attack_params.epochs: 80
+  attack_params.display_step: 1
+  attack_params.fine_tune_epochs: 20
+  attack_params.do_synchronize: True
+  attack_params.ppr_recalc_at_end: True
+  attack_params.ppr_cache_params:
+    data_artifact_dir: cache
+    data_storage_type: ppr
+
+grid:
+  seed:
+    type: choice
+    options:
+      - 0
+      # - 1
+      # - 5
+      # - 42
+      # - 100
+
+
+localprbcd_pprgo:
+  fixed:
+    attack: LocalBatchedPRBCD
+    model_label: Vanilla PPRGo Diffusion Embedding
+    attack_params.loss_type: Margin
+    attack_params.search_space_size: 20_000
+    attack_params.lr_factor: 0.1
+
+
+localprbcd_pprgo_median:
+  fixed:
+    attack: LocalBatchedPRBCD
+    model_label: Soft Median PPRGo Diffusion (T=0.5)
+    attack_params.loss_type: Margin
+    attack_params.search_space_size: 20_000
+    attack_params.lr_factor: 0.1
+

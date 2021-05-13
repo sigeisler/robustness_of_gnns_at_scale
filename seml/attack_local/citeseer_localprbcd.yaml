@@ -1,5 +1,5 @@
 seml:
-  name: cora_localprbcd
+  name: cite_localprbcd
   executable: experiments/experiment_local_attack_direct.py
   project_root_dir: ../..
   output_dir: seml/attack_local/output
@@ -18,16 +18,17 @@ slurm:
 
 fixed:
   data_dir: datasets
-  dataset: cora_ml
+  dataset: citeseer
+  binary_attr: False
   epsilons: [0.5, 0.75, 1.0]
   artifact_dir: cache
-  model_storage_type: victim_cora
+  model_storage_type: pretrained
   device: cpu
   data_device: cpu
-  make_undirected: False
   nodes_topk: 40
   attack_params.epochs: 400
   attack_params.fine_tune_epochs: 100
+  attack_params.search_space_size: 10000
   attack_params.do_synchronize: True
   attack_params.loss_type: Margin
   attack_params.ppr_cache_params:
@@ -45,12 +46,9 @@ grid:
       # - 42
       # - 100
 
-
 localprbcd_gcn:
   fixed:
-    binary_attr: False
     attack: LocalPRBCD
-    model_storage_type: pretrained
     model_label: Vanilla GCN
     make_undirected: True
     attack_params.lr_factor: 0.02
@@ -58,7 +56,6 @@ localprbcd_gcn:
 
 localprbcd_gcn_directed:
   fixed:
-    binary_attr: False
     attack: LocalPRBCD
     model_label: Vanilla GCN
     make_undirected: False
@@ -67,10 +64,8 @@ localprbcd_gcn_directed:
 
 localprbcd_pprgo:
   fixed:
-    binary_attr: False
     attack: LocalBatchedPRBCD
     model_label: Vanilla PPRGo
+    make_undirected: False
     attack_params.lr_factor: 0.05
     attack_params.search_space_size: 10000
-
-

@@ -1,5 +1,5 @@
 seml:
-  name: cora_nettack
+  name: cite_nettack
   executable: experiments/experiment_local_attack_transfer.py
   project_root_dir: ../..
   output_dir: seml/attack_local/output
@@ -18,7 +18,7 @@ slurm:
 
 fixed:
   data_dir: datasets
-  dataset: cora_ml
+  dataset: citeseer
   epsilons: [0.5, 0.75, 1.0]
   artifact_dir: cache
   model_storage_type: pretrained
@@ -60,7 +60,6 @@ nettack_vanilla_ppro:
     attack: Nettack
     model_label: Vanilla PPRGo
     surrogate_model_label: Linear GCN
-    model_storage_type: victim_cora
 
 # nettack_robust_ppro:
 #   fixed:
