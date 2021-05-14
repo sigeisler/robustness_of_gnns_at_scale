@@ -579,11 +579,16 @@ class PPRGoWrapperBase():
                     optimizer, max_epochs)
 
         best_loss = np.inf
-
+        best_epoch_loss = np.inf
+        num_batches = len(train_loader)
         step = 0
         epoch_pbar = tqdm(range(max_epochs), desc='Training Epoch...')
         for it in epoch_pbar:
             batch_pbar = tqdm(train_loader, desc="Training Batch...")
+            epoch_loss_val = 0
+            epoch_acc_val = 0
+            epoch_acc_train = 0
+
             for batch_train_idx, xbs, yb in batch_pbar:
                 xbs, yb = [xb.to(device) for xb in xbs], yb.to(device)
 
@@ -605,19 +610,14 @@ class PPRGoWrapperBase():
                 loss_val, ncorrect_val = self.__run_batch(xbs, yb, None, train=False)
                 val_acc = ncorrect_val / float(yb.shape[0])
 
+                epoch_loss_val += loss_val / num_batches
+                epoch_acc_val += val_acc / num_batches
+                epoch_acc_train += train_acc / num_batches
+
                 trace_train_loss.append(loss_train)
                 trace_val_loss.append(loss_val)
                 trace_train_acc.append(train_acc)
                 trace_val_acc.append(val_acc)
-
-                if loss_val < best_loss:
-                    best_loss = loss_val
-                    best_epoch = it
-                    best_state = {key: value.cpu() for key, value in self.state_dict().items()}
-                    logging.info(f"Save best_state for new best_loss {best_loss}\n")
-                else:
-                    if it >= best_epoch + patience:
-                        break
 
                 batch_pbar.set_description(f"Epoch: {it:}, loss_train: {loss_train: .5f}, loss_val: {loss_val: .5f}",
                                            refresh=False)
@@ -628,12 +628,23 @@ class PPRGoWrapperBase():
 
                 step += 1
 
-            epoch_pbar.set_description(f"Training Epoch... acc_train: {train_acc: .4f}, acc_val: {val_acc: .4f}",
+            epoch_pbar.set_description(f"Training Epoch... acc_train: {epoch_acc_train: .4f}, acc_val: {epoch_acc_val: .4f}",
                                        refresh=False)
 
             if use_annealing_scheduler and scheduler_time == "epoch":
                 logging.info("Scheduler Epoch Step CosineAnnealingWarmRestarts\n")
                 scheduler.step()
+
+            if epoch_loss_val < best_epoch_loss:
+                best_epoch_loss = epoch_loss_val
+                best_epoch = it
+                best_state = {key: value.cpu() for key, value in self.state_dict().items()}
+                logging.info(f"Save best_state for new best_epoch_loss {best_epoch_loss}\n")
+            else:
+                if it >= best_epoch + patience:
+                    logging.info(f"Early stopping due to increase in validation loss")
+                    break
+                logging.info(f"No decrease in validation loss in epoch {it}...")
 
             # restore the best validation state
         self.load_state_dict(best_state)
