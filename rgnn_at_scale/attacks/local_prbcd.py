@@ -84,6 +84,9 @@ class LocalPRBCD(SparseLocalAttack):
 
             gradient = grad_with_checkpoint(loss, self.modified_edge_weight_diff)[0]
 
+            if torch.cuda.is_available():
+                logging.info(torch.cuda.max_memory_allocated() / (1024 ** 3))
+
             if torch.cuda.is_available() and self.do_synchronize:
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()

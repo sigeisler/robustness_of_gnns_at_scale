@@ -628,7 +628,7 @@ def to_symmetric(edge_index: torch.Tensor, edge_weight: torch.Tensor,
 
 
 def to_symmetric_scipy(adjacency: sp.csr_matrix):
-    sym_adjacency = adjacency + adjacency.T
+    sym_adjacency = (adjacency + adjacency.T).astype(bool).astype(float)
 
     sym_adjacency.tocsr().sort_indices()
 
