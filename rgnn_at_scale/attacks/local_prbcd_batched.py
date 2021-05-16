@@ -99,8 +99,36 @@ class LocalBatchedPRBCD(LocalPRBCD):
             A_idx = torch.stack([A_rows, A_cols], dim=0)
 
             # sparse addition: row = A[i] + v
-            A_idx = torch.cat((v_idx, A_idx), dim=-1)
-            A_weights = torch.cat((v_vals, A_vals))
+
+            # we know v_rows only has node_idx as value
+            assert all(v_rows == node_idx), "In a local attack only outgoing edges of the attacked edge are valid"
+            pert_segment_mask = A_rows == node_idx
+
+            A_idx_pert_seg = A_idx[:, pert_segment_mask]
+            A_vals_pert_seg = A_vals[pert_segment_mask]
+
+            A_idx_pert_seg = torch.cat((v_idx, A_idx_pert_seg), dim=-1)
+            A_vals_pert_seg = torch.cat((v_vals, A_vals_pert_seg))
+
+            # we need to insert the new edges already sorted, otherwise if the index passed to torch_sparse is not
+            # fully sorted it will try to sort the complete index which is infeasible for large graphs
+            idx = A_idx_pert_seg[1].new_zeros(A_idx_pert_seg[1].numel() + 1)
+            idx[1:] = A_idx_pert_seg[0]
+            idx[1:] *= self.n
+            idx[1:] += A_idx_pert_seg[1]
+            perm = idx[1:].argsort()
+
+            A_idx_pert_seg = A_idx_pert_seg[:, perm]
+            A_vals_pert_seg = A_vals_pert_seg[perm]
+
+            pert_segment_mask_before = A_rows < node_idx
+            pert_segment_mask_after = A_rows > node_idx
+
+            A_idx = torch.cat((A_idx[:, pert_segment_mask_before], A_idx_pert_seg,
+                               A_idx[:, pert_segment_mask_after]), dim=-1)
+            A_weights = torch.cat((A_vals[pert_segment_mask_before], A_vals_pert_seg,
+                                   A_vals[pert_segment_mask_after]), dim=-1)
+
             A_idx, A_weights = torch_sparse.coalesce(
                 A_idx,
                 A_weights,
