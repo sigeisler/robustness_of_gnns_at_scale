@@ -1,3 +1,4 @@
+import collections
 import logging
 from typing import Any, Dict, Sequence, Union
 
@@ -68,7 +69,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
     if model_label is not None and model_label:
         model_params['label'] = model_label
     models_and_hyperparams = storage.find_models(model_storage_type, model_params)
-    logging.error(f"Found {len(models_and_hyperparams)} models with label '{model_label}' to attack.")
+    logging.info(f"Found {len(models_and_hyperparams)} models with label '{model_label}' to attack.")
 
     for model, hyperparams in models_and_hyperparams:
         model.to(device)
@@ -86,14 +87,13 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
             logging.error(f"Failed to instantiate attack {attack} for model '{model_label}'.")
             continue
 
-        tmp_nodes = np.array(nodes)
-        if nodes is None:
-            tmp_nodes = get_local_attack_nodes(attr, adj, labels, model,
-                                               idx_test, device,  topk=int(nodes_topk / 4), min_node_degree=int(1 / min(epsilons)))
-        tmp_nodes = [int(i) for i in tmp_nodes]
+        if nodes is None or isinstance(nodes, collections.Sequence) or not nodes:
+            nodes = get_local_attack_nodes(attr, adj, labels, model, idx_test, device, 
+                                           topk=int(nodes_topk / 4), min_node_degree=int(1 / min(epsilons)))
+        nodes = [int(i) for i in nodes]
 
-        assert all(np.unique(tmp_nodes) == np.sort(tmp_nodes)), "Attacked node list contains duplicates"
-        for node in tmp_nodes:
+        assert all(np.unique(nodes) == np.sort(nodes)), "Attacked node list contains duplicates"
+        for node in nodes:
             degree = adj[node].sum()
             for eps in epsilons:
                 n_perturbations = int((eps * degree).round().item())

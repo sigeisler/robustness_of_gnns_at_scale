@@ -209,9 +209,9 @@ class LocalPRBCD(SparseLocalAttack):
 
     def sample_search_space(self, node_idx: int, n_perturbations: int):
         while True:
-            self.current_search_space = torch.randint(self.n, (self.search_space_size,), device=self.device)
+            self.current_search_space = torch.randint(self.n - 1, (self.search_space_size,), device=self.device)
+            self.current_search_space[self.current_search_space >= node_idx] += 1
             self.current_search_space = torch.unique(self.current_search_space, sorted=True)
-            #self.current_search_space = self.current_search_space[node_idx != self.current_search_space]
             self.modified_edge_weight_diff = torch.full_like(self.current_search_space, self.eps,
                                                              dtype=torch.float32, requires_grad=True)
             if self.current_search_space.size(0) >= n_perturbations:
@@ -229,8 +229,9 @@ class LocalPRBCD(SparseLocalAttack):
 
         # Sample until enough edges were drawn
         while True:
-            number_new_edges = (self.search_space_size - self.current_search_space.size(0),)
-            new_index = torch.randint(self.n, number_new_edges, device=self.device)
+            number_new_edges = self.search_space_size - self.current_search_space.size(0)
+            new_index = torch.randint(self.n - 1, (number_new_edges,), device=self.device)
+            new_index[new_index >= node_idx] += 1
             self.current_search_space = torch.cat((self.current_search_space, new_index))
             #self.current_search_space = self.current_search_space[node_idx != self.current_search_space]
             self.current_search_space, unique_idx = torch.unique(
@@ -267,20 +268,17 @@ class LocalPRBCD(SparseLocalAttack):
                     continue
 
                 self.modified_edge_weight_diff = sampled
-                self.current_search_space = current_search_space[
-                    self.modified_edge_weight_diff == 1
-                ].to(self.device)
-                self.modified_edge_weight_diff = self.modified_edge_weight_diff[
-                    self.modified_edge_weight_diff == 1
-                ].to(self.device)
+                keep_mask = self.modified_edge_weight_diff == 1
+                self.current_search_space = current_search_space[keep_mask].to(self.device)
+                self.modified_edge_weight_diff = self.modified_edge_weight_diff[keep_mask].to(self.device)
 
                 perturbed_graph = self.perturb_graph(node_idx)
                 logits = self.get_surrogate_logits(node_idx, perturbed_graph)
                 margin = LocalPRBCD.classification_statistics(logits, self.labels[node_idx])['margin']
                 if best_margin > margin:
                     best_margin = margin
-                    best_weights = self.modified_edge_weight_diff.clone().cpu()
-                    best_search_space = self.current_search_space.clone().cpu()
+                    best_weights = self.modified_edge_weight_diff.cpu()
+                    best_search_space = self.current_search_space.cpu()
         self.modified_edge_weight_diff = best_weights.to(self.device).float()
         self.current_search_space = best_search_space.to(self.device).long()
 
