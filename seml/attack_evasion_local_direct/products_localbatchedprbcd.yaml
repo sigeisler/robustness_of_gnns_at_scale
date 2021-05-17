@@ -10,16 +10,14 @@ slurm:
     gres: gpu:1       # num GPUs
     mem: 24G          # memory
     cpus-per-task: 4  # num cores
-    time: 1-00:00     # max time, D-HH:MM
-    partition: gpu_large
-    
+    time: 2-00:00     # max time, D-HH:MM
 
 fixed:
   data_dir: datasets
   dataset: ogbn-products
-  epsilons: [0.5, 1.0]
+  epsilons: [0.5, 0.75, 1.0]
   artifact_dir: cache
-  model_storage_type: pretrained
+  model_storage_type: victim_products
   device: 0
   data_device: cpu
   debug_level: info
@@ -28,6 +26,10 @@ fixed:
   attack_params.fine_tune_epochs: 5
   attack_params.display_step: 2
   attack_params.do_synchronize: True
+  attack_params.ppr_recalc_at_end: True
+  attack_params.ppr_cache_params:
+    data_artifact_dir: cache
+    data_storage_type: ppr
 
 grid:
   seed:
@@ -38,20 +40,25 @@ grid:
       - 5
       # - 42
       # - 100
-    
-  make_undirected: 
-    type: choice
-    options:
-      - False
-      - True
+  
 
-
-localprbcd_GCN:
+localprbcd_pprgo:
   fixed:
     binary_attr: False
-    attack: LocalPRBCD
-    model_label: Vanilla GCN (surrogate)
+    make_undirected: True
+    attack: LocalBatchedPRBCD
+    model_label: Vanilla PPRGo
     attack_params.loss_type: Margin
     attack_params.search_space_size: 20_000
-    attack_params.lr_factor: 0.05
+    attack_params.lr_factor: 1e-3
 
+
+localprbcd_pprgo_median:
+  fixed:
+    binary_attr: False
+    make_undirected: True
+    attack: LocalBatchedPRBCD
+    model_label: Soft Median PPRGo (T=5.0)
+    attack_params.loss_type: Margin
+    attack_params.search_space_size: 20_000
+    attack_params.lr_factor: 0.5

@@ -83,66 +83,10 @@ class LocalBatchedPRBCD(LocalPRBCD):
                                                             modified_edge_weight_diff,
                                                             node_idx, self.attacked_model.alpha)
             return perturbed_graph
-        else:
-            assert n_perturbations is not None, "n_perturbations must be given when only updating adjacency"
-            v_rows, v_cols, v_vals = modified_edge_weight_diff.to(self.adj.device()).coo()
-            v_rows += node_idx
 
-            # projection
-            pertubations = v_vals.argsort()[-n_perturbations:]
-            v_rows = v_rows[pertubations]
-            v_cols = v_cols[pertubations]
-            v_vals = v_vals[pertubations]
-            v_idx = torch.stack([v_rows, v_cols], dim=0)
+        assert n_perturbations is not None, "n_perturbations must be given when only updating adjacency"
 
-            A_rows, A_cols, A_vals = self.adj.coo()
-            A_idx = torch.stack([A_rows, A_cols], dim=0)
+        device = self.adj.device()
+        updated_adj = LocalPRBCD.mod_row(modified_edge_weight_diff.to(device), self.adj, node_idx, self.make_undirected)
 
-            # sparse addition: row = A[i] + v
-
-            # we know v_rows only has node_idx as value
-            assert all(v_rows == node_idx), "In a local attack only outgoing edges of the attacked edge are valid"
-            pert_segment_mask = A_rows == node_idx
-
-            A_idx_pert_seg = A_idx[:, pert_segment_mask]
-            A_vals_pert_seg = A_vals[pert_segment_mask]
-
-            A_idx_pert_seg = torch.cat((v_idx, A_idx_pert_seg), dim=-1)
-            A_vals_pert_seg = torch.cat((v_vals, A_vals_pert_seg))
-
-            # we need to insert the new edges already sorted, otherwise if the index passed to torch_sparse is not
-            # fully sorted it will try to sort the complete index which is infeasible for large graphs
-            idx = A_idx_pert_seg[1].new_zeros(A_idx_pert_seg[1].numel() + 1)
-            idx[1:] = A_idx_pert_seg[0]
-            idx[1:] *= self.n
-            idx[1:] += A_idx_pert_seg[1]
-            perm = idx[1:].argsort()
-
-            A_idx_pert_seg = A_idx_pert_seg[:, perm]
-            A_vals_pert_seg = A_vals_pert_seg[perm]
-
-            pert_segment_mask_before = A_rows < node_idx
-            pert_segment_mask_after = A_rows > node_idx
-
-            A_idx = torch.cat((A_idx[:, pert_segment_mask_before], A_idx_pert_seg,
-                               A_idx[:, pert_segment_mask_after]), dim=-1)
-            A_weights = torch.cat((A_vals[pert_segment_mask_before], A_vals_pert_seg,
-                                   A_vals[pert_segment_mask_after]), dim=-1)
-
-            A_idx, A_weights = torch_sparse.coalesce(
-                A_idx,
-                A_weights,
-                m=1,
-                n=self.n,
-                op='sum'
-            )
-
-            # Works since the attack will always assign at least a small constant the elements in p
-            A_weights[A_weights > 1] = -A_weights[A_weights > 1] + 2
-
-            if self.make_undirected:
-                A_idx, A_weights = to_symmetric(A_idx, A_weights, self.n, op='max')
-
-            updated_adj = SparseTensor.from_edge_index(A_idx, A_weights, (self.n, self.n))
-
-            return updated_adj
+        return updated_adj
