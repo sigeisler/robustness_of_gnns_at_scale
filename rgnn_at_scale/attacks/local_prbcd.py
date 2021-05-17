@@ -105,6 +105,8 @@ class LocalPRBCD(SparseLocalAttack):
                     logits, self.labels[node_idx].to(self.device))
                 if epoch % self.display_step == 0:
                     logging.info(f'\nEpoch: {epoch} Loss: {loss.item()} Statstics: {classification_statistics}\n')
+                    logging.info(
+                        f"Gradient mean {gradient.abs().mean().item()} std {gradient.abs().std().item()} with base learning rate {n_perturbations * self.lr_factor}")
 
                 if self.with_early_stropping and best_margin > classification_statistics['margin']:
                     best_margin = classification_statistics['margin']
