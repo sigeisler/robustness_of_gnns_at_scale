@@ -166,33 +166,46 @@ class LocalPRBCD(SparseLocalAttack):
                                                  value=self.modified_edge_weight_diff,
                                                  sparse_sizes=(1, self.n))
 
-        v_rows, v_cols, v_vals = modified_edge_weight_diff.coo()
-        v_rows += node_idx
+        device = self.modified_edge_weight_diff.device
+        updated_adj = LocalPRBCD.mod_row(modified_edge_weight_diff, self.adj.to(device), node_idx, self.make_undirected)
+
+        return updated_adj
+
+    @staticmethod
+    def mod_row(modified: SparseTensor, adj: SparseTensor, row_idx: int, make_undirected: bool) -> SparseTensor:
+        n = adj.size(0)
+
+        v_rows, v_cols, v_vals = modified.coo()
+        v_rows += row_idx
         v_idx = torch.stack([v_rows, v_cols], dim=0)
 
-        A_rows, A_cols, A_vals = self.adj.to(v_vals.device).coo()
+        A_rows, A_cols, A_vals = adj.coo()
         A_idx = torch.stack([A_rows, A_cols], dim=0)
 
+        # select only changed row
+        is_row = A_rows == row_idx
+        A_idx_row = A_idx[:, is_row]
+        A_vals_row = A_vals[is_row]
+
         # sparse addition: row = A[i] + v
-        A_idx = torch.cat((v_idx, A_idx), dim=-1)
-        A_weights = torch.cat((v_vals, A_vals))
-        A_idx, A_weights = torch_sparse.coalesce(
-            A_idx,
-            A_weights,
-            m=1,
-            n=self.n,
-            op='sum'
-        )
+        A_idx_row = torch.cat((v_idx, A_idx_row), dim=-1)
+        A_vals_row = torch.cat((v_vals, A_vals_row))
+
+        A_idx_row, A_vals_row = torch_sparse.coalesce(A_idx_row, A_vals_row, m=1, n=n, op='sum')
+
+        is_before = A_rows < row_idx
+        is_after = A_rows > row_idx
+
+        A_idx = torch.cat((A_idx[:, is_before], A_idx_row, A_idx[:, is_after]), dim=-1)
+        A_weights = torch.cat((A_vals[is_before], A_vals_row, A_vals[is_after]), dim=-1)
 
         # Works since the attack will always assign at least a small constant the elements in p
         A_weights[A_weights > 1] = -A_weights[A_weights > 1] + 2
 
-        if self.make_undirected:
-            A_idx, A_weights = to_symmetric(A_idx, A_weights, self.n, op='max')
+        if make_undirected:
+            A_idx, A_weights = to_symmetric(A_idx, A_weights, n, op='max')
 
-        updated_adj = SparseTensor.from_edge_index(A_idx, A_weights, (self.n, self.n))
-
-        return updated_adj
+        return SparseTensor.from_edge_index(A_idx, A_weights, (n, n))
 
     def update_edge_weights(self, n_perturbations: int, epoch: int, gradient: torch.Tensor):
         lr_factor = n_perturbations * self.lr_factor
