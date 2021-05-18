@@ -10,7 +10,10 @@ slurm:
     gres: gpu:1       # num GPUs
     mem: 16G          # memory
     cpus-per-task: 4  # num cores
-    time: 0-08:00     # max time, D-HH:MM
+    time: 0-02:00     # max time, D-HH:MM
+    # partition: cpu
+    qos: studentprio
+    # qos: studentpriocpu
 
 fixed:
   train_params:
@@ -21,7 +24,7 @@ fixed:
   artifact_dir: cache
   model_storage_type: pretrained_pprgo
   device: 0
-  data_device: 0 
+  data_device: 0
   make_undirected: True
   binary_attr: False
 
@@ -35,146 +38,146 @@ grid:
       - 1
       - 5
 
-gcn:
-  fixed:
-    model_params:
-      label: Vanilla GCN
-      model: GCN
-      dropout: 0.5
-      n_filters: 64
-      gdc_params: None
-      svd_params: None
-      jaccard_params: None
-      do_cache_adj_prep: True
+# gcn:
+#   fixed:
+#     model_params:
+#       label: Vanilla GCN
+#       model: GCN
+#       dropout: 0.5
+#       n_filters: 64
+#       gdc_params: None
+#       svd_params: None
+#       jaccard_params: None
+#       do_cache_adj_prep: True
 
-gdc:
-  fixed:
-    model_params:
-      label: Vanilla GDC
-      model: GCN
-      dropout: 0.5
-      n_filters: 64
-      gdc_params:
-          alpha: 0.15
-          k: 32
-          use_cpu: True
-      svd_params: None
-      jaccard_params: None
-      do_cache_adj_prep: True
+# gdc:
+#   fixed:
+#     model_params:
+#       label: Vanilla GDC
+#       model: GCN
+#       dropout: 0.5
+#       n_filters: 64
+#       gdc_params:
+#           alpha: 0.15
+#           k: 32
+#           use_cpu: True
+#       svd_params: None
+#       jaccard_params: None
+#       do_cache_adj_prep: True
 
-soft_medoid_gdc_t1_0:
-  fixed:
-    model_params:
-      label: Soft Medoid GDC (T=1.0)
-      model: RGNN
-      dropout: 0.5
-      n_filters: 64
-      mean: soft_k_medoid
-      mean_kwargs:
-          k: 64
-          temperature: 1.0
-          with_weight_correction: True
-      gdc_params:
-          alpha: 0.15
-          k: 64
-          use_cpu: True
-      svd_params: None
-      jaccard_params: None
-      do_cache_adj_prep: True
+# soft_medoid_gdc_t1_0:
+#   fixed:
+#     model_params:
+#       label: Soft Medoid GDC (T=1.0)
+#       model: RGNN
+#       dropout: 0.5
+#       n_filters: 64
+#       mean: soft_k_medoid
+#       mean_kwargs:
+#           k: 64
+#           temperature: 1.0
+#           with_weight_correction: True
+#       gdc_params:
+#           alpha: 0.15
+#           k: 64
+#           use_cpu: True
+#       svd_params: None
+#       jaccard_params: None
+#       do_cache_adj_prep: True
 
-soft_medoid_gdc_t0_5:
-  fixed:
-    model_params:
-      label: Soft Medoid GDC (T=0.5)
-      model: RGNN
-      dropout: 0.5
-      n_filters: 64
-      mean: soft_k_medoid
-      mean_kwargs:
-          k: 64
-          temperature: 0.5
-          with_weight_correction: True
-      gdc_params:
-          alpha: 0.15
-          k: 64
-          use_cpu: True
-      svd_params: None
-      jaccard_params: None
-      do_cache_adj_prep: True
+# soft_medoid_gdc_t0_5:
+#   fixed:
+#     model_params:
+#       label: Soft Medoid GDC (T=0.5)
+#       model: RGNN
+#       dropout: 0.5
+#       n_filters: 64
+#       mean: soft_k_medoid
+#       mean_kwargs:
+#           k: 64
+#           temperature: 0.5
+#           with_weight_correction: True
+#       gdc_params:
+#           alpha: 0.15
+#           k: 64
+#           use_cpu: True
+#       svd_params: None
+#       jaccard_params: None
+#       do_cache_adj_prep: True
 
-soft_medoid_gdc_t0_2:
-  fixed:
-    model_params:
-      label: Soft Medoid GDC (T=0.2)
-      model: RGNN
-      dropout: 0.5
-      n_filters: 64
-      mean: soft_k_medoid
-      mean_kwargs:
-          k: 64
-          temperature: 0.2
-          with_weight_correction: True
-      gdc_params:
-          alpha: 0.15
-          k: 64
-          use_cpu: True
-      svd_params: None
-      jaccard_params: None
-      do_cache_adj_prep: True
+# soft_medoid_gdc_t0_2:
+#   fixed:
+#     model_params:
+#       label: Soft Medoid GDC (T=0.2)
+#       model: RGNN
+#       dropout: 0.5
+#       n_filters: 64
+#       mean: soft_k_medoid
+#       mean_kwargs:
+#           k: 64
+#           temperature: 0.2
+#           with_weight_correction: True
+#       gdc_params:
+#           alpha: 0.15
+#           k: 64
+#           use_cpu: True
+#       svd_params: None
+#       jaccard_params: None
+#       do_cache_adj_prep: True
 
-soft_median_gdc_t1_0:
-  fixed:
-    model_params:
-      label: Soft Median GDC (T=1.0)
-      model: RGNN
-      dropout: 0.5
-      n_filters: 64
-      mean: soft_median
-      mean_kwargs:
-          temperature: 1.0
-      gdc_params:
-          alpha: 0.15
-          k: 64
-          use_cpu: True
-      svd_params: None
-      jaccard_params: None
-      do_cache_adj_prep: True
+# soft_median_gdc_t1_0:
+#   fixed:
+#     model_params:
+#       label: Soft Median GDC (T=1.0)
+#       model: RGNN
+#       dropout: 0.5
+#       n_filters: 64
+#       mean: soft_median
+#       mean_kwargs:
+#           temperature: 1.0
+#       gdc_params:
+#           alpha: 0.15
+#           k: 64
+#           use_cpu: True
+#       svd_params: None
+#       jaccard_params: None
+#       do_cache_adj_prep: True
 
-soft_median_gdc_t0_5:
-  fixed:
-    model_params:
-      label: Soft Median GDC (T=0.5)
-      model: RGNN
-      dropout: 0.5
-      n_filters: 64
-      mean: soft_median
-      mean_kwargs:
-          temperature: 0.5
-      gdc_params:
-          alpha: 0.15
-          k: 64
-          use_cpu: True
-      svd_params: None
-      jaccard_params: None
-      do_cache_adj_prep: True
+# soft_median_gdc_t0_5:
+#   fixed:
+#     model_params:
+#       label: Soft Median GDC (T=0.5)
+#       model: RGNN
+#       dropout: 0.5
+#       n_filters: 64
+#       mean: soft_median
+#       mean_kwargs:
+#           temperature: 0.5
+#       gdc_params:
+#           alpha: 0.15
+#           k: 64
+#           use_cpu: True
+#       svd_params: None
+#       jaccard_params: None
+#       do_cache_adj_prep: True
 
-soft_median_gdc_t0_2:
-  fixed:
-    model_params:
-      label: Soft Median GDC (T=0.2)
-      model: RGNN
-      dropout: 0.5
-      n_filters: 64
-      mean: soft_median
-      mean_kwargs:
-          temperature: 0.2
-      gdc_params:
-          alpha: 0.15
-          k: 64
-          use_cpu: True
-      svd_params: None
-      jaccard_params: None
-      do_cache_adj_prep: True
+# soft_median_gdc_t0_2:
+#   fixed:
+#     model_params:
+#       label: Soft Median GDC (T=0.2)
+#       model: RGNN
+#       dropout: 0.5
+#       n_filters: 64
+#       mean: soft_median
+#       mean_kwargs:
+#           temperature: 0.2
+#       gdc_params:
+#           alpha: 0.15
+#           k: 64
+#           use_cpu: True
+#       svd_params: None
+#       jaccard_params: None
+#       do_cache_adj_prep: True
 
 pprgo:
   fixed:
@@ -184,16 +187,18 @@ pprgo:
       model: PPRGo
       ppr_normalization: 'row' 
       batch_norm: False
-      topk: 128
+      topk: 256
       hidden_size: 256
-      nlayers: 4
-      alpha: 0.15
-      eps: 1e-4
-      dropout: 0.0
+      nlayers: 2
+      alpha: 0.1
+      eps: 1e-6
+      dropout: 0.25
     train_params:
+      lr: 1e-4
+      weight_decay:  1e-3
       batch_mult_val: 1
-      batch_size: 2048
-      forward_batch_size: 512
+      batch_size: 10240
+      forward_batch_size: 8192
 
 soft_median_rpprgo_t1_0:
   fixed:
@@ -202,39 +207,43 @@ soft_median_rpprgo_t1_0:
       label: Soft Median RPPRGo (T=1.0)
       model: RobustPPRGo
       ppr_normalization: 'row' 
-      batch_norm: True
-      topk: 128
+      batch_norm: False
+      topk: 256
       hidden_size: 256
-      alpha: 0.15
-      eps: 1e-4
-      dropout: 0.0
-      nlayers: 4
+      alpha: 0.1
+      eps: 1e-6
+      dropout: 0.25
+      nlayers: 2
       mean: soft_median
       mean_kwargs: 
         temperature: 1.0
     train_params:
+      lr: 1e-4
+      weight_decay:  1e-3
       batch_mult_val: 1
-      batch_size: 2048
-      forward_batch_size: 512
+      batch_size: 8192
+      forward_batch_size: 8192
 
 soft_median_rpprgo_t5_0:
   fixed:
     data_device: 'cpu'
     model_params:
-      label: Soft Median RPPRGo (T=1.0)
+      label: Soft Median RPPRGo (T=5.0)
       model: RobustPPRGo
       ppr_normalization: 'row' 
-      batch_norm: True
-      topk: 128
+      batch_norm: False
+      topk: 256
       hidden_size: 256
-      alpha: 0.15
-      eps: 1e-4
-      dropout: 0.0
-      nlayers: 4
+      alpha: 0.1
+      eps: 1e-6
+      dropout: 0.25
+      nlayers: 2
       mean: soft_median
       mean_kwargs: 
-        temperature: 1.0
+        temperature: 5.0
     train_params:
+      lr: 1e-4
+      weight_decay:  1e-3
       batch_mult_val: 1
-      batch_size: 2048
-      forward_batch_size: 512
+      batch_size: 8192
+      forward_batch_size: 8192
