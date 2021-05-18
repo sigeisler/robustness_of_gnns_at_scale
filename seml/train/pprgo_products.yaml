@@ -17,17 +17,32 @@ slurm:
 fixed:
   data_dir: datasets
   dataset: ogbn-products
-  seed: 0
   binary_attr: False
   train_params:
     log_dir: runs/products
     max_epochs: 30
     patience: 300
   artifact_dir: cache
-  model_storage_type: products_hpt
+  model_storage_type: victim_products
   device: 0
   data_device: cpu
-  make_undirected: False
+
+
+grid:
+  seed: 
+    type: choice
+    options:
+      - 0
+      - 1
+      - 5
+      # - 42
+      # - 100
+  make_undirected: 
+    type: choice
+    options:
+      - True
+      - False
+
 
 
 pprgo:
@@ -70,6 +85,30 @@ soft_median_5_0_pprgo:
       mean: soft_median
       mean_kwargs: 
         temperature: 5.0
+    train_params:
+      lr: 1e-2
+      weight_decay: 5e-5
+      batch_size: 2048 # 8192 #10240 #16384 #10240 # 3072 # 2048 # 6144 #4096 # 8192
+      batch_mult_val: 1
+      forward_batch_size: 512
+
+
+soft_median_1_0_pprgo:
+  fixed:
+    model_params:
+      label: Soft Median PPRGo (T=1.0)
+      model: RobustPPRGo
+      topk: 128
+      eps: 1e-5
+      alpha: 0.1
+      ppr_normalization: row
+      batch_norm: True
+      dropout: 0.0
+      hidden_size: 512
+      nlayers: 4
+      mean: soft_median
+      mean_kwargs: 
+        temperature: 1.0
     train_params:
       lr: 1e-2
       weight_decay: 5e-5
