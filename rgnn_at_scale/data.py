@@ -799,6 +799,8 @@ class CachedPPRMatrix:
             logging.info(
                 f"Memory after  loading 'Attack' CachedPPRMatrix from storage:{utils.get_max_memory_bytes() / (1024 ** 3)}")
 
+        self.has_missing_ppr_values = (self.csr_ppr.sum(-1) == 0).any()
+
         if self.csr_ppr is None and use_train_val_ppr and self.storage is not None:
             stored_pprs = self._load_partial_pprs()
             self.coo_ppr = sp.coo_matrix(self.shape, dtype=self.adj.dtype)
@@ -814,20 +816,26 @@ class CachedPPRMatrix:
             self.coo_ppr = self.csr_ppr.tocoo()
             logging.info(f'Memory after initalizing coo_ppr: {utils.get_max_memory_bytes() / (1024 ** 3)}')
 
-        rows, _ = self.csr_ppr.nonzero()
-        # make this look up table
-        self.cached_csr_rows = np.array(np.unique(rows))
+        if self.has_missing_ppr_values:
+            rows, _ = self.csr_ppr.nonzero()
+            logging.info("Memory after .nonzero() ")
+            logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
+            # make this look up table
+            self.cached_csr_rows = np.array(np.unique(rows))
+            logging.info("Memory after self.cached_csr_rows:")
+            logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
 
-        if not self.ppr_values_on_demand:
-            # calculate all ppr scores beforehand, instead of calculating them on demand
-            # this improves training/attack speed as there's no need to check whether the
-            # required ppr scores are already cached or not
-            missing_ppr_idx = self._get_uncached(np.arange(self.shape[0]))
-            if len(missing_ppr_idx) > 0:
-                self._calc_ppr(missing_ppr_idx)
-                self.save_to_storage()
-                logging.info(
-                    f"Memory after computing all missing ppr values:{utils.get_max_memory_bytes() / (1024 ** 3)}")
+            if not self.ppr_values_on_demand:
+                # calculate all ppr scores beforehand, instead of calculating them on demand
+                # this improves training/attack speed as there's no need to check whether the
+                # required ppr scores are already cached or not
+                missing_ppr_idx = self._get_uncached(np.arange(self.shape[0]))
+                if len(missing_ppr_idx) > 0:
+                    self._calc_ppr(missing_ppr_idx)
+                    self.save_to_storage()
+                    logging.info(
+                        f"Memory after computing all missing ppr values:{utils.get_max_memory_bytes() / (1024 ** 3)}")
+                    self.has_missing_ppr_values = False
 
         logging.info("Memory after loading CachedPPRMatrix from storage:")
         logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
@@ -898,7 +906,7 @@ class CachedPPRMatrix:
             logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
 
     def _sync_pprs(self):
-        if self.ppr_values_on_demand:
+        if self.has_missing_ppr_values:
             logging.info("Updating csr ppr matrix...")
             if self.csr_ppr is None:
                 self.csr_ppr = self.coo_ppr.tocsr()
@@ -913,7 +921,7 @@ class CachedPPRMatrix:
 
     def save_to_storage(self):
         self._sync_pprs()
-        if self.storage is not None:
+        if self.storage is not None and self.has_missing_ppr_values:
             logging.info("Save ppr to storage")
             self.storage_params["split_desc"] = "attack"
             rows, _ = self.csr_ppr.nonzero()
@@ -959,7 +967,7 @@ class CachedPPRMatrix:
         return uncached_csr_rows
 
     def __getitem__(self, key):
-        if self.ppr_values_on_demand:
+        if self.has_missing_ppr_values:
             row, col = self.csr_ppr._validate_indices(key)
             uncached_csr_rows = self._get_uncached(row)
             self._calc_ppr(uncached_csr_rows)
