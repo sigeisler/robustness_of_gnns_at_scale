@@ -578,7 +578,6 @@ class PPRGoWrapperBase():
                 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
                     optimizer, max_epochs)
 
-        best_loss = np.inf
         best_epoch_loss = np.inf
         num_batches = len(train_loader)
         step = 0
@@ -644,7 +643,7 @@ class PPRGoWrapperBase():
                 if it >= best_epoch + patience:
                     logging.info(f"Early stopping due to increase in validation loss")
                     break
-                logging.info(f"No decrease in validation loss in epoch {it}...")
+                logging.info(f"No decrease in validation loss in epoch {it} since best epoch {best_epoch} ...")
 
             # restore the best validation state
         self.load_state_dict(best_state)

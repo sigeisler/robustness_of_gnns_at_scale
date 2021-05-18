@@ -2,18 +2,18 @@ seml:
   name: papers_localprbcd
   executable: experiments/experiment_local_attack_direct.py
   project_root_dir: ../..
-  output_dir: seml/attack_local/output
+  output_dir: seml/attack_evasion_local_direct/output
 
 slurm:
   experiments_per_job: 1
   sbatch_options:
     gres: gpu:1       # num GPUs
-    mem: 420G          # memory
+    mem: 280G          # memory
     cpus-per-task: 4  # num cores
     time: 1-00:00     # max time, D-HH:MM
     qos: interactive 
     #qos: studentpriocpu
-    #qos: studentprio
+    qos: studentprio
     #partition: cpu
     
 
@@ -43,8 +43,8 @@ grid:
     type: choice
     options:
       - 0
-      # - 1
-      # - 5
+      - 1
+      - 5
       # - 42
       # - 100
 
@@ -54,8 +54,8 @@ localprbcd_pprgo:
     attack: LocalBatchedPRBCD
     model_label: Vanilla PPRGo Diffusion Embedding
     attack_params.loss_type: Margin
-    attack_params.search_space_size: 15_000
-    attack_params.lr_factor: 0.001
+    attack_params.search_space_size: 10_000
+    attack_params.lr_factor: 0.0005
 
 
 localprbcd_pprgo_median:

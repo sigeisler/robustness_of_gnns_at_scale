@@ -34,26 +34,25 @@ def config():
     # default params
     dataset = 'ogbn-arxiv'  # 'cora_ml'
     model_params = {
-        'label': 'Vanilla GCN',
-        'model': 'GCN',
-        'dropout': 0.5,
-        'n_filters': 64,
-        'hidden_size': 64,
-        'nlayers': 3,
-        'gdc_params': None,
-        'svd_params': None,
-        'batch_norm': False,
-        'jaccard_params': None,
-        'do_cache_adj_prep': True
+        # 'label': 'Vanilla GCN',
+        # 'model': 'GCN',
+        # 'dropout': 0.5,
+        # 'n_filters': 64,
+        # 'hidden_size': 64,
+        # 'nlayers': 3,
+        # 'gdc_params': None,
+        # 'svd_params': None,
+        # 'batch_norm': False,
+        # 'jaccard_params': None,
+        # 'do_cache_adj_prep': True
     }
     train_params = {
-        'lr': 1e-2,
-        'weight_decay': 5e-4,
-        'patience': 300,
-        'max_epochs': 2
+        # 'lr': 1e-2,
+        # 'weight_decay': 5e-4,
+        # 'patience': 300,
+        # 'max_epochs': 2
     }
     binary_attr = False
-    normalize_attr = False
     seed = 1
     artifact_dir = 'cache_debug'
     model_storage_type = 'pretrained'

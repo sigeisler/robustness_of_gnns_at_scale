@@ -10,19 +10,26 @@ slurm:
     gres: gpu:1       # num GPUs
     mem: 16G          # memory
     cpus-per-task: 4  # num cores
-    time: 0-08:00     # max time, D-HH:MM
+    time: 1-00:00     # max time, D-HH:MM
+    #partition: cpu
+    #qos: studentpriocpu
+    qos: studentprio
 
 fixed:
-  data_dir: datasets/
-  epsilons: [0.5, 0.75, 1]
+  data_dir: datasets
+  epsilons: [0.5, 0.75, 1.0, 2.0]
   model_storage_type: pretrained
   artifact_dir: cache
-  display_steps: 20
   nodes: None
+  nodes_topk: 40
+  attack_params.epochs: 400
+  attack_params.fine_tune_epochs: 100
+  attack_params.search_space_size: 10_000
+  attack_params.ppr_recalc_at_end: True
+  attack_params.loss_type: Margin
   device: 0
-  data_device: cpu
+  data_device: 0
   binary_attr: False
-  make_undirected: True
 
 grid:
   seed:
@@ -31,55 +38,50 @@ grid:
       - 0
       - 1
       - 5
-
   dataset:
     type: choice
     options:
       - cora_ml
       - citeseer
+  make_undirected:
+    type: choice
+    options:
+      - True
+      - False
 
 localprbcd_gcn:
   fixed:
     attack: LocalPRBCD
     model_label: Vanilla GCN
     attack_params:
-      lr_factor: 0.02
-      search_space_size: 10_000
-      ppr_recalc_at_end: True
+      lr_factor: 0.05
 
 pprgo_localprbcd:
   fixed:
+    attack: LocalBatchedPRBCD
     model_label: Vanilla PPRGo
     attack_params:
       lr_factor: 0.05
-      search_space_size: 10_000
-      ppr_recalc_at_end: True
 
 meidan_1_0_pprgo_localprbcd:
   fixed:
-    attack: LocalPRBCD
+    attack: LocalBatchedPRBCD
     model_label: Soft Median RPPRGo (T=1.0)
     attack_params:
       lr_factor: 0.25
-      search_space_size: 10_000
-      ppr_recalc_at_end: True
 
 
 meidan_0_5_pprgo_localprbcd:
   fixed:
-    attack: LocalPRBCD
+    attack: LocalBatchedPRBCD
     model_label: Soft Median RPPRGo (T=0.5)
     attack_params:
       lr_factor: 0.25
-      search_space_size: 10_000
-      ppr_recalc_at_end: True
 
 
 meidan_0_2_pprgo_localprbcd:
   fixed:
-    attack: LocalPRBCD
+    attack: LocalBatchedPRBCD
     model_label: Soft Median RPPRGo (T=0.2)
     attack_params:
       lr_factor: 0.25
-      search_space_size: 10_000
-      ppr_recalc_at_end: True
