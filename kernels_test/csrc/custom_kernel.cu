@@ -169,6 +169,43 @@ __global__ void dimmedian_idx_cuda_forward_kernel(
     free(localPerm);
 }
 
+template <typename scalar_t>
+__global__ void dimmedian_idx_cuda_sorted_forward_kernel(
+    const torch::PackedTensorAccessor32<scalar_t, 1, torch::RestrictPtrTraits> csrPtr,
+    const torch::PackedTensorAccessor32<scalar_t, 1, torch::RestrictPtrTraits> rowIdx,
+    const torch::PackedTensorAccessor32<scalar_t, 1, torch::RestrictPtrTraits> colIdx,
+    const torch::PackedTensorAccessor32<float, 1, torch::RestrictPtrTraits> weight,
+    torch::PackedTensorAccessor32<scalar_t, 2, torch::RestrictPtrTraits> outIdx,
+    const int64_t m,
+    const int64_t d)
+{
+    const int row = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (row >= m)
+    {
+        return;
+    }
+
+    const int start = csrPtr[row];
+    const int end = csrPtr[row + 1];
+
+    float weightSum = 0;
+    for (int j = start; j < end; j++)
+    {
+        weightSum = weightSum + weight[j];
+    }
+
+    float cumSumPrefix = 0;
+    int medianIndex = -1;
+    for (int k = start; cumSumPrefix < weightSum / 2; k++)
+    {
+        cumSumPrefix = cumSumPrefix + weight[k];
+        medianIndex = k;
+    }
+    
+    outIdx[row][d] = colIdx[medianIndex];
+}
+
 void coo2csr(cusparseHandle_t handle, const int *cooRowIdx, int64_t nnz, int64_t m, int *csrPtr)
 {
     TORCH_CHECK((m <= INT_MAX) && (nnz <= INT_MAX),
@@ -321,13 +358,6 @@ at::Tensor dimmedian_idx_forward_cuda(
     torch::Tensor rowIndices = edge_idx.select(0, 0);
     torch::Tensor colIndices = edge_idx.select(0, 1);
 
-    size_t limit = 0;
-    cudaDeviceGetLimit(&limit, cudaLimitMallocHeapSize);
-    printf("cudaDeviceGetLimit(&limit, cudaLimitMallocHeapSize): %d\n", limit);
-    if(limit < 4*1024*1024*1024) {
-        cudaDeviceSetLimit(cudaLimitMallocHeapSize, 4*1024*1024*1024);
-    }
-
     cusparseHandle_t handle = NULL;
     cusparseCreate(&handle);
 
@@ -339,19 +369,44 @@ at::Tensor dimmedian_idx_forward_cuda(
     colIndicesInt.copy_(colIndices);
     coo2csr(handle, rowIndicesInt.data_ptr<int32_t>(), nnz, n_rows, csrPtr.data_ptr<int32_t>());
 
-    const dim3 n_blocks(ceil((float) n_rows * d / n_threads));
+    torch::Tensor reverseIdx = torch::argsort(attr, 0);
+    torch::Tensor valueIdx = torch::argsort(reverseIdx, 0).to(torch::kInt32);
+
     torch::Tensor outIdx = torch::full({n_rows, d}, -1, attr.options().dtype(torch::kInt32));
-    AT_DISPATCH_INTEGRAL_TYPES(csrPtr.scalar_type(), "dimmedian_idx_cuda_forward", ([&] {
-                                   dimmedian_idx_cuda_forward_kernel<scalar_t><<<n_blocks, n_threads>>>(
-                                       csrPtr.packed_accessor32<scalar_t, 1, torch::RestrictPtrTraits>(),
-                                       rowIndicesInt.packed_accessor32<scalar_t, 1, torch::RestrictPtrTraits>(),
-                                       colIndicesInt.packed_accessor32<scalar_t, 1, torch::RestrictPtrTraits>(),
-                                       values.packed_accessor32<float, 1, torch::RestrictPtrTraits>(),
-                                       attr.packed_accessor32<float, 2, torch::RestrictPtrTraits>(),
-                                       outIdx.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
-                                       n_rows,
-                                       d);
-                               }));
+    for (int i = 0; i < d; i++) {
+        // Sort values per row
+        torch::Tensor sortedValues = torch::empty({values.size(0)}, rowIndices.options().dtype(torch::kFloat32));
+        // datatype hack...
+        torch::Tensor sortedColIndicesInt = torch::empty({colIndicesInt.size(0)}, colIndicesInt.options().dtype(torch::kFloat32));
+        torch::Tensor valueIdxSliced = valueIdx.index({colIndices, i});
+
+        csrsort(handle,
+                n_rows,
+                n_rows,
+                nnz,
+                csrPtr.data_ptr<int32_t>(),
+                valueIdxSliced.data_ptr<int32_t>(),
+                values.data_ptr<float>(),
+                sortedValues.data_ptr<float>(),
+                colIndicesInt.to(torch::kFloat32).data_ptr<float>(), // datatype hack...
+                sortedColIndicesInt.data_ptr<float>());
+        // datatype hack...
+        sortedColIndicesInt = sortedColIndicesInt.to(torch::kInt32);
+
+        const dim3 n_blocks(ceil((float) n_rows / n_threads));
+        AT_DISPATCH_INTEGRAL_TYPES(csrPtr.scalar_type(), "dimmedian_idx_cuda_sorted_forward", ([&] {
+                                    dimmedian_idx_cuda_sorted_forward_kernel<scalar_t><<<n_blocks, n_threads>>>(
+                                        csrPtr.packed_accessor32<scalar_t, 1, torch::RestrictPtrTraits>(),
+                                        rowIndicesInt.packed_accessor32<scalar_t, 1, torch::RestrictPtrTraits>(),
+                                        sortedColIndicesInt.packed_accessor32<scalar_t, 1, torch::RestrictPtrTraits>(),
+                                        sortedValues.packed_accessor32<float, 1, torch::RestrictPtrTraits>(),
+                                        outIdx.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
+                                        n_rows,
+                                        i);
+                                }));
+    }
+    cusparseDestroy(handle);
+
+
     return outIdx.to(torch::kInt64);
 }
-
