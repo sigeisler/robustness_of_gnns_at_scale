@@ -95,16 +95,6 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
 
-        # evaluate clean accuracy
-        adversary.set_pertubations(adj, attr)
-
-        logits, accuracy = adversary.evaluate_global(idx_test)
-        results.append({
-            'label': model_label,
-            'epsilon': 0,
-            'accuracy': accuracy
-        })
-
     assert len(results) > 0
 
     return {

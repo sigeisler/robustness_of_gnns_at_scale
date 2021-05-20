@@ -407,6 +407,9 @@ def get_ppr_matrix(adjacency_matrix: torch.Tensor,
         device = adjacency_matrix.device
         adjacency_matrix = adjacency_matrix.cpu()
 
+    if adjacency_matrix.is_sparse:
+        adjacency_matrix = adjacency_matrix.to_dense()
+
     dtype = adjacency_matrix.dtype
 
     adjacency_matrix = alpha * torch.inverse(
