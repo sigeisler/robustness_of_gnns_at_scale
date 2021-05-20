@@ -301,11 +301,12 @@ def calc_ppr_update_sparse_result(ppr: sp.csr_matrix,
     )
 
     ppr_pert_update = alpha * P_uv_inv
+    topk_values, topk_indices = ppr_pert_update.squeeze().topk(p.nnz())
 
     return SparseTensor(
-        row=torch.zeros(col_mask.sum(), device=row.device(), dtype=torch.long),
-        col=torch.arange(num_nodes, device=row.device())[col_mask],
-        value=ppr_pert_update.squeeze(),
+        row=torch.zeros(topk_indices.shape[0], device=row.device(), dtype=torch.long),
+        col=torch.arange(num_nodes, device=row.device())[col_mask][topk_indices],
+        value=topk_values.squeeze(),
         sparse_sizes=(1, num_nodes)
     )
 

@@ -8,10 +8,10 @@ slurm:
   experiments_per_job: 1
   sbatch_options:
     gres: gpu:1       # num GPUs
-    mem: 280G          # memory
-    cpus-per-task: 4  # num cores
-    time: 1-00:00     # max time, D-HH:MM
-    qos: interactive 
+    mem: 400G          # memory
+    cpus-per-task: 8  # num cores
+    time: 2-00:00     # max time, D-HH:MM
+    #qos: interactive 
     #qos: studentpriocpu
     qos: studentprio
     #partition: cpu
@@ -49,13 +49,13 @@ grid:
       # - 100
 
 
-localprbcd_pprgo:
-  fixed:
-    attack: LocalBatchedPRBCD
-    model_label: Vanilla PPRGo Diffusion Embedding
-    attack_params.loss_type: Margin
-    attack_params.search_space_size: 10_000
-    attack_params.lr_factor: 0.0005
+# localprbcd_pprgo:
+#   fixed:
+#     attack: LocalBatchedPRBCD
+#     model_label: Vanilla PPRGo Diffusion Embedding
+#     attack_params.loss_type: Margin
+#     attack_params.search_space_size: 10_000
+#     attack_params.lr_factor: 0.0005
 
 
 localprbcd_pprgo_median:
