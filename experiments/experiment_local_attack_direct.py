@@ -87,7 +87,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
             logging.error(f"Failed to instantiate attack {attack} for model '{model_label}'.")
             continue
 
-        if nodes is None or isinstance(nodes, collections.Sequence) or not nodes:
+        if nodes is None or not isinstance(nodes, collections.Sequence) or not nodes:
             nodes = get_local_attack_nodes(attr, adj, labels, model, idx_test, device, 
                                            topk=int(nodes_topk / 4), min_node_degree=int(1 / min(epsilons)))
         nodes = [int(i) for i in nodes]

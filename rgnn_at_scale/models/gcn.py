@@ -75,6 +75,7 @@ class ChainableGCNConv(GCNConv):
 ACTIVATIONS = {
     "ReLU": nn.ReLU(),
     "Tanh": nn.Tanh(),
+    "ELU": nn.ELU(),
     "Identiy": nn.Identity()
 }
 

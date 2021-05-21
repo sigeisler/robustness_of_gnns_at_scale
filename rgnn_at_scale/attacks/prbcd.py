@@ -194,7 +194,7 @@ class PRBCD(SparseAttack):
             f'search space size mismatch: {is_in_search_space.sum()} vs. {self.current_search_space.size(0)}'
         modified_edge_weight = edge_weight[is_in_search_space]
         original_edge_weight = modified_edge_weight - self.modified_edge_weight_diff
-        does_original_edge_exist = torch.isclose(original_edge_weight, torch.tensor(1.))
+        does_original_edge_exist = torch.isclose(original_edge_weight.float(), torch.tensor(1.))
         # for source, dest in self.modified_edge_index[:, does_original_edge_exist].T:
         #     weight = self.edge_weight[(self.edge_index[0] == source) & (self.edge_index[1] == dest)]
         #     assert weight == 1, f'For edge ({source}, {dest}) the weight is not 1, it is {weight}'
