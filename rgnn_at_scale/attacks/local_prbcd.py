@@ -87,7 +87,7 @@ class LocalPRBCD(SparseLocalAttack):
             gradient = grad_with_checkpoint(loss, self.modified_edge_weight_diff)[0]
 
             if torch.cuda.is_available():
-                logging.info(torch.cuda.max_memory_allocated() / (1024 ** 3))
+                logging.info(torch.cuda.memory_allocated() / (1024 ** 3))
 
             if torch.cuda.is_available() and self.do_synchronize:
                 torch.cuda.empty_cache()
@@ -109,6 +109,8 @@ class LocalPRBCD(SparseLocalAttack):
                     logging.info(f'\nEpoch: {epoch} Loss: {loss.item()} Statstics: {classification_statistics}\n')
                     logging.info(
                         f"Gradient mean {gradient.abs().mean().item()} std {gradient.abs().std().item()} with base learning rate {n_perturbations * self.lr_factor}")
+                    if torch.cuda.is_available():
+                        logging.info(torch.cuda.memory_allocated() / (1024 ** 3))
 
                 if self.with_early_stropping and best_margin > classification_statistics['margin']:
                     best_margin = classification_statistics['margin']
@@ -132,16 +134,25 @@ class LocalPRBCD(SparseLocalAttack):
         # For the case that the attack was not successfull
         if best_margin > statistics_orig['margin']:
             self.perturbed_edges = torch.tensor([])
-            self.adj_adversary = self.adj
+            self.adj_adversary = None
             self.attr_adversary = self.attr
+            logging.info(f"Failed to attack node {node_idx} with n_perturbations={n_perturbations}")
             return None
 
         if self.with_early_stropping:
             self.current_search_space = best_search_space.to(self.device)
             self.modified_edge_weight_diff = best_edge_weight_diff.to(self.device)
 
+        if torch.cuda.is_available() and self.do_synchronize:
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+
         self.adj_adversary = self.sample_final_edges(node_idx, n_perturbations)
         self.perturbed_edges = self.calc_perturbed_edges(node_idx)
+
+        if torch.cuda.is_available() and self.do_synchronize:
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
 
     def get_logits(self, model: MODEL_TYPE, node_idx: int, perturbed_graph: SparseTensor = None):
         if perturbed_graph is None:

@@ -80,6 +80,8 @@ def construct_sparse(neighbors, weights, shape):
 def topk_ppr_matrix(adj_matrix, alpha, eps, idx, topk, normalization='row'):
     """Create a sparse matrix where each node has up to the topk PPR neighbors and their weights."""
 
+    adj_matrix.eliminate_zeros()
+
     topk_matrix = ppr_topk(adj_matrix, alpha, eps, idx, topk).tocsr()
 
     if normalization == 'sym':
