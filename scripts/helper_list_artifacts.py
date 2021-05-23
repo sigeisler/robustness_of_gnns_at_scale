@@ -14,9 +14,9 @@ parser = argparse.ArgumentParser(
     description='Sparse smoothing results on the pretrained models (with binary attributes).',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter
 )
-parser.add_argument('--artifact_dir', type=str, default='cache_debug',
+parser.add_argument('--artifact_dir', type=str, default='cache',
                     help='Dir where the artifacts (e.g. models) are located at.')
-parser.add_argument('--artifact_type', type=str, default='victim_cora_2',
+parser.add_argument('--artifact_type', type=str, default='pretrained',
                     help='Type of the artifact (should related to a `<type>.json` file in `artifact_dir`).')
 parser.add_argument('--filer_kwargs', type=json.loads, default='{}', help='Further filer kwargs.')
 parser.add_argument('--output_csv', type=str, default='./artifacts.csv', help='Output of artifacts.')
@@ -24,7 +24,8 @@ parser.add_argument('--output_csv', type=str, default='./artifacts.csv', help='O
 
 def main(args: argparse.Namespace):
     storage = Storage(args.artifact_dir)
-    artifacts = storage.find_artifacts(args.artifact_type, match_condition=args.filer_kwargs)
+    artifacts = storage.find_artifacts(
+        args.artifact_type, match_condition=args.filer_kwargs, return_documents_only=True)
 
     df_artifacts = pd.DataFrame([
         {'_id': artifact['id'], 'time': artifact['time'], **artifact['params']}

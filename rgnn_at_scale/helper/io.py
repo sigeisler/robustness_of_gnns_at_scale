@@ -221,7 +221,7 @@ class Storage():
         else:
             return torch.load(path)
 
-    def find_artifacts(self, artifact_type: str, match_condition: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def find_artifacts(self, artifact_type: str, match_condition: Dict[str, Any], return_documents_only=False) -> List[Dict[str, Any]]:
         """Find all artifacts matching the defined parameters.
 
         Parameters
@@ -249,7 +249,9 @@ class Storage():
             document_id = document.doc_id
             document = dict(document)
             document['id'] = document_id
-            document['artifact'] = torch.load(self._build_artifact_path(artifact_type, document_id))
+
+            if not return_documents_only:
+                document['artifact'] = torch.load(self._build_artifact_path(artifact_type, document_id))
             documents.append(document)
         return documents
 
