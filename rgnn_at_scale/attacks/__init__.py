@@ -1,20 +1,20 @@
 from typing import Union
-import torch
 
 from .dice import DICE
 from .fgsm import FGSM
 from .gang import GANG
 from .greedy_rbcd import GreedyRBCD
 from .local_prbcd import LocalPRBCD
+from .local_dice import LocalDICE
 from .local_prbcd_batched import LocalBatchedPRBCD
 from .pgd import PGD
 from .prbcd import PRBCD
 from .nettack import Nettack
 from .base_attack import Attack
 
-ATTACK_TYPE = Union[DICE, FGSM, GANG, GreedyRBCD, LocalPRBCD, PGD, PRBCD, Nettack, LocalBatchedPRBCD]
+ATTACK_TYPE = Union[DICE, FGSM, GANG, GreedyRBCD, LocalPRBCD, PGD, PRBCD, Nettack, LocalBatchedPRBCD, LocalDICE]
 SPARSE_ATTACKS = [GANG.__name__, GreedyRBCD.__name__, PRBCD.__name__, DICE.__name__]
-LOCAL_ATTACKS = [LocalPRBCD.__name__, Nettack.__name__, LocalBatchedPRBCD.__name__]
+LOCAL_ATTACKS = [LocalPRBCD.__name__, Nettack.__name__, LocalBatchedPRBCD.__name__, LocalDICE.__name__]
 
 
 def create_attack(attack: str, *args, **kwargs) -> Attack:
@@ -38,5 +38,5 @@ def create_attack(attack: str, *args, **kwargs) -> Attack:
     return globals()[attack](*args, **kwargs)
 
 
-__all__ = [FGSM, GANG, GreedyRBCD, LocalPRBCD, LocalBatchedPRBCD,
+__all__ = [FGSM, GANG, GreedyRBCD, LocalPRBCD, LocalBatchedPRBCD, LocalDICE,
            PRBCD, create_attack, ATTACK_TYPE, SPARSE_ATTACKS, Nettack]

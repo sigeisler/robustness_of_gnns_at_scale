@@ -29,6 +29,11 @@ def config():
     dataset = 'citeseer'  # Options are 'cora_ml' and 'citeseer' (or with a big GPU 'pubmed')
     attack = 'LocalBatchedPRBCD'
     attack_params = {
+        # "epochs": 30,
+        # "fine_tune_epochs": 10,
+        # "display_step": 1,
+        # "do_synchronize": True,
+        # "ppr_recalc_at_end": True,
         "ppr_cache_params": {
             "data_artifact_dir": "cache",
             "data_storage_type": "ppr"
@@ -37,8 +42,8 @@ def config():
     nodes = None
     nodes_topk = 40
 
-    epsilons = [0.5]  # , 0.75, 1]
-    seed = 1
+    epsilons = [0.1]  # , 0.5, 0.75, 1]
+    seed = 0
 
     artifact_dir = "cache"
     model_storage_type = 'pretrained'
@@ -48,8 +53,8 @@ def config():
     binary_attr = False
     make_undirected = False
 
-    data_device = 'cpu'
-    device = "cpu"
+    data_device = "cpu"
+    device = 0
     debug_level = "info"
 
 
@@ -71,6 +76,9 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
     models_and_hyperparams = storage.find_models(model_storage_type, model_params)
     logging.info(f"Found {len(models_and_hyperparams)} models with label '{model_label}' to attack.")
 
+    if model_label is not None and model_label:
+        assert len(models_and_hyperparams) == 1, "When specifying a model_label only one model is expected to be found"
+
     for model, hyperparams in models_and_hyperparams:
         model.to(device)
         model_label = hyperparams["label"]
@@ -87,8 +95,8 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
             logging.error(f"Failed to instantiate attack {attack} for model '{model_label}'.")
             continue
 
-        if nodes is None or isinstance(nodes, collections.Sequence) or not nodes:
-            nodes = get_local_attack_nodes(attr, adj, labels, model, idx_test, device, 
+        if nodes is None or not isinstance(nodes, collections.Sequence) or not nodes:
+            nodes = get_local_attack_nodes(attr, adj, labels, model, idx_test, device,
                                            topk=int(nodes_topk / 4), min_node_degree=int(1 / min(epsilons)))
         nodes = [int(i) for i in nodes]
 
