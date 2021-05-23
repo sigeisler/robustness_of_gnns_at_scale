@@ -118,15 +118,15 @@ def sample_attack_nodes(logits: torch.Tensor, labels: torch.Tensor, nodes_idx, a
 
     suitable_nodes_mask = (node_degrees >= min_node_degree).cpu()
 
-    logging.info(
-        f"Found {sum(suitable_nodes_mask)} suitable '{min_node_degree}+ degree' nodes out of {len(nodes_idx)} candidate nodes to be sampled from for the attack")
-    assert sum(suitable_nodes_mask) >= (topk * 4), \
-        f"There are not enough suitable nodes to sample {(topk*4)} nodes from"
-
     labels = labels.cpu()[suitable_nodes_mask]
     logits = logits.cpu()[suitable_nodes_mask]
 
     correctly_classifed = logits.max(-1).indices == labels
+
+    logging.info(
+        f"Found {sum(suitable_nodes_mask)} suitable '{min_node_degree}+ degree' nodes out of {len(nodes_idx)} candidate nodes to be sampled from for the attack of which {correctly_classifed.sum().item()} have the correct class label")
+    assert sum(suitable_nodes_mask) >= (topk * 4), \
+        f"There are not enough suitable nodes to sample {(topk*4)} nodes from"
 
     _, max_confidence_nodes_idx = torch.topk(logits[correctly_classifed].max(-1).values, k=topk)
     _, min_confidence_nodes_idx = torch.topk(-logits[correctly_classifed].max(-1).values, k=topk)
@@ -134,7 +134,8 @@ def sample_attack_nodes(logits: torch.Tensor, labels: torch.Tensor, nodes_idx, a
     rand_nodes_idx = np.arange(correctly_classifed.sum().item())
     rand_nodes_idx = np.setdiff1d(rand_nodes_idx, max_confidence_nodes_idx)
     rand_nodes_idx = np.setdiff1d(rand_nodes_idx, min_confidence_nodes_idx)
-    rand_nodes_idx = np.random.choice(rand_nodes_idx, size=(topk * 2), replace=False)
+    rnd_sample_size = min((topk * 2), len(rand_nodes_idx))
+    rand_nodes_idx = np.random.choice(rand_nodes_idx, size=rnd_sample_size, replace=False)
 
     return (np.array(nodes_idx[suitable_nodes_mask][correctly_classifed][max_confidence_nodes_idx])[None].flatten(),
             np.array(nodes_idx[suitable_nodes_mask][correctly_classifed][min_confidence_nodes_idx])[None].flatten(),

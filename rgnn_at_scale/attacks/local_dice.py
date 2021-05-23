@@ -24,7 +24,7 @@ class LocalDICE(SparseLocalAttack):
 
     """
 
-    def __init__(self, add_ratio: float = 0.6, **kwargs):
+    def __init__(self, add_ratio: float = 1.0, **kwargs):
         super().__init__(**kwargs)
 
         assert not self.make_undirected, 'Attack only implemented for directed graphs'
@@ -52,12 +52,16 @@ class LocalDICE(SparseLocalAttack):
 
         # 3. sample edges to nodes of not in 2. and add them
         exlude_from_add_idx = [node_idx] + neighbors_idx.tolist()
-        add_neighbors_idx = self._sample_additions(n_perturbations, same_class_mask.sum(), exclude=exlude_from_add_idx)
+        add_neighbors_idx = self._sample_additions(
+            node_idx, n_perturbations, min(delete_budget, same_class_mask.sum()), exclude=exlude_from_add_idx)
 
         # 4. sample edges to nodes of 2. and delete them
-        delete_neighbors_idx = neighbors_idx[same_class_mask][torch.randperm(same_class_mask.sum())][: delete_budget]
-        delete_neighbors_mask = (neighbors_idx.repeat(delete_neighbors_idx.shape[0]).view(
-            delete_neighbors_idx.shape[0], -1) == delete_neighbors_idx[:, None].repeat(1, neighbors_idx.shape[0])).any(dim=0)
+        delete_neighbors_mask = torch.full_like(neighbors_idx, False)
+        if delete_budget > 0:
+            delete_neighbors_idx = neighbors_idx[same_class_mask][torch.randperm(
+                same_class_mask.sum())][: delete_budget]
+            delete_neighbors_mask = (neighbors_idx.repeat(delete_neighbors_idx.shape[0]).view(
+                delete_neighbors_idx.shape[0], -1) == delete_neighbors_idx[:, None].repeat(1, neighbors_idx.shape[0])).any(dim=0)
 
         # 5. build perturbed adjacency
         A_rows, A_cols, A_vals = self.adj.coo()
@@ -77,7 +81,7 @@ class LocalDICE(SparseLocalAttack):
         self.perturbed_edges = i_idx
         self.adj_adversary = SparseTensor.from_edge_index(A_idx, A_weights, (self.n, self.n))
 
-    def _sample_additions(self,  n_perturbations, n_deletions, exclude=[],):
+    def _sample_additions(self, node_idx, n_perturbations, n_deletions, exclude=[],):
         """Randomly random sample edges from adjacency matrix, `exclude` is a set
         which contains the edges we do not want to sample and the ones already sampled
         """
@@ -85,7 +89,7 @@ class LocalDICE(SparseLocalAttack):
         additions_idx = []
         while len(additions_idx) < n_perturbations - n_deletions:
             possible_edge = torch.randint(self.n, (1, 1)).item()
-            if possible_edge not in exclude:
+            if possible_edge not in exclude and self.labels[possible_edge] != self.labels[node_idx]:
                 additions_idx.append(possible_edge)
                 exclude.append(possible_edge)
         return torch.tensor(additions_idx, dtype=torch.long)

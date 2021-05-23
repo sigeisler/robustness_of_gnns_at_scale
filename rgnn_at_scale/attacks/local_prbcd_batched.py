@@ -53,18 +53,23 @@ class LocalBatchedPRBCD(LocalPRBCD):
 
         if self.ppr_recalc_at_end:
             adj = self.perturb_graph(node_idx, only_update_adj=True, n_perturbations=n_perturbations)
-            # Handle disconnected nodes
-            disconnected_nodes = (adj.sum(0) == 0).nonzero().flatten()
-            if disconnected_nodes.nelement():
-                adj = SparseTensor(row=torch.cat((adj.storage.row(), disconnected_nodes)),
-                                   col=torch.cat((adj.storage.col(), disconnected_nodes)),
-                                   value=torch.cat((adj.storage.col(), torch.full_like(disconnected_nodes, 1e-9))))
+
+            if self.make_undirected:
+                # Handle disconnected nodes
+                disconnected_nodes = (adj.sum(0) == 0).nonzero().flatten()
+                if disconnected_nodes.nelement():
+                    logging.info(
+                        f'Adding {disconnected_nodes.nelement()} nodes back into perturbed adjacency that would have disconnected the graph.')
+                    adj = SparseTensor(row=torch.cat((adj.storage.row(), disconnected_nodes)),
+                                       col=torch.cat((adj.storage.col(), disconnected_nodes)),
+                                       value=torch.cat((adj.storage.col(), torch.full_like(disconnected_nodes, 1e-9))))
+
             sp_adj = adj.to_scipy(layout="csr")
             perturbed_graph = ppr.topk_ppr_matrix(sp_adj,
                                                   self.attacked_model.alpha,
                                                   self.attacked_model.eps,
                                                   np.array([node_idx]),
-                                                  self.attacked_model.topk + n_perturbations,
+                                                  self.attacked_model.topk,
                                                   normalization=self.attacked_model.ppr_normalization)
             perturbed_graph = SparseTensor.from_scipy(perturbed_graph)
 

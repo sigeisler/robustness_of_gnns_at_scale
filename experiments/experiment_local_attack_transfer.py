@@ -1,3 +1,4 @@
+import collections
 import logging
 import warnings
 from typing import Any, Dict, Sequence, Union
@@ -34,12 +35,13 @@ def config():
     nodes_topk = 40
 
     epsilons = [0.5, 0.75, 1]
-    seed = 0
+    min_node_degree = None
+    seed = 1
 
     artifact_dir = "cache"
 
     model_storage_type = 'pretrained'
-    model_label = "Vanilla GCN"
+    model_label = "Vanilla PPRGo"
 
     surrogate_model_storage_type = "pretrained_linear"
     surrogate_model_label = 'Linear GCN'
@@ -55,7 +57,7 @@ def config():
 
 @ex.automain
 def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any], nodes: str, seed: int,
-        epsilons: Sequence[float], binary_attr: bool, make_undirected: bool, artifact_dir: str, nodes_topk: int,
+        epsilons: Sequence[float], min_node_degree: int, binary_attr: bool, make_undirected: bool, artifact_dir: str, nodes_topk: int,
         model_label: str, model_storage_type: str, device: Union[str, int], surrogate_model_storage_type: str,
         surrogate_model_label: str, data_device: Union[str, int], debug_level: str):
 
@@ -101,9 +103,16 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
             continue
 
         tmp_nodes = np.array(nodes)
-        if nodes is None:
+        if nodes is None or not isinstance(nodes, collections.Sequence) or not nodes:
+            minimal_degree = min_node_degree
+            if minimal_degree is None:
+                minimal_degree = int(1 / min(epsilons))
+
+            assert minimal_degree >= int(
+                1 / min(epsilons)), f"The min_node_degree has to be smaller than 'int(1 / min(epsilons)' == {int(1 / min(epsilons))}"
+
             tmp_nodes = get_local_attack_nodes(attr, adj, labels, model,
-                                               idx_test, device,  topk=int(nodes_topk / 4), min_node_degree=int(1 / min(epsilons)))
+                                               idx_test, device,  topk=int(nodes_topk / 4), min_node_degree=minimal_degree)
         tmp_nodes = [int(i) for i in tmp_nodes]
         for node in tmp_nodes:
             degree = adj[node].sum()

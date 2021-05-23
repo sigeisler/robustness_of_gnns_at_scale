@@ -26,12 +26,14 @@ def config():
         ex.observers.append(seml.create_mongodb_observer(db_collection, overwrite=overwrite))
 
     # default params
-    dataset = 'citeseer'  # Options are 'cora_ml' and 'citeseer' (or with a big GPU 'pubmed')
-    attack = 'LocalBatchedPRBCD'
+    dataset = 'ogbn-papers100M'  # Options are 'cora_ml' and 'citeseer' (or with a big GPU 'pubmed')
+    attack = 'LocalDICE'
     attack_params = {
-        # "epochs": 30,
-        # "fine_tune_epochs": 10,
-        # "display_step": 1,
+        # "epochs": 10,
+        # "fine_tune_epochs": 5,
+        # "search_space_size": 10_000,
+        # "lr_factor": 0.05,
+        # "display_step": 10,
         # "do_synchronize": True,
         # "ppr_recalc_at_end": True,
         "ppr_cache_params": {
@@ -42,12 +44,13 @@ def config():
     nodes = None
     nodes_topk = 40
 
-    epsilons = [0.1]  # , 0.5, 0.75, 1]
+    epsilons = [0.05, 0.1, 0.25, 0.5]  # , 0.5, 0.75, 1]
+    min_node_degree = None
     seed = 0
 
     artifact_dir = "cache"
-    model_storage_type = 'pretrained'
-    model_label = 'Vanilla PPRGo'
+    model_storage_type = 'pretrained_papers100M'
+    model_label = 'Soft Median PPRGo Diffusion (T=0.1)'
 
     data_dir = './datasets'
     binary_attr = False
@@ -60,7 +63,7 @@ def config():
 
 @ex.automain
 def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any], nodes: str, nodes_topk: int, seed: int,
-        epsilons: Sequence[float], binary_attr: bool, make_undirected: bool, artifact_dir: str, model_label: str,
+        epsilons: Sequence[float], min_node_degree: int, binary_attr: bool, make_undirected: bool, artifact_dir: str, model_label: str,
         model_storage_type: str, device: Union[str, int], data_device: Union[str, int], debug_level: str):
 
     results = []
@@ -77,7 +80,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
     logging.info(f"Found {len(models_and_hyperparams)} models with label '{model_label}' to attack.")
 
     if model_label is not None and model_label:
-        assert len(models_and_hyperparams) == 1, "When specifying a model_label only one model is expected to be found"
+        assert len(models_and_hyperparams) == 1, "When specifying a model_label exactly one model is expected to be found"
 
     for model, hyperparams in models_and_hyperparams:
         model.to(device)
@@ -96,6 +99,13 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
             continue
 
         if nodes is None or not isinstance(nodes, collections.Sequence) or not nodes:
+            minimal_degree = min_node_degree
+            if minimal_degree is None:
+                minimal_degree = int(1 / min(epsilons))
+
+            assert minimal_degree >= int(
+                1 / min(epsilons)), f"The min_node_degree has to be smaller than 'int(1 / min(epsilons)' == {int(1 / min(epsilons))}"
+
             nodes = get_local_attack_nodes(attr, adj, labels, model, idx_test, device,
                                            topk=int(nodes_topk / 4), min_node_degree=int(1 / min(epsilons)))
         nodes = [int(i) for i in nodes]
