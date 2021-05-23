@@ -215,8 +215,8 @@ def calc_ppr_update_sparse_result(ppr: sp.csr_matrix,
     num_nodes = ppr.shape[0]
     assert ppr.shape[1] == Ai.size(1), "shapes of ppr and adjacency must be the same"
     # assert Ai[0, i].nnz() == 0, "The adjacency's must not have self loops"
-    assert (torch.logical_or(Ai.storage.value() == 1, Ai.storage.value() == 0)
-            ).all().item(), "The adjacency must be unweighted"
+    assert (torch.logical_or(Ai.storage.value() == 1, Ai.storage.value() == 0)).all().item(), \
+        "The adjacency must be unweighted"
     assert torch.all(p.storage.value() > 0), "For technical reasons all values in p must be greater than 0"
     assert torch.all(p.storage.value() <= 1), "All values in p must be less than 1"
 

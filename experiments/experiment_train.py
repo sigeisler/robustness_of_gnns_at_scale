@@ -168,8 +168,8 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
         trace_val, trace_train = trace if trace is not None else (None, None)
 
     else:
-        trace_val, trace_train = train(model=model, attr=attr, adj=adj, labels=labels, idx_train=idx_train,
-                                       idx_val=idx_val, display_step=display_steps, **train_params)
+        trace_val, trace_train, _, _ = train(model=model, attr=attr, adj=adj, labels=labels, idx_train=idx_train,
+                                             idx_val=idx_val, display_step=display_steps, **train_params)
 
     model.eval()
 

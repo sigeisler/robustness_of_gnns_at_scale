@@ -62,9 +62,11 @@ class LocalPRBCD(SparseLocalAttack):
 
         with torch.no_grad():
             logits_orig = self.get_surrogate_logits(node_idx).to(self.device)
-            loss_orig = self.calculate_loss(logits_orig, self.labels[node_idx][None]).to(self.device)
+            loss_orig = self.calculate_loss(logits_orig, self.labels[node_idx, None]).to(self.device)
             statistics_orig = LocalPRBCD.classification_statistics(logits_orig, self.labels[node_idx])
             logging.info(f'Original: Loss: {loss_orig.item()} Statstics: {statistics_orig}\n')
+            del logits_orig
+            del loss_orig
 
         for epoch in tqdm(range(self.epochs + self.fine_tune_epochs)):
             self.modified_edge_weight_diff.requires_grad = True

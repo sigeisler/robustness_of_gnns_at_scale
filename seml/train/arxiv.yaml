@@ -20,7 +20,7 @@ fixed:
     patience: 300
     max_epochs: 3000
   artifact_dir: cache
-  model_storage_type: victims_arxiv
+  model_storage_type: pretrained
   device: 0
   data_device: cpu
   make_undirected: True

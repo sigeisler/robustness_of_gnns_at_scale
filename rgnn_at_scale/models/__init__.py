@@ -1,5 +1,6 @@
 from typing import Any, Dict, Union
 
+from rgnn_at_scale.models.gat import RGAT
 from rgnn_at_scale.models.gcn import GCN, DenseGCN
 from rgnn_at_scale.models.rgnn import RGNN
 from rgnn_at_scale.models.rgcn import RGCN
@@ -26,24 +27,26 @@ def create_model(hyperparams: Dict[str, Any]) -> MODEL_TYPE:
     """
     if 'model' not in hyperparams or hyperparams['model'] == 'GCN':
         return GCN(**hyperparams)
+    if hyperparams['model'] == 'RGAT':
+        return RGAT(**hyperparams)
     if hyperparams['model'] == 'DenseGCN':
         return DenseGCN(**hyperparams)
     if hyperparams['model'] == 'RGCN':
         return RGCN(**hyperparams)
-    elif hyperparams['model'] == "PPRGoDiffEmbWrapper":
+    if hyperparams['model'] == "PPRGoDiffEmbWrapper":
         return PPRGoDiffEmbWrapper(**hyperparams)
-    elif hyperparams['model'] == "RobustPPRGoDiffEmb":
+    if hyperparams['model'] == "RobustPPRGoDiffEmb":
         return RobustPPRGoDiffEmbWrapper(**hyperparams)
-    elif hyperparams['model'] == "RobustPPRGo":
+    if hyperparams['model'] == "RobustPPRGo":
         return RobustPPRGoWrapper(**hyperparams)
-    elif hyperparams['model'] == "PPRGo":
+    if hyperparams['model'] == "PPRGo":
         return PPRGoWrapper(**hyperparams)
-    else:
-        return RGNN(**hyperparams)
+    return RGNN(**hyperparams)
 
 
 __all__ = [GCN,
            DenseGCN,
+           RGAT,
            RGNN,
            RGCN,
            PPRGoWrapperBase,
