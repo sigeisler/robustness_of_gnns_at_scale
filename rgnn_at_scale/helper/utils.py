@@ -346,11 +346,11 @@ def calc_ppr_update_dense(ppr: torch.Tensor,
                           alpha: float):
     num_nodes = A.shape[0]
     assert ppr.shape == A.shape, "shapes of ppr and adjacency must be the same"
-    assert (torch.diag(A) == torch.zeros(num_nodes)).all().item(), "The adjacency's must not have self loops"
+    assert (torch.diag(A) == torch.zeros(num_nodes, device=A.device)).all().item(), \
+        "The adjacency's must not have self loops"
     assert (torch.logical_or(A == 1, A == 0)).all().item(), "The adjacency must be unweighted"
 
-    u = torch.zeros((num_nodes, 1),
-                    dtype=torch.float32)
+    u = torch.zeros((num_nodes, 1), dtype=torch.float32, device=ppr.device)
     u[i] = 1
     v = torch.where(A[i] > 0, -p, p)
 

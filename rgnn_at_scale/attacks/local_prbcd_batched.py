@@ -1,10 +1,9 @@
-from typing import Dict, Optional, Any
+from typing import Dict, Any
 
 import logging
 
 import numpy as np
 import torch
-import torch_sparse
 from torch_sparse import SparseTensor
 
 from rgnn_at_scale.helper.utils import calc_ppr_update_sparse_result
@@ -13,7 +12,6 @@ from rgnn_at_scale.models import MODEL_TYPE, BATCHED_PPR_MODELS
 from rgnn_at_scale.attacks.local_prbcd import LocalPRBCD
 from rgnn_at_scale.helper import utils
 from rgnn_at_scale.helper import ppr_utils as ppr
-from rgnn_at_scale.helper.utils import to_symmetric
 from rgnn_at_scale.data import CachedPPRMatrix
 
 

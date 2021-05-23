@@ -77,6 +77,20 @@ class PRBCD(SparseAttack):
         best_epoch = float('-Inf')
         self.attack_statistics = defaultdict(list)
 
+        with torch.no_grad():
+            logits = self.attacked_model(
+                data=self.attr.to(self.device),
+                adj=(self.edge_index.to(self.device), self.edge_weight.to(self.device))
+            )
+            loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
+            accuracy = (
+                logits.argmax(-1)[self.idx_attack] == self.labels[self.idx_attack]
+            ).float().mean().item()
+            print(f'\nBefore the attack - Loss: {loss.item()} Accuracy: {100 * accuracy:.3f} %\n')
+            self._append_attack_statistics(loss.item(), accuracy, 0., 0.)
+            del logits
+            del loss
+
         for epoch in tqdm(range(self.epochs + self.fine_tune_epochs)):
             self.modified_edge_weight_diff.requires_grad = True
             edge_index, edge_weight = self.get_modified_adj()
