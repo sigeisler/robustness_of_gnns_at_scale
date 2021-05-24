@@ -99,7 +99,7 @@ class LocalDICE(SparseLocalAttack):
             perturbed_graph = self.adj
 
         if type(model) in BATCHED_PPR_MODELS.__args__:
-            return model.forward(self.attr.to(self.device), perturbed_graph, ppr_idx=np.array([node_idx]))
+            return model.forward(self.attr, perturbed_graph, ppr_idx=np.array([node_idx]))
         else:
             return model(data=self.attr.to(self.device), adj=perturbed_graph.to(self.device))[node_idx:node_idx + 1]
 
