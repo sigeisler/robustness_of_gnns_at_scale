@@ -19,7 +19,6 @@ fixed:
   data_dir: datasets
   dataset: ogbn-products
   binary_attr: False
-  epsilons: [0.05, 0.1, 0.25, 0.5]
   model_storage_type: victim_products
   artifact_dir: cache
   nodes: None
@@ -40,6 +39,13 @@ grid:
     options:
       # - True
       - False
+  epsilons:
+    type: choice
+    options:
+      - [0.05]
+      - [0.1]
+      - [0.25]
+      #- [0.05, 0.1, 0.25]
 
 # gcn_dice:
 #   fixed:

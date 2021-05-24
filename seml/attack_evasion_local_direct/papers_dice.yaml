@@ -20,7 +20,6 @@ fixed:
   data_dir: datasets
   dataset: ogbn-papers100M
   binary_attr: False
-  epsilons: [0.05, 0.1, 0.25]
   min_node_degree: 20
   model_storage_type: pretrained_papers100M
   artifact_dir: cache
@@ -42,6 +41,13 @@ grid:
     options:
       # - True
       - False
+  epsilons:
+    type: choice
+    options:
+      - [0.05]
+      - [0.1]
+      - [0.25]
+      #- [0.05, 0.1, 0.25]
 
 pprgo_localprbcd_seed0:
   fixed:
