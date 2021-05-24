@@ -1,0 +1,61 @@
+seml:
+  name: papers_dice
+  executable: experiments/experiment_local_attack_direct.py
+  project_root_dir: ../..
+  output_dir: seml/attack_evasion_local_direct/output
+
+slurm:
+  experiments_per_job: 1
+  sbatch_options:
+    gres: gpu:1       # num GPUs
+    mem: 210G          # memory
+    cpus-per-task: 4  # num cores
+    time: 1-00:00     # max time, D-HH:MM
+    # partition: cpu
+    # qos: studentpriocpu
+    qos: studentprio
+    #qos: interactive
+
+fixed:
+  data_dir: datasets
+  dataset: ogbn-papers100M
+  binary_attr: False
+  epsilons: [0.05, 0.1, 0.25]
+  min_node_degree: 20
+  model_storage_type: pretrained_papers100M
+  artifact_dir: cache
+  nodes: None
+  nodes_topk: 40
+  device: 0
+  data_device: cpu
+  debug_level: info
+
+grid:
+  seed:
+    type: choice
+    options:
+      - 0
+      # - 1
+      # - 5
+  make_undirected:
+    type: choice
+    options:
+      # - True
+      - False
+
+pprgo_localprbcd_seed0:
+  fixed:
+    attack: LocalDICE
+    model_label: Vanilla PPRGo Diffusion Embedding
+
+
+# meidan_0_5_pprgo_localprbcd_seed1:
+#   fixed:
+#     attack: LocalDICE
+#     model_label: Soft Median PPRGo Diffusion (T=0.5)
+
+
+meidan_0_1_pprgo_localprbcd_seed1:
+  fixed:
+    attack: LocalDICE
+    model_label: Soft Median PPRGo Diffusion (T=0.1)
