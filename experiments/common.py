@@ -3,6 +3,7 @@ import logging
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from sacred import Experiment
 from torch_sparse import SparseTensor
 
@@ -119,17 +120,17 @@ def sample_attack_nodes(logits: torch.Tensor, labels: torch.Tensor, nodes_idx, a
     suitable_nodes_mask = (node_degrees >= min_node_degree).cpu()
 
     labels = labels.cpu()[suitable_nodes_mask]
-    logits = logits.cpu()[suitable_nodes_mask]
+    confidences = F.softmax(logits.cpu()[suitable_nodes_mask], dim=-1)
 
-    correctly_classifed = logits.max(-1).indices == labels
+    correctly_classifed = confidences.max(-1).indices == labels
 
     logging.info(
         f"Found {sum(suitable_nodes_mask)} suitable '{min_node_degree}+ degree' nodes out of {len(nodes_idx)} candidate nodes to be sampled from for the attack of which {correctly_classifed.sum().item()} have the correct class label")
     assert sum(suitable_nodes_mask) >= (topk * 4), \
         f"There are not enough suitable nodes to sample {(topk*4)} nodes from"
 
-    _, max_confidence_nodes_idx = torch.topk(logits[correctly_classifed].max(-1).values, k=topk)
-    _, min_confidence_nodes_idx = torch.topk(-logits[correctly_classifed].max(-1).values, k=topk)
+    _, max_confidence_nodes_idx = torch.topk(confidences[correctly_classifed].max(-1).values, k=topk)
+    _, min_confidence_nodes_idx = torch.topk(-confidences[correctly_classifed].max(-1).values, k=topk)
 
     rand_nodes_idx = np.arange(correctly_classifed.sum().item())
     rand_nodes_idx = np.setdiff1d(rand_nodes_idx, max_confidence_nodes_idx)
