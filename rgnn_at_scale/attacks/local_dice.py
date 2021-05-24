@@ -38,10 +38,10 @@ class LocalDICE(SparseLocalAttack):
         # remove edges connecting to nodes of the same class
         # add edges connecting to nodes of different class
 
-        add_budget = round((n_perturbations * self.add_ratio), 0)
-        delete_budget = n_perturbations - add_budget
+        add_budget = int(round((n_perturbations * self.add_ratio), 0))
+        delete_budget = int(n_perturbations - add_budget)
 
-        # 1. get all outgoing edge indices of the given node
+        # 1. get all incoming edge indices of the given node
 
         adj_i = self.adj[node_idx]
         _, neighbors_idx, _ = adj_i.coo()
@@ -56,7 +56,7 @@ class LocalDICE(SparseLocalAttack):
             node_idx, n_perturbations, min(delete_budget, same_class_mask.sum()), exclude=exlude_from_add_idx)
 
         # 4. sample edges to nodes of 2. and delete them
-        delete_neighbors_mask = torch.full_like(neighbors_idx, False)
+        delete_neighbors_mask = torch.full_like(neighbors_idx, False, dtype=bool)
         if delete_budget > 0:
             delete_neighbors_idx = neighbors_idx[same_class_mask][torch.randperm(
                 same_class_mask.sum())][: delete_budget]
@@ -70,7 +70,7 @@ class LocalDICE(SparseLocalAttack):
         is_before = A_rows < node_idx
         is_after = A_rows > node_idx
 
-        i_col = torch.cat([neighbors_idx[~delete_neighbors_mask], add_neighbors_idx], dim=0)
+        i_col = torch.cat([neighbors_idx[~delete_neighbors_mask], add_neighbors_idx], dim=0).sort().values
         i_row = torch.full_like(i_col, node_idx)
         i_idx = torch.stack([i_row, i_col], dim=0)
         i_val = torch.ones(i_idx.shape[1])
@@ -81,7 +81,7 @@ class LocalDICE(SparseLocalAttack):
         self.perturbed_edges = i_idx
         self.adj_adversary = SparseTensor.from_edge_index(A_idx, A_weights, (self.n, self.n))
 
-    def _sample_additions(self, node_idx, n_perturbations, n_deletions, exclude=[],):
+    def _sample_additions(self, node_idx, n_perturbations, n_deletions, exclude=[]):
         """Randomly random sample edges from adjacency matrix, `exclude` is a set
         which contains the edges we do not want to sample and the ones already sampled
         """

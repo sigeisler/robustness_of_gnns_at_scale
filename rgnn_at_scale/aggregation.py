@@ -384,7 +384,7 @@ def weighted_dimwise_median(A: torch.sparse.FloatTensor, x: torch.Tensor, **kwar
     assert A.is_sparse
     N, D = x.shape
 
-    median_idx = custom_cuda_kernels.dimmedian_idx(x, A.indices(), A.values(), A.nnz(), N)
+    median_idx = custom_cuda_kernels.dimmedian_idx(x, A.indices(), A.values(), A._nnz(), N)
     col_idx = torch.arange(D, device=A.device).view(1, -1).expand(N, D)
     x_selected = x[median_idx, col_idx]
 
