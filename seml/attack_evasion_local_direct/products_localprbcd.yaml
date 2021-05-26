@@ -17,7 +17,6 @@ slurm:
 fixed:
   data_dir: datasets
   dataset: ogbn-products
-  epsilons: [0.5, 1.0]
   artifact_dir: cache
   model_storage_type: pretrained
   device: 0
@@ -38,12 +37,22 @@ grid:
       - 5
       # - 42
       # - 100
+
+  epsilons:
+    type: choice
+    options:
+      - [0.05]
+      - [0.1]
+      - [0.25]
+      - [0.5]
+      # - [0.75]
+      # - [1.0]
     
-  make_undirected: 
+  make_undirected:
     type: choice
     options:
       - False
-      - True
+      # - True
 
 
 localprbcd_GCN:
