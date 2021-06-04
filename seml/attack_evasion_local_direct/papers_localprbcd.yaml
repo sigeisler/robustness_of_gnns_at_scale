@@ -7,14 +7,14 @@ seml:
 slurm:
   experiments_per_job: 1
   sbatch_options:
-    # gres: gpu:1       # num GPUs
-    mem: 350G          # memory
-    cpus-per-task: 8  # num cores
+    gres: gpu:1       # num GPUs
+    mem: 380G          # memory
+    cpus-per-task: 4  # num cores
     time: 1-00:00     # max time, D-HH:MM
-    partition: cpu
-    qos: studentpriocpu
+    #partition: cpu
+    # qos: studentpriocpu
     #qos: interactive 
-    # qos: studentprio
+    qos: studentprio
     
 
 fixed:
@@ -25,7 +25,7 @@ fixed:
   nodes_topk: 40
   artifact_dir: cache
   model_storage_type: pretrained_papers100M
-  device: cpu
+  device: 0
   data_device: cpu
   debug_level: info
   make_undirected: False
@@ -51,34 +51,67 @@ grid:
       - [0.05]
       - [0.1]
       - [0.25]
+      - [0.5]
+      - [1.0]
       #- [0.05, 0.1, 0.25]
 
 
-localprbcd_pprgo:
+
+
+
+localprbcd_pprgo_vanilla:
   fixed:
     attack: LocalBatchedPRBCD
-    model_label: Vanilla PPRGo Diffusion Embedding
+    model_label: Vanilla PPRGo LowAcc
     attack_params.loss_type: Margin
     attack_params.search_space_size: 2_500
-    attack_params.lr_factor: 1e-2
+    attack_params.lr_factor: 1e-1
+
+localprbcd_pprgo_median05:
+  fixed:
+    attack: LocalBatchedPRBCD
+    model_label: Soft Median PPRGo (T=20.0) LowAcc
+    attack_params.loss_type: Margin
+    attack_params.search_space_size: 2_500
+    attack_params.lr_factor: 1e-1
 
 
-# localprbcd_pprgo_median01:
-#   fixed:
-#     attack: LocalBatchedPRBCD
-#     model_label: Soft Median PPRGo Diffusion (T=0.1)
-#     attack_params.loss_type: Margin
-#     attack_params.search_space_size: 2_500
-#     attack_params.lr_factor: 1e-1
+localprbcd_pprgo_median50:
+  fixed:
+    attack: LocalBatchedPRBCD
+    model_label: Soft Median PPRGo (T=50.0)
+    attack_params.loss_type: Margin
+    attack_params.search_space_size: 2_500
+    attack_params.lr_factor: 1e-1
 
 
+localprbcd_pprgo_median100:
+  fixed:
+    attack: LocalBatchedPRBCD
+    model_label: Soft Median PPRGo (T=100.0)
+    attack_params.loss_type: Margin
+    attack_params.search_space_size: 2_500
+    attack_params.lr_factor: 1e-1
 
-# localprbcd_pprgo_median05:
-#   fixed:
-#     attack: LocalBatchedPRBCD
-#     model_label: Soft Median PPRGo Diffusion (T=0.5)
-#     attack_params.loss_type: Margin
-#     attack_params.search_space_size: 2_500
-#     attack_params.lr_factor: 1e-1
+
+localprbcd_pprgo_median200:
+  fixed:
+    attack: LocalBatchedPRBCD
+    model_label: Soft Median PPRGo (T=200.0)
+    attack_params.loss_type: Margin
+    attack_params.search_space_size: 2_500
+    attack_params.lr_factor: 1e-1
+
+
+localprbcd_pprgo_median500:
+  fixed:
+    attack: LocalBatchedPRBCD
+    model_label: Soft Median PPRGo (T=500.0)
+    attack_params.loss_type: Margin
+    attack_params.search_space_size: 2_500
+    attack_params.lr_factor: 1e-1
+
+
+    
 
 

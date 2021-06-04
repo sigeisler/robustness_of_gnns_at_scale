@@ -10,7 +10,7 @@ slurm:
     gres: gpu:1       # num GPUs
     mem: 48G          # memory
     cpus-per-task: 4  # num cores
-    time: 0-12:00     # max time, D-HH:MM
+    time: 0-01:00     # max time, D-HH:MM
     # partition: cpu
     # qos: studentpriocpu
     qos: studentprio
@@ -45,6 +45,8 @@ grid:
       - [0.05]
       - [0.1]
       - [0.25]
+      - [0.5]
+      - [1.0]
       #- [0.05, 0.1, 0.25]
 
 # gcn_dice:
@@ -63,7 +65,7 @@ meidan_1_0_pprgo_localprbcd:
     attack: LocalDICE
     model_label: Soft Median PPRGo (T=1.0)
 
-meidan_5_0_pprgo_localprbcd:
-  fixed:
-    attack: LocalDICE
-    model_label: Soft Median PPRGo (T=5.0)
+# meidan_5_0_pprgo_localprbcd:
+#   fixed:
+#     attack: LocalDICE
+#     model_label: Soft Median PPRGo (T=5.0)
