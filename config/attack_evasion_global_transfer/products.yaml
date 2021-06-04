@@ -34,6 +34,15 @@ grid:
       - 0
       - 1
       - 5
+  model_label:
+    type: choice
+    options:
+      - Vanilla GCN
+      - Vanilla GDC
+      - Soft Median GDC (T=5.0)
+      - Vanilla PPRGo
+      - Soft Median RPPRGo (T=5.0)
+      - Soft Median RPPRGo (T=1.0)
 
   epsilons: 
     type: choice

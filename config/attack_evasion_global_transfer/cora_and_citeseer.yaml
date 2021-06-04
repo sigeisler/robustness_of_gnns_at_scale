@@ -37,6 +37,28 @@ grid:
       - 0
       - 1
       - 5
+  model_label:
+    type: choice
+    options:
+      - Vanilla GCN
+      - Vanilla Dense GCN
+      - Vanilla GAT
+      - Vanilla GDC
+      - Soft Medoid GDC (T=0.5)
+      - Soft Median GDC (T=1.0)
+      - Soft Median GDC (T=0.5)
+      - Soft Median GDC (T=0.2)
+      - SVD GCN (rank=50)
+      - SVD GCN (rank=100)
+      - Jaccard GCN
+      - RGCN
+      - Vanilla PPRGo
+      - Soft Medoid RPPRGo (T=1.0)
+      - Soft Medoid RPPRGo (T=0.5)
+      - Soft Medoid RPPRGo (T=0.2)
+      - Soft Median RPPRGo (T=1.0)
+      - Soft Median RPPRGo (T=0.5)
+      - Soft Median RPPRGo (T=0.2)
 
 
 fgsm:

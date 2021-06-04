@@ -36,7 +36,7 @@ grid:
       # - 42
       # - 100
 
-# mean acc 0.720160
+
 pprgo:
   fixed:
     model_params:
@@ -54,7 +54,7 @@ pprgo:
       lr: 1e-3
       weight_decay: 1e-2
 
-# mean acc 0.713904
+
 soft_medoid_rpprgo_t1_0:
   fixed:
     model_params:
@@ -77,7 +77,7 @@ soft_medoid_rpprgo_t1_0:
       lr: 1e-3
       weight_decay: 1e-2
 
-# mean acc 0.707005
+
 soft_medoid_rpprgo_t0_5:
   fixed:
     model_params:
@@ -100,7 +100,7 @@ soft_medoid_rpprgo_t0_5:
       lr: 1e-2
       weight_decay: 1e-2
 
-# mean acc 0.703636
+
 soft_medoid_rpprgo_t0_2:
   fixed:
     model_params:
@@ -123,7 +123,7 @@ soft_medoid_rpprgo_t0_2:
       lr: 1e-3
       weight_decay: 1e-2
 
-# mean acc 0.717219
+
 soft_median_rpprgo_t1_0:
   fixed:
     model_params:
@@ -144,7 +144,7 @@ soft_median_rpprgo_t1_0:
       lr: 1e-2
       weight_decay: 1e-2
 
-# mean acc 0.713422
+
 soft_median_rpprgo_t0_5:
   fixed:
     model_params:
@@ -165,7 +165,7 @@ soft_median_rpprgo_t0_5:
       lr: 1e-2
       weight_decay: 1e-2
 
-# mean acc 0.700321
+
 soft_median_rpprgo_t0_2:
   fixed:
     model_params:
