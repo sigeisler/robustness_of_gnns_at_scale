@@ -10,7 +10,6 @@ import numpy as np
 import pandas as pd
 from ogb.nodeproppred import PygNodePropPredDataset
 import scipy.sparse as sp
-import sklearn
 from sklearn.model_selection import train_test_split
 
 import torch

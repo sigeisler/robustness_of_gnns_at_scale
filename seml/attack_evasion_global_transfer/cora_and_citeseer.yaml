@@ -16,7 +16,7 @@ slurm:
 
 fixed:
   data_dir: datasets/
-  epsilons: [0, 0.01, 0.05, 0.1]
+  epsilons: [0, 0.01, 0.05, 0.1, 0.25, 0.5, 1]
   artifact_dir: cache
   pert_adj_storage_type: evasion_global_transfer_adj
   pert_attr_storage_type: evasion_global_transfer_attr
@@ -25,6 +25,7 @@ fixed:
   device: 0
   data_device: 0
   make_undirected: True
+  # model_label: Vanilla GAT
 
 grid:
   dataset:

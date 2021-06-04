@@ -8,7 +8,7 @@ slurm:
   experiments_per_job: 1
   sbatch_options:
     gres: gpu:1       # num GPUs
-    mem: 32G          # memory
+    mem: 96G          # memory
     cpus-per-task: 4  # num cores
     time: 2-00:00     # max time, D-HH:MM
     partition: gpu_large
@@ -18,11 +18,11 @@ fixed:
   artifact_dir: cache
   pert_adj_storage_type: evasion_global_transfer_adj
   pert_attr_storage_type: evasion_global_transfer_attr
-  model_storage_type: pretrained
   surrogate_model_storage_type: pretrained
   device: 0
   data_device: 'cpu' 
   make_undirected: True
+  model_label: Soft Median PPRGo (T=30.0)
 
   dataset: ogbn-products
 
@@ -33,6 +33,13 @@ grid:
       - 0
       - 1
       - 5
+    
+  model_storage_type:
+    type: choice
+    options:
+      # - pretrained
+      # - victim_products
+      - victim_products_simon
 
   epsilons: 
     type: choice
@@ -40,6 +47,7 @@ grid:
     - [0, 0.01]
     - [0.05]
     - [0.1]
+    # - [0.25]
 
 greedy_rbcd:
   fixed:

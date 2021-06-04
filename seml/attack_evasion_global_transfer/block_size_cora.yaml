@@ -41,65 +41,55 @@ grid:
       - 42
       - 100
 
-# fsgm:
-#   fixed:
-#     attack: FGSM
-#   grid: 
-#     attack_params:
-#       type: parameter_collection
-#       params:
-#         stop_optimizing_if_label_flipped: 
-#           type: choice
-#           options:
-#             - True
-#             - False
+fsgm:
+  fixed:
+    attack: FGSM
+    attack_params:
+      epochs: 300
+      loss_type: MCE
 
 pgd:
   fixed:
     attack: PGD
-  grid:
     attack_params: 
+      epochs: 300
+      loss_type: tanhMargin
+
+greedy_rbcd:
+  fixed:
+    attack: GreedyRBCD
+    surrogate_model_label: Vanilla GCN
+  grid:
+   attack_params: 
       type: choice
       options:
-        # - epochs: 300
-        #   loss_type: CE
-        - epochs: 300
-          loss_type: tanhCW
+        # - epochs: 50
+        #   search_space_size: 2_000
+        # - epochs: 50
+        #   search_space_size: 5_000
+        # - epochs: 50
+        #   search_space_size: 10_000
+        # - epochs: 50
+        #   search_space_size: 100_000
+        # - epochs: 50
+        #   search_space_size: 1_000_000
+        - epochs: 50
+          search_space_size: 2_000
+          loss_type: MCE
+        - epochs: 50
+          search_space_size: 5_000
+          loss_type: MCE
+        - epochs: 50
+          search_space_size: 10_000
+          loss_type: MCE
+        - epochs: 50
+          search_space_size: 100_000
+          loss_type: MCE
+        - epochs: 50
+          search_space_size: 1_000_000
+          loss_type: MCE
 
-# sampled_fsgm:
-#   fixed:
-#     attack: GreedyRBCD
-#   grid:
-#    attack_params: 
-#       type: choice
-#       options:
-#         - epochs: 50
-#           search_space_size: 2_000
-#         - epochs: 50
-#           search_space_size: 5_000
-#         - epochs: 50
-#           search_space_size: 10_000
-#         - epochs: 50
-#           search_space_size: 100_000
-#         - epochs: 50
-#           search_space_size: 1_000_000
-#         - epochs: 50
-#           search_space_size: 2_000
-#           loss_type: MCE
-#         - epochs: 50
-#           search_space_size: 5_000
-#           loss_type: MCE
-#         - epochs: 50
-#           search_space_size: 10_000
-#           loss_type: MCE
-#         - epochs: 50
-#           search_space_size: 100_000
-#           loss_type: MCE
-#         - epochs: 50
-#           search_space_size: 1_000_000
-#           loss_type: MCE
-
-sampled_pgd:
+prbcd:
   fixed:
     attack: PRBCD
     surrogate_model_label: Vanilla GCN
@@ -111,32 +101,32 @@ sampled_pgd:
           keep_heuristic: WeightOnly
           fine_tune_epochs: 250
           search_space_size: 2_000
-          loss_type: tanhCW
+          loss_type: tanhMargin
         - epochs: 50
           keep_heuristic: WeightOnly
           fine_tune_epochs: 250
           search_space_size: 5_000
-          loss_type: tanhCW
+          loss_type: tanhMargin
         - epochs: 50
           keep_heuristic: WeightOnly
           fine_tune_epochs: 250
           search_space_size: 10_000
-          loss_type: tanhCW
+          loss_type: tanhMargin
         - epochs: 50
           keep_heuristic: WeightOnly
           fine_tune_epochs: 250
           search_space_size: 100_000
-          loss_type: tanhCW
+          loss_type: tanhMargin
         - epochs: 50
           keep_heuristic: WeightOnly
           fine_tune_epochs: 250
           search_space_size: 1_000_000
-          loss_type: tanhCW
+          loss_type: tanhMargin
         - epochs: 50
           keep_heuristic: WeightOnly
           fine_tune_epochs: 250
           search_space_size: 10_000_000
-          loss_type: tanhCW
+          loss_type: tanhMargin
         # - epochs: 50
         #   keep_heuristic: WeightOnly
         #   fine_tune_epochs: 250

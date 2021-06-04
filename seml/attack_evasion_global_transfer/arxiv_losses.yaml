@@ -15,7 +15,7 @@ slurm:
 
 fixed:
   data_dir: datasets/
-  epsilons: [0, 0.01, 0.05, 0.10]
+  epsilons: [0, 0.01, 0.05, 0.10, 0.25]
   artifact_dir: cache
   pert_adj_storage_type: evasion_global_transfer_adj
   pert_attr_storage_type: evasion_global_transfer_attr
@@ -41,30 +41,31 @@ grid:
     type: choice
     options:
       - pretrained
-      - victims_arxiv
+      # - victims_arxiv
 
-greedy_rbcd:
-  fixed:
-    attack: GreedyRBCD
-    binary_attr: False
-    surrogate_model_label: Vanilla GCN
-    attack_params:
-      search_space_size: 10_000_000
-  grid: 
-    attack_params:
-      type: parameter_collection
-      params:
-        loss_type: 
-          type: choice
-          options:
-            # - CE
-            - MCE
+# greedy_rbcd:
+#   fixed:
+#     attack: GreedyRBCD
+#     binary_attr: False
+#     surrogate_model_label: Vanilla GCN
+#     attack_params:
+#       search_space_size: 10_000_000
+#   grid: 
+#     attack_params:
+#       type: parameter_collection
+#       params:
+#         loss_type: 
+#           type: choice
+#           options:
+#             # - CE
+#             - MCE
 
 prbcd:
   fixed:
     attack: PRBCD
     binary_attr: False
     surrogate_model_label: Vanilla GCN
+    model_label: Vanilla GCN
     attack_params:
       keep_heuristic: WeightOnly
       search_space_size: 10_000_000
@@ -76,8 +77,19 @@ prbcd:
         loss_type: 
           type: choice
           options:
-            # - CE
+            - CE
+            - CW
+            - SCE
+            - MCE
             - tanhMargin
+            - Margin
+            - eluMargin
+            - tanhMarginMCE-0.25
+            - tanhMarginMCE-0.5
+            - tanhMarginMCE-0.75
+            - tanhMarginMCE-0.85
+            - tanhMarginMCE-0.9
+            - tanhMarginMCE-0.95
 
 # gang:
 #   fixed:
@@ -92,8 +104,8 @@ prbcd:
 #       do_synchronize: True
 #       eps: 1e-16
 
-dice:
-  fixed:
-    attack: DICE
-    binary_attr: False
-    surrogate_model_label: Vanilla GCN
+# dice:
+#   fixed:
+#     attack: DICE
+#     binary_attr: False
+#     surrogate_model_label: Vanilla GCN

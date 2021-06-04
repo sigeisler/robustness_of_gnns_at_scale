@@ -111,12 +111,14 @@ pgf_with_latex = {  # setup matplotlib to use latex for output
         r"\usepackage[utf8]{inputenc}",  # use utf8 fonts
         r"\usepackage[T1]{fontenc}",
         r"\usepackage{amsmath}",
+        r'\usepackage{amsfonts}',
         r"\newcommand*{\mat}[1]{\boldsymbol{#1}}",
     ],
     "pgf.preamble": [
         r"\usepackage[utf8]{inputenc}",  # use utf8 fonts
         r"\usepackage[T1]{fontenc}",
         r"\usepackage{amsmath}",
+        r'\usepackage{amsfonts}',
         r"\newcommand*{\mat}[1]{\boldsymbol{#1}}",
     ],
 }
@@ -138,7 +140,6 @@ default_rcParams = {
     'ytick.minor.width': 0.75,
     'xtick.minor.size': 2.0,
     'ytick.minor.size': 2.0,
-    'lines.linewidth': 1.0,
 }
 
 

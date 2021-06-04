@@ -5,29 +5,36 @@ seml:
   output_dir: seml/attack_evasion_local_transfer/output
 
 slurm:
-  experiments_per_job: 1
+  experiments_per_job: 4
   sbatch_options:
-    # gres: gpu:1       # num GPUs
+    gres: gpu:1       # num GPUs
     mem: 16G          # memory
     cpus-per-task: 4  # num cores
     time: 1-00:00     # max time, D-HH:MM
-    partition: cpu
-    qos: studentpriocpu
 
 fixed:
   data_dir: datasets/
-  epsilons: [0.5, 0.75, 1, 2.0]
   model_storage_type: pretrained
   surrogate_model_storage_type: pretrained_linear
   artifact_dir: cache
   nodes: None
   nodes_topk: 40
-  device: cpu
+  device: 0
   data_device: cpu
   binary_attr: False
   attack: Nettack
 
 grid:
+  epsilons:
+    type: choice
+    options:
+      - [0.1]
+      - [0.25]
+      - [0.5]
+      - [0.75]
+      - [1.0]
+      - [2.0]
+
   dataset:
     type: choice
     options:
@@ -40,20 +47,30 @@ grid:
       - 0
       - 1
       - 5
-  
-  make_undirected:
-    type: choice
-    options:
-      - True
-      - False
+
+# localprbcd_gcn:
+#   fixed:
+#     model_label: Vanilla GCN
+#     make_undirected: True
+
+# localprbcd_gcn_directed:
+#   fixed:
+#     model_label: Vanilla GCN
+#     model_storage_type: pretrained_rownorm
+#     make_undirected: False
 
 models:
   grid:
     model_label:
       type: choice
       options:
-        - Vanilla GCN
-        - Vanilla PPRGo
+        # - Vanilla PPRGo
         - Soft Median RPPRGo (T=1.0)
-        - Soft Median RPPRGo (T=0.5)
-        - Soft Median RPPRGo (T=0.2)
+        # - Soft Median RPPRGo (T=0.5)
+        # - Soft Median RPPRGo (T=0.2)
+
+    make_undirected:
+      type: choice
+      options:
+        - True
+        - False
