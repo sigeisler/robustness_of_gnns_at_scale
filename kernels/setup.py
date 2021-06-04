@@ -16,8 +16,6 @@ if CC is not None:
 setup(
     name='kernels',
     version='1.0.0',
-    author='Simon Geisler',
-    author_email='geisler@in.tum.de',
     description='Custom kernels for sparse topk and median',
     license='MIT',
     python_requires='>=3.6',

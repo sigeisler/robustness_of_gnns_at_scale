@@ -1,17 +1,11 @@
-"""TODO: Do better than this
-"""
 import random
-from typing import Union
 
 import numpy as np
-
 import torch
 from torch_sparse import SparseTensor
-
 from tqdm import tqdm
 
 from rgnn_at_scale.attacks.base_attack import SparseAttack
-from rgnn_at_scale.models import MODEL_TYPE
 from rgnn_at_scale.helper import utils
 
 

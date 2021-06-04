@@ -26,7 +26,7 @@ def config():
         ex.observers.append(seml.create_mongodb_observer(db_collection, overwrite=overwrite))
 
     # default params
-    dataset = 'cora_ml'  # Options are 'cora_ml' and 'citeseer' (or with a big GPU 'pubmed')
+    dataset = 'cora_ml'
     data_dir = './datasets'
     binary_attr = False
     make_undirected = True

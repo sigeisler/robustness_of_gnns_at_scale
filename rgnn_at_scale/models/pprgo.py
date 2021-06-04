@@ -1,16 +1,12 @@
 from typing import Any, Dict, Union
 
-import math
 import logging
 
 import torch
 import torch.nn.functional as F
-
 import numpy as np
 import scipy.sparse as sp
-
 from torch import nn
-
 from torch_sparse import SparseTensor
 from torch_scatter import scatter
 from tqdm.auto import tqdm
@@ -98,69 +94,6 @@ class PPRGo(nn.Module):
         return propagated_logits
 
 
-class PPRGoEmmbeddingDiffusions(nn.Module):
-    """
-    Just like PPRGo, but diffusing/aggregating on the embedding space and not the logit space.
-    """
-
-    def __init__(self,
-                 num_features: int,
-                 num_classes: int,
-                 hidden_size: int,
-                 nlayers: int,
-                 dropout: float,
-                 batch_norm: bool = False,
-                 skip_connection=False,
-                 aggr: str = "sum",
-                 **kwargs):
-        super().__init__()
-        # TODO: rewrite PPRGoMLP such that it doesn't expect at least n_layers >= 2.
-        self.skip_connection = skip_connection
-
-        layer_num_mlp = math.ceil(nlayers / 2)
-        layer_num_mlp_logits = math.floor(nlayers / 2)
-
-        if self.skip_connection:
-            assert hidden_size > num_features, "hidden size must be greater than num_features for this skip_connection implementation to work"
-            self.mlp = PPRGoMLP(num_features, hidden_size - num_features,
-                                hidden_size, layer_num_mlp, dropout, batch_norm)
-        else:
-            self.mlp = PPRGoMLP(num_features, hidden_size,
-                                hidden_size, layer_num_mlp, dropout, batch_norm)
-
-        self.mlp_logits = PPRGoMLP(hidden_size, num_classes,
-                                   hidden_size, layer_num_mlp_logits, dropout, batch_norm)
-        self.aggr = aggr
-
-    def forward(self,
-                X: SparseTensor,
-                ppr_scores: torch.Tensor,
-                ppr_idx: torch.Tensor):
-        """
-        Parameters:
-            X: torch_sparse.SparseTensor of shape (num_ppr_nodes, num_features)
-                The node features for all nodes which were assigned a ppr score
-            ppr_scores: torch.Tensor of shape (num_ppr_nodes)
-                The ppr scores are calculate for every node of the batch individually.
-                This tensor contains these concatenated ppr scores for every node in the batch.
-            ppr_idx: torch.Tensor of shape (num_ppr_nodes)
-                The id of the batch that the corresponding ppr_score entry belongs to
-
-        Returns:
-            propagated_logits: torch.Tensor of shape (batch_size, num_classes)
-
-        """
-        # logits of shape (num_batch_nodes, num_classes)
-        embedding = self.mlp(X)
-        propagated_embedding = scatter(embedding * ppr_scores[:, None], ppr_idx[:, None],
-                                       dim=0, dim_size=ppr_idx[-1] + 1, reduce=self.aggr)
-        if self.skip_connection:
-            # concatenated node features and propagated node embedding on feature dimension:
-            propagated_embedding = torch.cat((X[ppr_idx.unique()], propagated_embedding), dim=-1)
-
-        return self.mlp_logits(propagated_embedding)
-
-
 class RobustPPRGo(nn.Module):
     def __init__(self,
                  num_features: int,
@@ -228,91 +161,6 @@ class RobustPPRGo(nn.Module):
         return self._mean(ppr_scores,
                           logits,
                           **self._mean_kwargs)
-
-
-class RobustPPRGoEmmbeddingDiffusions(nn.Module):
-    """
-    Just like RobustPPRGo, but diffusing/aggregating on the embedding space and not the logit space.
-    """
-
-    def __init__(self,
-                 num_features: int,
-                 num_classes: int,
-                 hidden_size: int,
-                 nlayers: int,
-                 dropout: float,
-                 batch_norm: bool = False,
-                 mean='soft_k_medoid',
-                 mean_kwargs: Dict[str, Any] = dict(k=32,
-                                                    temperature=1.0,
-                                                    with_weight_correction=True),
-                 **kwargs):
-        super().__init__()
-        # TODO: rewrite PPRGoMLP such that it doesn't expect at least n_layers >= 2.
-        assert nlayers >= 4, "nlayers must be 4 or greater for this implementation to work"
-        self._mean = ROBUST_MEANS[mean]
-        self._mean_kwargs = mean_kwargs
-
-        layer_num_mlp = math.ceil(nlayers / 2)
-        layer_num_mlp_logits = math.floor(nlayers / 2)
-
-        self.mlp = PPRGoMLP(num_features, hidden_size,
-                            hidden_size, layer_num_mlp, dropout, batch_norm)
-
-        self.mlp_logits = PPRGoMLP(hidden_size, num_classes,
-                                   hidden_size, layer_num_mlp_logits, dropout, batch_norm)
-
-    def forward(self,
-                X: SparseTensor,
-                ppr_scores: SparseTensor):
-        """
-        Parameters:
-            X: torch_sparse.SparseTensor of shape (num_ppr_nodes, num_features)
-                The node features of all neighboring from nodes of the ppr_matrix (training nodes)
-            ppr_matrix: torch_sparse.SparseTensor of shape (ppr_num_nonzeros, num_features)
-                The node features of all neighboring nodes of the training nodes in
-                the graph derived from the Personal Page Rank as specified by idx
-
-        Returns:
-            propagated_logits: torch.Tensor of shape (batch_size, num_classes)
-
-        """
-        # logits of shape (num_batch_nodes, num_classes)
-        embedding = self.mlp(X)
-
-        if self._mean.__name__ == 'soft_median' and ppr_scores.size(0) == 1 and 'temperature' in self._mean_kwargs:
-            c = embedding.shape[1]
-            weights = ppr_scores.storage.value()
-            with torch.no_grad():
-                sort_idx = embedding.argsort(0)
-                weights_cumsum = weights[sort_idx].cumsum(0)
-                median_idx = sort_idx[(weights_cumsum < weights_cumsum[-1][None, :] / 2).sum(0), torch.arange(c)]
-            median = embedding[median_idx, torch.arange(c)]
-            distances = torch.norm(embedding - median[None, :], dim=1) / pow(c, 1 / 2)
-
-            soft_weights = weights * F.softmax(-distances / self._mean_kwargs['temperature'], dim=-1)
-            soft_weights /= soft_weights.sum()
-            new_embedding = (soft_weights[:, None] * weights.sum() * embedding).sum(0)
-
-            diffused_embedding = new_embedding[None, :]
-
-        elif "k" in self._mean_kwargs.keys() and "with_weight_correction" in self._mean_kwargs.keys() \
-                and self._mean_kwargs["k"] > X.size(0):
-            # `n` less than `k` and `with_weight_correction` is not implemented
-            # so we need to make sure we set with_weight_correction to false if n less than k
-            print("no with_weight_correction")
-            diffused_embedding = self._mean(ppr_scores,
-                                            embedding,
-                                            # we can not manipluate self._mean_kwargs because this would affect
-                                            # the next call to forward, so we do it this way
-                                            with_weight_correction=False,
-                                            ** {k: v for k, v in self._mean_kwargs.items() if k != "with_weight_correction"})
-        else:
-            diffused_embedding = self._mean(ppr_scores,
-                                            embedding,
-                                            **self._mean_kwargs)
-
-        return self.mlp_logits(diffused_embedding)
 
 
 class PPRGoWrapperBase():
@@ -702,28 +550,6 @@ class PPRGoWrapper(PPRGo, PPRGoWrapperBase):
         return super().forward(attr, ppr_scores, source_idx)
 
 
-class PPRGoDiffEmbWrapper(PPRGoEmmbeddingDiffusions, PPRGoWrapperBase):
-    def __init__(self,
-                 *args,
-                 **kwargs):
-        PPRGoWrapperBase.__init__(self, *args, **kwargs)
-        PPRGoEmmbeddingDiffusions.__init__(self, self.num_features, self.num_classes,
-                                           self.hidden_size, self.nlayers, self.dropout,
-                                           batch_norm=self.batch_norm, skip_connection=self.skip_connection,
-                                           mean=self.mean, mean_kwargs=self.mean_kwargs)
-
-    def forward(self, *args, **kwargs):
-        return self.forward_wrapper(*args, **kwargs)
-
-    def model_forward(self,
-                      attr: torch.Tensor,
-                      ppr_matrix: SparseTensor,
-                      **kwargs):
-        source_idx, neighbor_idx, ppr_scores = ppr_matrix.coo()
-        attr = attr[neighbor_idx]
-        return super().forward(attr, ppr_scores, source_idx)
-
-
 class RobustPPRGoWrapper(RobustPPRGo, PPRGoWrapperBase):
     def __init__(self,
                  *args,
@@ -733,24 +559,6 @@ class RobustPPRGoWrapper(RobustPPRGo, PPRGoWrapperBase):
                              self.hidden_size, self.nlayers, self.dropout,
                              batch_norm=self.batch_norm, skip_connection=self.skip_connection,
                              mean=self.mean, mean_kwargs=self.mean_kwargs)
-
-    def forward(self, *args, **kwargs):
-        return self.forward_wrapper(*args, **kwargs)
-
-    def model_forward(self, *args, **kwargs):
-        return super().forward(*args, **kwargs)
-
-
-class RobustPPRGoDiffEmbWrapper(RobustPPRGoEmmbeddingDiffusions, PPRGoWrapperBase):
-
-    def __init__(self,
-                 *args,
-                 **kwargs):
-        PPRGoWrapperBase.__init__(self, *args, **kwargs)
-        RobustPPRGoEmmbeddingDiffusions.__init__(self, self.num_features, self.num_classes,
-                                                 self.hidden_size, self.nlayers, self.dropout,
-                                                 batch_norm=self.batch_norm, skip_connection=self.skip_connection,
-                                                 mean=self.mean, mean_kwargs=self.mean_kwargs)
 
     def forward(self, *args, **kwargs):
         return self.forward_wrapper(*args, **kwargs)

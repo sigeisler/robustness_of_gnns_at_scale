@@ -64,7 +64,6 @@ class ChainableGCNConv(GCNConv):
             embedding = super(ChainableGCNConv, self).update(embedding)
         return embedding
 
-    # TODO: Add docstring
     def message_and_aggregate(self, adj_t: Union[torch.Tensor, SparseTensor], x: torch.Tensor) -> torch.Tensor:
         if not self.do_chunk or not isinstance(adj_t, SparseTensor):
             return super(ChainableGCNConv, self).message_and_aggregate(adj_t, x)
@@ -109,7 +108,17 @@ class GCN(nn.Module):
     jaccard_params : Dict[str, float], optional
         Parameters for the Jaccard preprocessing (`threshold`), by default None
     do_cache_adj_prep : bool, optional
-        If `True` the preoprocessing of the adjacency matrix is chached for training, by default False
+        If `True` the preoprocessing of the adjacency matrix is chached for training, by default True
+    do_normalize_adj_once : bool, optional
+        If true the adjacency matrix is normalized only once, by default True
+    do_use_sparse_tensor : bool, optional
+        If true use SparseTensor internally, by default True
+    do_checkpoint : bool, optional
+        If true use checkpointing in message passing, by default False
+    row_norm : bool, optional
+        If true use row norm normalization otherwise symmetric (only relevant if do_normalize_adj_once = True), by default False
+    n_chunks : int, optional
+        Number of chunks for checkpointing, by default 8
     """
 
     def __init__(self,
@@ -127,8 +136,8 @@ class GCN(nn.Module):
                  do_normalize_adj_once: bool = True,
                  add_self_loops: bool = True,
                  do_use_sparse_tensor: bool = True,
-                 do_checkpoint: bool = False,  # TODO: Doc string
-                 row_norm: bool = False,  # TODO: Doc string
+                 do_checkpoint: bool = False,
+                 row_norm: bool = False,
                  n_chunks: int = 8,
                  **kwargs):
         super().__init__()

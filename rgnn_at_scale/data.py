@@ -165,8 +165,6 @@ class SparseGraph:
     def to_undirected(self) -> 'SparseGraph':
         """Convert to an undirected graph (make adjacency matrix symmetric).
         """
-        # TODO: add warnings / logging
-
         idx = self.get_edgeid_to_idx_array().T
         ridx = np.ravel_multi_index(idx, self.adj_matrix.shape)
         ridx_rev = np.ravel_multi_index(idx[::-1], self.adj_matrix.shape)
@@ -402,9 +400,6 @@ def create_subgraph(
         node_names = None
     else:
         node_names = sparse_graph.node_names[nodes_to_keep]
-    # TODO: add warnings / logging
-    # print("Resulting subgraph with N = {0}, E = {1}"
-    #               .format(sparse_graph.num_nodes(), sparse_graph.num_edges()))
     return SparseGraph(
         adj_matrix, attr_matrix, labels, node_names, sparse_graph.attr_names,
         sparse_graph.class_names, sparse_graph.metadata)

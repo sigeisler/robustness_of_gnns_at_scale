@@ -1,17 +1,9 @@
-"""TODO: Do better than this
-"""
-import random
-from typing import Union
-
 import numpy as np
-from numpy.core.fromnumeric import shape
-
 import torch
 from torch_sparse import SparseTensor
 
 from rgnn_at_scale.attacks.base_attack import SparseLocalAttack
 from rgnn_at_scale.models import MODEL_TYPE, BATCHED_PPR_MODELS
-from rgnn_at_scale.helper import ppr_utils as ppr
 
 
 class LocalDICE(SparseLocalAttack):

@@ -26,16 +26,9 @@ def config():
         ex.observers.append(seml.create_mongodb_observer(db_collection, overwrite=overwrite))
 
     # default params
-    dataset = 'ogbn-papers100M'  # Options are 'cora_ml' and 'citeseer' (or with a big GPU 'pubmed')
+    dataset = 'ogbn-papers100M'
     attack = 'LocalDICE'
     attack_params = {
-        # "epochs": 10,
-        # "fine_tune_epochs": 5,
-        # "search_space_size": 10_000,
-        # "lr_factor": 0.05,
-        # "display_step": 10,
-        # "do_synchronize": True,
-        # "ppr_recalc_at_end": True,
         "ppr_cache_params": {
             "data_artifact_dir": "cache",
             "data_storage_type": "ppr"
@@ -44,7 +37,7 @@ def config():
     nodes = None
     nodes_topk = 40
 
-    epsilons = [0.05, 0.1, 0.25, 0.5]  # , 0.5, 0.75, 1]
+    epsilons = [0.05, 0.1, 0.25, 0.5]
     min_node_degree = None
     seed = 0
 

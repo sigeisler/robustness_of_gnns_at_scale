@@ -177,7 +177,7 @@ class Attack(ABC):
         elif self.loss_type == 'MCE':
             not_flipped = logits.argmax(-1) == labels
             loss = F.cross_entropy(logits[not_flipped], labels[not_flipped])
-        elif self.loss_type == 'SCE':
+        elif self.loss_type == 'NCE':
             sorted = logits.argsort(-1)
             best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
             loss = -F.cross_entropy(logits, best_non_target_class)

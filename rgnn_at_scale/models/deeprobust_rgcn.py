@@ -133,7 +133,6 @@ class GaussianConvolution(Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        # TODO
         torch.nn.init.xavier_uniform_(self.weight_miu)
         torch.nn.init.xavier_uniform_(self.weight_sigma)
 
@@ -152,7 +151,6 @@ class GaussianConvolution(Module):
         # M = torch.mm(torch.mm(adj, previous_miu * A), self.weight_miu)
         # Sigma = torch.mm(torch.mm(adj, previous_sigma * A * A), self.weight_sigma)
 
-        # TODO sparse implemention
         # support = torch.mm(input, self.weight)
         # output = torch.spmm(adj, support)
         # return output + self.bias

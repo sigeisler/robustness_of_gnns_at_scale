@@ -32,25 +32,13 @@ def config():
         ex.observers.append(seml.create_mongodb_observer(db_collection, overwrite=overwrite))
 
     # default params
-    dataset = 'ogbn-arxiv'  # 'cora_ml'
-    model_params = {
-        # 'label': 'Vanilla GCN',
-        # 'model': 'GCN',
-        # 'dropout': 0.5,
-        # 'n_filters': 64,
-        # 'hidden_size': 64,
-        # 'nlayers': 3,
-        # 'gdc_params': None,
-        # 'svd_params': None,
-        # 'batch_norm': False,
-        # 'jaccard_params': None,
-        # 'do_cache_adj_prep': True
-    }
+    dataset = 'ogbn-arxiv'
+    model_params = {}
     train_params = {
-        # 'lr': 1e-2,
-        # 'weight_decay': 5e-4,
-        # 'patience': 300,
-        # 'max_epochs': 2
+        'lr': 1e-2,
+        'weight_decay': 1e-3,
+        'patience': 300,
+        'max_epochs': 3000
     }
     binary_attr = False
     seed = 1
@@ -58,7 +46,7 @@ def config():
     model_storage_type = 'pretrained'
     ppr_cache_params = None
     ppr_cache_params = dict(
-        data_artifact_dir="/nfs/students/schmidtt/cache",
+        data_artifact_dir="cache",
         data_storage_type="ppr"
     )
     device = 0

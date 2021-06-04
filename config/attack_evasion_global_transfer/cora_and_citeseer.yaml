@@ -1,0 +1,112 @@
+seml:
+  name: rgnn_at_scale_attack_evasion_global_transfer
+  executable: experiments/experiment_global_attack_transfer.py
+  project_root_dir: ../..
+  output_dir: config/attack_evasion_global_transfer/output
+
+slurm:
+  experiments_per_job: 1
+  sbatch_options:
+    gres: gpu:1       # num GPUs
+    mem: 4G          # memory
+    cpus-per-task: 4  # num cores
+    time: 0-01:00     # max time, D-HH:MM
+
+
+fixed:
+  data_dir: datasets/
+  epsilons: [0, 0.01, 0.05, 0.1, 0.25, 0.5, 1]
+  artifact_dir: cache
+  pert_adj_storage_type: evasion_global_transfer_adj
+  pert_attr_storage_type: evasion_global_transfer_attr
+  model_storage_type: pretrained
+  surrogate_model_storage_type: pretrained
+  device: 0
+  data_device: 0
+  make_undirected: True
+
+grid:
+  dataset:
+    type: choice
+    options:
+      - cora_ml
+      - citeseer
+  seed:
+    type: choice
+    options:
+      - 0
+      - 1
+      - 5
+
+
+fgsm:
+  fixed:
+    attack: FGSM
+    binary_attr: False
+    surrogate_model_label: Vanilla Dense GCN
+  grid: 
+    attack_params:
+      type: parameter_collection
+      params:
+        loss_type: 
+          type: choice
+          options:
+            - CE
+            - CW
+            - NCE
+            - MCE
+            - tanhMargin
+            - Margin
+            - eluMargin
+            - tanhMarginMCE-0.5
+
+pgd:
+  fixed:
+    attack: PGD
+    binary_attr: False
+    surrogate_model_label: Vanilla Dense GCN
+  grid: 
+    attack_params:
+      type: parameter_collection
+      params:
+        loss_type: 
+          type: choice
+          options:
+            - CE
+            - CW
+            - NCE
+            - MCE
+            - tanhMargin
+            - Margin
+            - eluMargin
+            - tanhMarginMCE-0.75
+        base_lr: 
+          type: choice
+          options:
+            - 1e-1
+
+greedy_rbcd:
+  fixed:
+    attack: GreedyRBCD
+    binary_attr: False
+    surrogate_model_label: Vanilla GCN
+    attack_params: 
+      loss_type: MCE
+
+prbcd:
+  fixed:
+    attack: PRBCD
+    binary_attr: False
+    surrogate_model_label: Vanilla GCN
+    attack_params:
+      epochs: 400
+      fine_tune_epochs: 100
+      keep_heuristic: WeightOnly
+      search_space_size: 1_000_000
+      do_synchronize: True
+      loss_type: tanhMargin
+
+dice:
+  fixed:
+    attack: DICE
+    binary_attr: False

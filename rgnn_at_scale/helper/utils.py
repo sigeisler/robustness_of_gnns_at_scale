@@ -3,20 +3,17 @@
 from typing import Sequence, Tuple, Union
 import resource
 
-import numba
+import numpy as np
 import torch
 import torch_scatter
-
-import numpy as np
 import scipy.sparse as sp
-
 from sklearn.preprocessing import normalize
-
-from torch_geometric.utils import from_scipy_sparse_matrix, add_remaining_self_loops
+from torch_geometric.utils import from_scipy_sparse_matrix
 from torch_sparse import SparseTensor, SparseStorage, coalesce
 
+from rgnn_at_scale.helper.ppr_utils import ppr_topk
 
-# TODO: Move to base attack
+
 def grad_with_checkpoint(outputs: Union[torch.Tensor, Sequence[torch.Tensor]],
                          inputs: Union[torch.Tensor, Sequence[torch.Tensor]]) -> Tuple[torch.Tensor, ...]:
     inputs = (inputs,) if isinstance(inputs, torch.Tensor) else tuple(inputs)
@@ -302,7 +299,7 @@ def calc_ppr_update_sparse_result(ppr: sp.csr_matrix,
 
     ppr_pert_update = alpha * P_uv_inv
 
-    # TODO: Maybe include this later to reduce memory footprint further for large scale attacks
+    # This strategy helps to reduce the memory footprint
     # topk_values, topk_indices = ppr_pert_update.squeeze().topk(p.nnz())
 
     # return SparseTensor(
@@ -443,70 +440,38 @@ def get_ppr_matrix(adjacency_matrix: torch.Tensor,
     ).coalesce()
 
 
-@numba.njit(cache=True, locals={'_val': numba.float32, 'res': numba.float32, 'res_vnode': numba.float32})
-def _calc_ppr_node(inode, indptr, indices, deg, alpha, epsilon):
-    alpha_eps = alpha * epsilon
-    f32_0 = numba.float32(0)
-    p = {inode: f32_0}
-    r = {}
-    r[inode] = alpha
-    q = [inode]
-    while len(q) > 0:
-        unode = q.pop()
-        res = r[unode] if unode in r else f32_0
-        if unode in p:
-            p[unode] += res
-        else:
-            p[unode] = res
-        r[unode] = f32_0
-        for vnode in indices[indptr[unode]:indptr[unode + 1]]:
-            _val = (1 - alpha) * res / deg[unode]
-            if vnode in r:
-                r[vnode] += _val
-            else:
-                r[vnode] = _val
-            res_vnode = r[vnode] if vnode in r else f32_0
-            if res_vnode >= alpha_eps * deg[vnode]:
-                if vnode not in q:
-                    q.append(vnode)
-    return list(p.keys()), list(p.values())
-
-
-@numba.njit(parallel=True)
-def _calc_ppr_topk_parallel(indptr, indices, deg, alpha, epsilon, nodes, topk):
-    js = [np.zeros(0, dtype=np.int64)] * len(nodes)
-    vals = [np.zeros(0, dtype=np.float32)] * len(nodes)
-    for i in numba.prange(len(nodes)):
-        j, val = _calc_ppr_node(nodes[i], indptr, indices, deg, alpha, epsilon)
-        j_np, val_np = np.array(j), np.array(val)
-        idx_topk = np.argsort(val_np)[-topk:]
-        js[i] = j_np[idx_topk]
-        vals[i] = val_np[idx_topk]
-    return js, vals
-
-
-def _ppr_topk(adj_matrix, alpha, epsilon, nodes, topk):
-    """Calculate the PPR matrix approximately using Anderson."""
-    out_degree = np.sum(adj_matrix > 0, axis=1).A1
-    nnodes = adj_matrix.shape[0]
-    neighbors, weights = _calc_ppr_topk_parallel(adj_matrix.indptr, adj_matrix.indices, out_degree,
-                                                 numba.float32(alpha), numba.float32(epsilon), nodes, topk)
-    return _construct_sparse(neighbors, weights, (len(nodes), nnodes))
-
-
 def _construct_sparse(neighbors, weights, shape):
     i = np.repeat(np.arange(len(neighbors)), np.fromiter(map(len, neighbors), dtype=np.int))
     j = np.concatenate(neighbors)
     return sp.coo_matrix((np.concatenate(weights), (i, j)), shape)
 
 
-# TODO
 def get_approx_topk_ppr_matrix(edge_idx: torch.Tensor,
                                n: int,
                                alpha: float = 0.15,
                                k: float = 64,
                                ppr_err: float = 1e-4,
                                **kwargs) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Calculates the personalized page rank diffusion of the adjacency matrix as proposed in Johannes Klicpera,
+    Stefan Weißenberger, and Stephan Günnemann. Diffusion Improves Graph Learning.
+
+    Parameters
+    ----------
+    edge_idx : torch.Tensor
+        Sparse (unweighted) adjacency matrix.
+    alpha : float, optional
+        Teleport probability, by default 0.15.
+    k : int, optional
+        Neighborhood for sparsification, by default 32.
+    ppr_err : bool, optional
+        Admissible error, by default 1e-4
+
+    Returns
+    -------
+    torch.Tensor
+        Preprocessed adjacency matrix.
+
+    """
     edge_weight = torch.ones_like(edge_idx[0], dtype=torch.float32)
     edge_idx, edge_weight = coalesce(edge_idx, edge_weight, n, n)
 
@@ -517,7 +482,7 @@ def get_approx_topk_ppr_matrix(edge_idx: torch.Tensor,
     edge_weight = edge_weight.cpu()
     row, col = row.cpu(), col.cpu()
 
-    ppr = _ppr_topk(
+    ppr = ppr_topk(
         adj_matrix=sp.csr_matrix((edge_weight, (row, col)), (n, n)),
         alpha=alpha,
         epsilon=ppr_err,
@@ -600,26 +565,6 @@ def get_jaccard(adjacency_matrix: torch.Tensor, features: torch.Tensor, threshol
     modified_adj = drop_dissimilar_edges(features.cpu().numpy(), modified_adj, threshold=threshold)
     modified_adj = torch.sparse.FloatTensor(*from_scipy_sparse_matrix(modified_adj)).to(adjacency_matrix.device)
     return modified_adj
-
-
-# TODO: This name is confusing as it only adds remaining self loops and converts the adjacency matrix zu symmetric
-def normalize_adjacency_matrix(edge_index: torch.Tensor, edge_weight: torch.Tensor, n: int, op='mean') -> torch.tensor:
-    """
-    For calculating $\hat{A} = 𝐷^{−\frac{1}{2}} 𝐴 𝐷^{−\frac{1}{2}}$.
-
-    Parameters
-    ----------
-    A: torch.sparse.FloatTensor
-        Sparse adjacency matrix (potentially) without added self-loops.
-
-    Returns
-    -------
-    A_hat: torch.sparse.FloatTensor
-        Normalized message passing matrix
-    """
-    edge_index, edge_weight = add_remaining_self_loops(edge_index, edge_weight, num_nodes=n)
-    edge_index, edge_weight = to_symmetric(edge_index, edge_weight, n, op=op)
-    return edge_index, edge_weight
 
 
 def to_symmetric(edge_index: torch.Tensor, edge_weight: torch.Tensor,

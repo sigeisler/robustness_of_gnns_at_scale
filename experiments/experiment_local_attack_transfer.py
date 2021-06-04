@@ -28,10 +28,10 @@ def config():
         ex.observers.append(seml.create_mongodb_observer(db_collection, overwrite=overwrite))
 
     # default params
-    dataset = 'cora_ml'  # Options are 'cora_ml' and 'citeseer' (or with a big GPU 'pubmed')
+    dataset = 'cora_ml'
     attack = 'Nettack'
     attack_params = {}
-    nodes = None  # [1854, 513, 2383]
+    nodes = None
     nodes_topk = 40
 
     epsilons = [0.5, 0.75, 1]

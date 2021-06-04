@@ -1,0 +1,129 @@
+seml:
+  name: rgnn_at_scale_train
+  executable: experiments/experiment_train.py
+  project_root_dir: ../..
+  output_dir: config/train/output
+
+slurm:
+  experiments_per_job: 1
+  sbatch_options:
+    gres: gpu:1       # num GPUs
+    mem: 32G          # memory
+    cpus-per-task: 4  # num cores
+    time: 1-00:00     # max time, D-HH:MM
+    partition: gpu_large
+
+fixed:
+  train_params:
+    lr: 1e-2
+    weight_decay: 0
+    patience: 300
+    max_epochs: 3000
+  artifact_dir: cache
+  model_storage_type: pretrained
+  device: 0
+  data_device: 0 
+  make_undirected: True
+  binary_attr: False
+
+  dataset: ogbn-products
+
+grid:      
+  seed:
+    type: choice
+    options:
+      - 0
+      - 1
+      - 5
+
+gcn:
+  fixed:
+    model_params:
+      label: Vanilla GCN
+      model: GCN
+      dropout: 0.5
+      n_filters: [256, 256]
+      gdc_params: None
+      svd_params: None
+      jaccard_params: None
+      do_checkpoint: True
+      n_chunks: 64
+      do_normalize_adj_once: True
+
+gcn_surrogate:
+  fixed:
+    model_params:
+      label: Vanilla GCN (surrogate)
+      model: GCN
+      dropout: 0.5
+      n_filters: 64
+      gdc_params: None
+      svd_params: None
+      jaccard_params: None
+      do_checkpoint: True
+      n_chunks: 64
+      do_normalize_adj_once: True
+
+gcn_surrogate_directed:
+  fixed:
+    make_undirected: False
+    model_params:
+      label: Vanilla GCN (surrogate)
+      model: GCN
+      dropout: 0.5
+      n_filters: 64
+      gdc_params: None
+      svd_params: None
+      jaccard_params: None
+      do_checkpoint: True
+      n_chunks: 64
+      do_normalize_adj_once: True
+      row_norm: True
+
+gdc:
+  fixed:
+    model_params:
+      label: Vanilla GDC
+      model: GCN
+      dropout: 0.5
+      gdc_params:
+          alpha: 0.15
+          k: 64
+          use_cpu: True
+      svd_params: None
+      jaccard_params: None
+      do_normalize_adj_once: True
+  grid: 
+    model_params:
+      type: parameter_collection
+      params:
+        n_filters: 
+          type: choice
+          options:
+            - [256, 256]
+
+soft_median_gdc_t5_0_k32:
+  fixed:
+    train_params:
+      lr: 1e-2
+      weight_decay: 0
+      patience: 300
+      max_epochs: 500
+    model_params:
+      label: Soft Median GDC (T=5.0)
+      model: RGNN
+      dropout: 0.5
+      mean: soft_median
+      mean_kwargs:
+          temperature: 5
+      gdc_params:
+          alpha: 0.15
+          k: 32
+          use_cpu: True
+      do_checkpoint: True
+      do_normalize_adj_once: True
+      n_chunks: 16
+      svd_params: None
+      jaccard_params: None
+      with_batch_norm: True
+      n_filters: 128

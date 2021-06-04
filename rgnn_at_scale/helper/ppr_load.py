@@ -140,7 +140,7 @@ def _load_ppr(input_dir, dump_suffix, shape):
 
 
 def load_ppr(
-    input_dir='/nfs/students/schmidtt/datasets/ppr/papers',
+    input_dir='datasets/ppr/papers',
     dataset='ogbn-papers100M',
     idx=None,
     alpha=0.1,
@@ -182,7 +182,7 @@ def load_ppr(
 
 
 def load_ppr_csr(
-    input_dir='/nfs/students/schmidtt/datasets/ppr/papers100M',
+    input_dir='datasets/ppr/papers100M',
     dataset='ogbn-papers100M',
     alpha=0.1,
     eps=1e-3,
@@ -216,16 +216,3 @@ def load_ppr_csr(
     concat_time = datetime.now() - concat_start
     logging.info(f"Building csr took {concat_time} seconds")
     return adj
-
-
-# topk_train = load_ppr(input_dir='/nfs/students/schmidtt/datasets/ppr/papers100M',
-#                       dataset='ogbn-papers100M',
-#                       alpha=0.1,
-#                       eps=1e-6,
-#                       topk=256,
-#                       ppr_normalization="row",
-#                       split_desc="train",
-#                       make_undirected=False)
-# print()
-# print(topk_train)
-# print(train_idx)
