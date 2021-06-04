@@ -799,7 +799,7 @@ class CachedPPRMatrix:
             logging.info(
                 f"Memory after  loading 'Attack' CachedPPRMatrix from storage:{utils.get_max_memory_bytes() / (1024 ** 3)}")
 
-        self.has_missing_ppr_values = (self.csr_ppr.sum(-1) == 0).any()
+        self.has_missing_ppr_values = True if self.csr_ppr is None else (self.csr_ppr.sum(-1) == 0).any()
 
         if self.csr_ppr is None and use_train_val_ppr and self.storage is not None:
             stored_pprs = self._load_partial_pprs()
