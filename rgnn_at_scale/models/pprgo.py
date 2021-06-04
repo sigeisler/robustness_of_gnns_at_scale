@@ -252,11 +252,15 @@ class RobustPPRGoEmmbeddingDiffusions(nn.Module):
         assert nlayers >= 4, "nlayers must be 4 or greater for this implementation to work"
         self._mean = ROBUST_MEANS[mean]
         self._mean_kwargs = mean_kwargs
+
+        layer_num_mlp = math.ceil(nlayers / 2)
+        layer_num_mlp_logits = math.floor(nlayers / 2)
+
         self.mlp = PPRGoMLP(num_features, hidden_size,
-                            hidden_size, nlayers - 2, dropout, batch_norm)
+                            hidden_size, layer_num_mlp, dropout, batch_norm)
 
         self.mlp_logits = PPRGoMLP(hidden_size, num_classes,
-                                   hidden_size, 2, dropout, batch_norm)
+                                   hidden_size, layer_num_mlp_logits, dropout, batch_norm)
 
     def forward(self,
                 X: SparseTensor,
@@ -307,6 +311,7 @@ class RobustPPRGoEmmbeddingDiffusions(nn.Module):
             diffused_embedding = self._mean(ppr_scores,
                                             embedding,
                                             **self._mean_kwargs)
+
         return self.mlp_logits(diffused_embedding)
 
 

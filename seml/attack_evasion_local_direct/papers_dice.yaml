@@ -8,7 +8,7 @@ slurm:
   experiments_per_job: 1
   sbatch_options:
     gres: gpu:1       # num GPUs
-    mem: 210G          # memory
+    mem: 256G          # memory
     cpus-per-task: 4  # num cores
     time: 1-00:00     # max time, D-HH:MM
     # partition: cpu
@@ -47,21 +47,51 @@ grid:
       - [0.05]
       - [0.1]
       - [0.25]
+      - [0.5]
+      - [1.0]
       #- [0.05, 0.1, 0.25]
 
-pprgo_localprbcd_seed0:
-  fixed:
-    attack: LocalDICE
-    model_label: Vanilla PPRGo Diffusion Embedding
-
-
-# meidan_0_5_pprgo_localprbcd_seed1:
+# pprgo_dice_seed0:
 #   fixed:
 #     attack: LocalDICE
-#     model_label: Soft Median PPRGo Diffusion (T=0.5)
+#     model_label: Vanilla PPRGo LowAcc
 
 
-meidan_0_1_pprgo_localprbcd_seed1:
+# meidan_0_5_pprgo_dice:
+#   fixed:
+#     attack: LocalDICE
+#     model_label: Soft Median PPRGo (T=0.5) LowAcc
+
+dice_pprgo_vanilla:
   fixed:
     attack: LocalDICE
-    model_label: Soft Median PPRGo Diffusion (T=0.1)
+    model_label: Vanilla PPRGo LowAcc
+
+dice_pprgo_median20:
+  fixed:
+    attack: LocalDICE
+    model_label: Soft Median PPRGo (T=20.0) LowAcc
+
+
+dice_pprgo_median50:
+  fixed:
+    attack: LocalDICE
+    model_label: Soft Median PPRGo (T=50.0)
+
+
+dice_pprgo_median100:
+  fixed:
+    attack: LocalDICE
+    model_label: Soft Median PPRGo (T=100.0)
+
+
+dice_pprgo_median200:
+  fixed:
+    attack: LocalDICE
+    model_label: Soft Median PPRGo (T=200.0)
+
+
+dice_pprgo_median500:
+  fixed:
+    attack: LocalDICE
+    model_label: Soft Median PPRGo (T=500.0)
