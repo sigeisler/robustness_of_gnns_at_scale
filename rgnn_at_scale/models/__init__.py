@@ -4,12 +4,11 @@ from rgnn_at_scale.models.gat import RGAT
 from rgnn_at_scale.models.gcn import GCN, DenseGCN
 from rgnn_at_scale.models.rgnn import RGNN
 from rgnn_at_scale.models.rgcn import RGCN
-from rgnn_at_scale.models.pprgo import (PPRGoWrapperBase, RobustPPRGoWrapper,
-                                        PPRGoWrapper, PPRGoDiffEmbWrapper, RobustPPRGoDiffEmbWrapper)
+from rgnn_at_scale.models.pprgo import (PPRGoWrapperBase, RobustPPRGoWrapper, PPRGoWrapper)
 
 
 MODEL_TYPE = Union[GCN, RGNN, RGCN, RobustPPRGoWrapper, PPRGoWrapper]
-BATCHED_PPR_MODELS = Union[RobustPPRGoWrapper, PPRGoWrapper, PPRGoDiffEmbWrapper, RobustPPRGoDiffEmbWrapper]
+BATCHED_PPR_MODELS = Union[RobustPPRGoWrapper, PPRGoWrapper]
 
 
 def create_model(hyperparams: Dict[str, Any]) -> MODEL_TYPE:
@@ -52,8 +51,6 @@ __all__ = [GCN,
            PPRGoWrapperBase,
            PPRGoWrapper,
            RobustPPRGoWrapper,
-           PPRGoDiffEmbWrapper,
-           RobustPPRGoDiffEmbWrapper,
            create_model,
            MODEL_TYPE,
            BATCHED_PPR_MODELS]
