@@ -66,7 +66,7 @@ This is the code used to analyze the learning curves and the distribution of att
 
 ## Training
 
-*Note: after open sourcing we will provide the full collection of pretrained models and in the case of transfer attacks we will also provide all perturbed adjacency matrices. For now we only include the artifacts for Cora ML.*
+*Note: after open sourcing we will provide the full collection of pretrained models and in the case of transfer attacks we will also provide all perturbed adjacency matrices. For now we only include the pretrained models for Cora ML.*
 
 For the training and evaluation code we decided to provide SEML/Sacred experiments which make it very easy to run the same code from the command line or on your cluster.
 
