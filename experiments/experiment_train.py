@@ -4,7 +4,7 @@ from typing import Any, Dict, Union
 
 import numpy as np
 from sacred import Experiment
-import seml
+
 import torch
 
 from rgnn_at_scale.data import prep_graph, split
@@ -16,20 +16,11 @@ from rgnn_at_scale.helper import utils
 import torch.nn.functional as F
 
 ex = Experiment()
-seml.setup_logger(ex)
-
-
-@ex.post_run_hook
-def collect_stats(_run):
-    seml.collect_exp_stats(_run)
 
 
 @ex.config
 def config():
     overwrite = None
-    db_collection = None
-    if db_collection is not None:
-        ex.observers.append(seml.create_mongodb_observer(db_collection, overwrite=overwrite))
 
     # default params
     dataset = 'ogbn-arxiv'
@@ -61,7 +52,7 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
         make_undirected: bool, seed: int, artifact_dir: str, model_storage_type: str, ppr_cache_params: Dict[str, str],
         device: Union[str, int], data_device: Union[str, int], display_steps: int, debug_level: str):
     """
-    Instantiates a SEML experiment executing a training run for a given model configuration.
+    Instantiates a sacred experiment executing a training run for a given model configuration.
     Saves the model to storage and evaluates its accuracy. 
 
     Parameters

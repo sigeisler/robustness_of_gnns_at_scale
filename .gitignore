@@ -149,7 +149,7 @@ plots/
 plots*/
 *.pickle
 
-# SEML
+# CONFIGS
 *.out
 output/
 

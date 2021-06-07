@@ -1,4 +1,4 @@
-seml:
+base:
   name: products_dice
   executable: experiments/experiment_local_attack_direct.py
   project_root_dir: ../..

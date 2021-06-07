@@ -5,27 +5,18 @@ from typing import Any, Dict, Sequence, Union
 
 import numpy as np
 from sacred import Experiment
-import seml
+
 
 from rgnn_at_scale.attacks import create_attack
 from rgnn_at_scale.helper.io import Storage
 from experiments.common import prepare_attack_experiment, get_local_attack_nodes
 
 ex = Experiment()
-seml.setup_logger(ex)
-
-
-@ex.post_run_hook
-def collect_stats(_run):
-    seml.collect_exp_stats(_run)
 
 
 @ex.config
 def config():
     overwrite = None
-    db_collection = None
-    if db_collection is not None:
-        ex.observers.append(seml.create_mongodb_observer(db_collection, overwrite=overwrite))
 
     # default params
     dataset = 'cora_ml'

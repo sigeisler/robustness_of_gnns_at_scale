@@ -28,7 +28,6 @@ install_requires = [
     'scikit-learn',
     'scipy',
     'seaborn',
-    'seml',
     'tabulate',
     'tinydb',
     'tinydb-serialization',

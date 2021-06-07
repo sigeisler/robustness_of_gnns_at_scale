@@ -68,7 +68,7 @@ This is the code used to analyze the learning curves and the distribution of att
 
 *Note: after open sourcing we will provide the full collection of pretrained models and in the case of transfer attacks we will also provide all perturbed adjacency matrices. For now we only include the pretrained models for Cora ML.*
 
-For the training and evaluation code we decided to provide SEML/Sacred experiments which make it very easy to run the same code from the command line or on your cluster.
+For the training and evaluation code we decided to provide Sacred experiments which make it very easy to run the same code from the command line.
 
 To train the models you can use the `script_execute_experiment` script and simply specif the respective configuration (if the configuration specifies `partition: gpu_large` you need at least 32 GB of GPU memory):
 ```bash

@@ -3,27 +3,18 @@ import warnings
 from typing import Any, Dict, Sequence, Union
 
 from sacred import Experiment
-import seml
+
 import torch
 
 from rgnn_at_scale.attacks import Attack, create_attack
 from experiments.common import prepare_attack_experiment, run_global_attack
 
 ex = Experiment()
-seml.setup_logger(ex)
-
-
-@ex.post_run_hook
-def collect_stats(_run):
-    seml.collect_exp_stats(_run)
 
 
 @ex.config
 def config():
     overwrite = None
-    db_collection = None
-    if db_collection is not None:
-        ex.observers.append(seml.create_mongodb_observer(db_collection, overwrite=overwrite))
 
     # default params
     dataset = 'cora_ml'
