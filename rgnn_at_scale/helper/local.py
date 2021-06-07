@@ -47,7 +47,7 @@ def build_configs_and_run(config_files: Sequence[str], executable: Optional[str]
     configs = []
     executable = None
     for config_file in config_files:
-        base_config, experiment_config = read_config(config_file)
+        base_config, _, experiment_config = read_config(config_file)
         if executable is None:
             executable = base_config['executable']
         elif executable != base_config['executable']:

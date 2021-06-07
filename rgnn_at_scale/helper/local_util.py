@@ -14,7 +14,9 @@ import numpy as np
 
 
 VALID_CONFIG_VALUES = ['executable', 'name', 'output_dir',
-                       'conda_environment', 'project_root_dir'],
+                       'conda_environment', 'project_root_dir']
+VALID_SLURM_CONFIG_VALUES = ['experiments_per_job', 'max_simultaneous_jobs',
+                             'sbatch_options_template', 'sbatch_options']
 
 RESERVED_KEYS = ['grid', 'fixed', 'random']
 
@@ -403,7 +405,17 @@ def read_config(config_path):
     if 'output_dir' in base_dict:
         base_dict['output_dir'] = str(Path(base_dict['output_dir']).expanduser().resolve())
 
-    return base_dict, config_dict
+    if 'slurm' in config_dict:
+        slurm_dict = config_dict['slurm']
+        del config_dict['slurm']
+
+        for k in slurm_dict.keys():
+            if k not in VALID_SLURM_CONFIG_VALUES:
+                raise ConfigError(f"{k} is not a valid value in the `slurm` config block.")
+
+        return base_dict, slurm_dict, config_dict
+    else:
+        return base_dict, None, config_dict
 
 
 def generate_configs(experiment_config):

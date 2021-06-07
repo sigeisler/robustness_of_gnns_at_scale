@@ -68,9 +68,9 @@ This is the code used to analyze the learning curves and the distribution of att
 
 *Note: after open sourcing we will provide the full collection of pretrained models and in the case of transfer attacks we will also provide all perturbed adjacency matrices. For now we only include the pretrained models for Cora ML.*
 
-For the training and evaluation code we decided to provide Sacred experiments which make it very easy to run the same code from the command line.
+For the training and evaluation code we decided to provide Sacred experiments which make it very easy to run the same code from the command line or on your cluster.
 
-To train the models you can use the `script_execute_experiment` script and simply specif the respective configuration (if the configuration specifies `partition: gpu_large` you need at least 32 GB of GPU memory):
+To train or attack the models you can use the `script_execute_experiment` script and simply specif the respective configuration (if the configuration specifies `partition: gpu_large` you need at least 32 GB of GPU memory):
 ```bash
 python script_execute_experiment.py --config-files 'config/train/cora_and_citeseer.yaml'
 ```
@@ -79,6 +79,8 @@ Alternatively, you can also execute the experiment directly passing the desired 
 ```bash
 python experiments/experiment_train.py with "dataset=cora_ml" "seed=0" "model_params={\"label\": \"Soft Median GDC (T=1.0)\", \"model\": \"RGNN\", \"do_cache_adj_prep\": True, \"n_filters\": 64, \"dropout\": 0.5, \"mean\": \"soft_median\", \"mean_kwargs\": {\"temperature\": 1.0}, \"svd_params\": None, \"jaccard_params\": None, \"gdc_params\": {\"alpha\": 0.15, \"k\": 64}}" "artifact_dir=cache" "binary_attr=False"
 ```
+
+By default all the results of the experiments will be logged into `./output`.
 
 ## Evaluation
 
