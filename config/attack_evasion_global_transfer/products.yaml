@@ -41,8 +41,8 @@ grid:
       - Vanilla GDC
       - Soft Median GDC (T=5.0)
       - Vanilla PPRGo
-      - Soft Median RPPRGo (T=5.0)
-      - Soft Median RPPRGo (T=1.0)
+      - Soft Median PPRGo (T=5.0)
+      - Soft Median PPRGo (T=1.0)
 
   epsilons: 
     type: choice

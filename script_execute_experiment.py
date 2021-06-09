@@ -25,7 +25,6 @@ def main(args: argparse.Namespace):
     for config in configs:
         try:
             result = run(config_updates=config)
-
         except Exception as e:
             logging.exception(e)
             logging.error(

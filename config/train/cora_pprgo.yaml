@@ -58,7 +58,7 @@ pprgo:
 soft_medoid_rpprgo_t1_0:
   fixed:
     model_params:
-      label: Soft Medoid RPPRGo (T=1.0)
+      label: Soft Medoid PPRGo (T=1.0)
       model: RobustPPRGo
       ppr_normalization: 'row' 
       batch_norm: False
@@ -80,7 +80,7 @@ soft_medoid_rpprgo_t1_0:
 soft_medoid_rpprgo_t0_5:
   fixed:
     model_params:
-      label: Soft Medoid RPPRGo (T=0.5)
+      label: Soft Medoid PPRGo (T=0.5)
       model: RobustPPRGo
       ppr_normalization: 'row' 
       batch_norm: False
@@ -102,7 +102,7 @@ soft_medoid_rpprgo_t0_5:
 soft_medoid_rpprgo_t0_2:
   fixed:
     model_params:
-      label: Soft Medoid RPPRGo (T=0.2)
+      label: Soft Medoid PPRGo (T=0.2)
       model: RobustPPRGo
       ppr_normalization: 'row' 
       batch_norm: False
@@ -124,7 +124,7 @@ soft_medoid_rpprgo_t0_2:
 soft_median_rpprgo_t1_0:
   fixed:
     model_params:
-      label: Soft Median RPPRGo (T=1.0)
+      label: Soft Median PPRGo (T=1.0)
       model: RobustPPRGo
       ppr_normalization: 'row' 
       batch_norm: False
@@ -144,7 +144,7 @@ soft_median_rpprgo_t1_0:
 soft_median_rpprgo_t0_5:
   fixed:
     model_params:
-      label: Soft Median RPPRGo (T=0.5)
+      label: Soft Median PPRGo (T=0.5)
       model: RobustPPRGo
       ppr_normalization: 'row' 
       batch_norm: False
@@ -164,7 +164,7 @@ soft_median_rpprgo_t0_5:
 soft_median_rpprgo_t0_2:
   fixed:
     model_params:
-      label: Soft Median RPPRGo (T=0.2)
+      label: Soft Median PPRGo (T=0.2)
       model: RobustPPRGo
       ppr_normalization: 'row' 
       batch_norm: False

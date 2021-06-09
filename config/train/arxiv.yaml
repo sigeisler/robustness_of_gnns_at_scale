@@ -218,7 +218,7 @@ soft_median_rpprgo_t1_0:
   fixed:
     data_device: 'cpu'
     model_params:
-      label: Soft Median RPPRGo (T=1.0)
+      label: Soft Median PPRGo (T=1.0)
       model: RobustPPRGo
       ppr_normalization: 'row' 
       batch_norm: False
@@ -245,7 +245,7 @@ soft_median_rpprgo_t5_0:
   fixed:
     data_device: 'cpu'
     model_params:
-      label: Soft Median RPPRGo (T=1.0)
+      label: Soft Median PPRGo (T=1.0)
       model: RobustPPRGo
       ppr_normalization: 'row' 
       batch_norm: False

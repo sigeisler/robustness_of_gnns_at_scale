@@ -10,6 +10,7 @@ Besides the standard python artifacts we provide:
 - `experiments`: source code defining the types of experiments
 - `kernels`: the custom kernel package
 - `notebooks`: for (jupyter) notebooks
+- `output`: for dumping the results of manual experiments (see instructions below)
 - `rgnn_at_scale`: the source code
 - `tests`: unit tests for some important parts of the code
 - `script_execute_experiment.py`: the _main script_ to execute an experiment
@@ -77,7 +78,7 @@ python script_execute_experiment.py --config-files 'config/train/cora_and_citese
 
 Alternatively, you can also execute the experiment directly passing the desired configuration:
 ```bash
-python experiments/experiment_train.py with "dataset=cora_ml" "seed=0" "model_params={\"label\": \"Soft Median GDC (T=1.0)\", \"model\": \"RGNN\", \"do_cache_adj_prep\": True, \"n_filters\": 64, \"dropout\": 0.5, \"mean\": \"soft_median\", \"mean_kwargs\": {\"temperature\": 1.0}, \"svd_params\": None, \"jaccard_params\": None, \"gdc_params\": {\"alpha\": 0.15, \"k\": 64}}" "artifact_dir=cache" "binary_attr=False"
+python experiments/experiment_train.py with "dataset=cora_ml" "seed=0" "model_params={\"label\": \"Soft Median GDC (T=1.0)\", \"model\": \"RGNN\", \"do_cache_adj_prep\": True, \"n_filters\": 64, \"dropout\": 0.5, \"mean\": \"soft_median\", \"mean_kwargs\": {\"temperature\": 1.0}, \"svd_params\": None, \"jaccard_params\": None, \"gdc_params\": {\"alpha\": 0.15, \"k\": 64}}" "artifact_dir=cache" "binary_attr=False"  "make_undirected=True"
 ```
 
 By default all the results of the experiments will be logged into `./output`.
@@ -86,9 +87,9 @@ By default all the results of the experiments will be logged into `./output`.
 
 For evaluation, we use the locally stored models in the `cache` folder (unless specified differently).
 
-### Empirical Robustness
+Similarly to training, we provide a script that runs the attacks for different seeds for all pretrained models. For all experiments, please check out the `config` folder. _Note: as this runs multiple seeds and budgets it will take several minutes to complete_
 
-Similarly to training, we provide a script that runs the attacks for different seeds for all pretrained models (here for a local attack on Cora ML and Citeseer using PR-BCD):
+Additionally, we provide an example for a local attack on Cora ML and using PR-BCD (single seed and one budget):
 ```bash
-python script_execute_experiment.py --config-files 'config/attack_evasion_local_direct/cora_and_citeseer_localprbcd.yaml'
+python script_execute_experiment.py --config-files 'config/attack_evasion_local_direct/EXAMPLE_cora_and_citeseer_localprbcd.yaml'
 ```

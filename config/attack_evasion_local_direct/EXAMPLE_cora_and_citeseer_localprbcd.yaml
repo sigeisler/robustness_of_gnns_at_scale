@@ -1,3 +1,5 @@
+# Minimal config for an experiment that runs in < 5 minutes on a command machine with a NVIDIA GTX 1080Ti.
+
 base:
   name: rgnn_at_scale_attack_evasion_local_direct
   executable: experiments/experiment_local_attack_direct.py
@@ -16,7 +18,7 @@ fixed:
   data_dir: datasets
   artifact_dir: cache
   nodes: None
-  nodes_topk: 40
+  nodes_topk: 4  # 40
   attack_params.epochs: 400
   attack_params.fine_tune_epochs: 100
   attack_params.search_space_size: 10_000
@@ -30,22 +32,22 @@ grid:
   epsilons:
     type: choice
     options:
-      - [0.1]
-      - [0.25]
+      # - [0.1]
+      # - [0.25]
       - [0.5]
-      - [0.75]
-      - [1.0]
+      # - [0.75]
+      # - [1.0]
   seed:
     type: choice
     options:
       - 0
-      - 1
-      - 5
+      # - 1
+      # - 5
   dataset:
     type: choice
     options:
       - cora_ml
-      - citeseer
+      # - citeseer
 
 localprbcd_gcn:
   fixed:
@@ -56,14 +58,14 @@ localprbcd_gcn:
       lr_factor: 0.05
     make_undirected: True
 
-localprbcd_gcn_directed:
-  fixed:
-    attack: LocalPRBCD
-    model_label: Vanilla GCN
-    model_storage_type: pretrained_rownorm
-    attack_params:
-      lr_factor: 0.05
-    make_undirected: False
+# localprbcd_gcn_directed:
+#   fixed:
+#     attack: LocalPRBCD
+#     model_label: Vanilla GCN
+#     model_storage_type: pretrained_rownorm
+#     attack_params:
+#       lr_factor: 0.05
+#     make_undirected: False
 
 pprgo_localprbcd:
   fixed:
@@ -76,7 +78,7 @@ pprgo_localprbcd:
     make_undirected:
       type: choice
       options:
-        - False
+        # - False
         - True
 
 median_1_0_pprgo_localprbcd:
@@ -90,5 +92,5 @@ median_1_0_pprgo_localprbcd:
     make_undirected:
       type: choice
       options:
-        - False
+        # - False
         - True

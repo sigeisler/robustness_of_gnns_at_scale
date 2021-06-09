@@ -44,8 +44,8 @@ grid:
       - Soft Median GDC (T=0.5)
       - Soft Median GDC (T=0.2)
       - Vanilla PPRGo
-      - Soft Median RPPRGo (T=1.0)
-      - Soft Median RPPRGo (T=5.0)
+      - Soft Median PPRGo (T=1.0)
+      - Soft Median PPRGo (T=5.0)
 
 pgd:
   fixed:

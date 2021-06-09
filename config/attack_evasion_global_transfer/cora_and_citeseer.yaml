@@ -53,12 +53,12 @@ grid:
       - Jaccard GCN
       - RGCN
       - Vanilla PPRGo
-      - Soft Medoid RPPRGo (T=1.0)
-      - Soft Medoid RPPRGo (T=0.5)
-      - Soft Medoid RPPRGo (T=0.2)
-      - Soft Median RPPRGo (T=1.0)
-      - Soft Median RPPRGo (T=0.5)
-      - Soft Median RPPRGo (T=0.2)
+      - Soft Medoid PPRGo (T=1.0)
+      - Soft Medoid PPRGo (T=0.5)
+      - Soft Medoid PPRGo (T=0.2)
+      - Soft Median PPRGo (T=1.0)
+      - Soft Median PPRGo (T=0.5)
+      - Soft Median PPRGo (T=0.2)
 
 
 fgsm:

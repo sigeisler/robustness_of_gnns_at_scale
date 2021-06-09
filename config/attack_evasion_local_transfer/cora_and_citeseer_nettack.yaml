@@ -64,7 +64,7 @@ models:
       type: choice
       options:
         - Vanilla PPRGo
-        - Soft Median RPPRGo (T=1.0)
+        - Soft Median PPRGo (T=1.0)
 
     make_undirected:
       type: choice

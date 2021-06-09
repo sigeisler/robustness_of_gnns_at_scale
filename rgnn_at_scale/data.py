@@ -838,6 +838,7 @@ class CachedPPRMatrix:
         del self.storage_params["split_desc"]
         stored_ppr_documents = self.storage.find_sparse_matrix(self.ppr_cache_params["data_storage_type"],
                                                                self.storage_params, return_documents_only=True)
+        stored_pprs = []
         if len(stored_ppr_documents) > 0:
             df_documents = pd.DataFrame(list(map(lambda doc: doc["params"], stored_ppr_documents)))
             df_documents["id"] = df_documents.index
@@ -858,7 +859,6 @@ class CachedPPRMatrix:
 
             doc_ids_to_read = list(df_cross.iloc[0][["id", "id_1", "id_2"]])
 
-            stored_pprs = []
             for i in doc_ids_to_read:
                 doc = stored_ppr_documents[i]
                 path = self.storage._build_artifact_path(self.ppr_cache_params["data_storage_type"],
