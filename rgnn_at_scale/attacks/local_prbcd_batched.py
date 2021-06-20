@@ -20,7 +20,7 @@ class LocalBatchedPRBCD(LocalPRBCD):
     def __init__(self, ppr_recalc_at_end: bool = True, ppr_cache_params: Dict[str, Any] = None, **kwargs):
         super().__init__(**kwargs)
 
-        assert type(self.attacked_model) in BATCHED_PPR_MODELS.__args__, "LocalBatchedPRBCD Attack only supports PPRGo models"
+        assert type(self.attacked_model) in BATCHED_PPR_MODELS.__args__, "LocalBatchedPRBCD only supports PPRGo models"
 
         self.ppr_cache_params = ppr_cache_params
         if self.ppr_cache_params is not None:
@@ -57,7 +57,8 @@ class LocalBatchedPRBCD(LocalPRBCD):
                 disconnected_nodes = (adj.sum(0) == 0).nonzero().flatten()
                 if disconnected_nodes.nelement():
                     logging.info(
-                        f'Adding {disconnected_nodes.nelement()} nodes back into perturbed adjacency that would have disconnected the graph.')
+                        f'Adding {disconnected_nodes.nelement()} nodes back into perturbed '
+                        'adjacency that would have disconnected the graph.')
                     adj = SparseTensor(row=torch.cat((adj.storage.row(), disconnected_nodes)),
                                        col=torch.cat((adj.storage.col(), disconnected_nodes)),
                                        value=torch.cat((adj.storage.col(), torch.full_like(disconnected_nodes, 1e-9))))

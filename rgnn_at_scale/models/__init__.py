@@ -32,10 +32,6 @@ def create_model(hyperparams: Dict[str, Any]) -> MODEL_TYPE:
         return DenseGCN(**hyperparams)
     if hyperparams['model'] == 'RGCN':
         return RGCN(**hyperparams)
-    if hyperparams['model'] == "PPRGoDiffEmbWrapper":
-        return PPRGoDiffEmbWrapper(**hyperparams)
-    if hyperparams['model'] == "RobustPPRGoDiffEmb":
-        return RobustPPRGoDiffEmbWrapper(**hyperparams)
     if hyperparams['model'] == "RobustPPRGo":
         return RobustPPRGoWrapper(**hyperparams)
     if hyperparams['model'] == "PPRGo":

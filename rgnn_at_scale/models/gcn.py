@@ -116,7 +116,8 @@ class GCN(nn.Module):
     do_checkpoint : bool, optional
         If true use checkpointing in message passing, by default False
     row_norm : bool, optional
-        If true use row norm normalization otherwise symmetric (only relevant if do_normalize_adj_once = True), by default False
+        If true use row norm normalization otherwise symmetric (only relevant if do_normalize_adj_once = True),
+        by default False
     n_chunks : int, optional
         Number of chunks for checkpointing, by default 8
     """

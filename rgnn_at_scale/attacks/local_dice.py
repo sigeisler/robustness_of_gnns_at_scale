@@ -52,8 +52,9 @@ class LocalDICE(SparseLocalAttack):
         if delete_budget > 0:
             delete_neighbors_idx = neighbors_idx[same_class_mask][torch.randperm(
                 same_class_mask.sum())][: delete_budget]
-            delete_neighbors_mask = (neighbors_idx.repeat(delete_neighbors_idx.shape[0]).view(
-                delete_neighbors_idx.shape[0], -1) == delete_neighbors_idx[:, None].repeat(1, neighbors_idx.shape[0])).any(dim=0)
+            delete_neighbors_mask = ((neighbors_idx.repeat(delete_neighbors_idx.shape[0]).view(
+                delete_neighbors_idx.shape[0], -1) == delete_neighbors_idx[:, None].repeat(1, neighbors_idx.shape[0]))
+                .any(dim=0))
 
         # 5. build perturbed adjacency
         A_rows, A_cols, A_vals = self.adj.coo()

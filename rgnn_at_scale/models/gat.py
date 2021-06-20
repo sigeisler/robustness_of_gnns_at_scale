@@ -33,8 +33,6 @@ class RGATConv(GATConv):
         self._mean = ROBUST_MEANS[mean] if mean is not None else None
         self._mean_kwargs = mean_kwargs
 
-        #assert isinstance(kwargs['in_channels'], int), 'Only identical encoders for left and right are supported'
-
     def forward(self, arguments: Tuple[torch.Tensor, SparseTensor] = None) -> torch.Tensor:
         """Predictions based on the input.
 
@@ -64,11 +62,6 @@ class RGATConv(GATConv):
         assert edge_weight is None, 'The weights must be passed via a SparseTensor'
         _, attention_matrix = super().forward(x, edge_index, return_attention_weights=True)
         attention_matrix.storage._value = attention_matrix.storage._value.squeeze()
-
-        #assert (attention_matrix.storage._row == attention_matrix.storage._row).all()
-        #assert (attention_matrix.storage._col == attention_matrix.storage._col).all()
-
-        #attention_matrix.storage._value *= edge_index.storage._value
 
         x = self.lin_l(x)
 
