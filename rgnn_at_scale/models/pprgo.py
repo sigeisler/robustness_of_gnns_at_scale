@@ -1,6 +1,7 @@
 from typing import Any, Dict, Union
 
 import logging
+from abc import ABC, abstractmethod
 
 import torch
 import torch.nn.functional as F
@@ -19,29 +20,29 @@ from rgnn_at_scale.helper import ppr_utils as ppr
 
 class PPRGoMLP(nn.Module):
     def __init__(self,
-                 num_features: int,
-                 num_classes: int,
-                 hidden_size: int,
-                 nlayers: int,
+                 n_features: int,
+                 n_classes: int,
+                 n_filters: int,
+                 n_layers: int,
                  dropout: float,
                  batch_norm: bool = False):
         super().__init__()
         self.use_batch_norm = batch_norm
 
-        layers = [nn.Linear(num_features, hidden_size, bias=False)]
+        layers = [nn.Linear(n_features, n_filters, bias=False)]
         if self.use_batch_norm:
-            layers.append(nn.BatchNorm1d(hidden_size))
+            layers.append(nn.BatchNorm1d(n_filters))
 
-        for i in range(nlayers - 2):
+        for i in range(n_filters - 2):
             layers.append(nn.ReLU())
             layers.append(nn.Dropout(dropout))
-            layers.append(nn.Linear(hidden_size, hidden_size, bias=False))
+            layers.append(nn.Linear(n_filters, n_layers, bias=False))
             if self.use_batch_norm:
-                layers.append(nn.BatchNorm1d(hidden_size))
+                layers.append(nn.BatchNorm1d(n_filters))
 
         layers.append(nn.ReLU())
         layers.append(nn.Dropout(dropout))
-        layers.append(nn.Linear(hidden_size, num_classes, bias=False))
+        layers.append(nn.Linear(n_filters, n_classes, bias=False))
 
         self.layers = nn.Sequential(*layers)
 
@@ -55,18 +56,50 @@ class PPRGoMLP(nn.Module):
 
 
 class PPRGo(nn.Module):
+    """
+    The vanilla PPRGo Model of Bojchevski & Klicpera et al. 
+    The implementation was taken from https://github.com/TUM-DAML/pprgo_pytorch
+
+    @inproceedings{bojchevski2020pprgo,
+        title={Scaling Graph Neural Networks with Approximate PageRank},
+        author={Bojchevski, Aleksandar and Klicpera, Johannes and Perozzi, Bryan and Kapoor, Amol and Blais, Martin and R{\'o}zemberczki, Benedek and Lukasik, Michal and G{\"u}nnemann, Stephan},
+        booktitle = {Proceedings of the 26th ACM SIGKDD International Conference on Knowledge Discovery and Data Mining},
+        year={2020},
+        publisher = {ACM},
+        address = {New York, NY, USA},
+    }
+
+    Parameters
+    ----------
+    n_features : int
+        Number of attributes for each node
+    n_classes : int
+        Number of classes for prediction
+    n_filters : int
+        number of dimensions for the hidden units
+    n_layers : int
+        number of layers before the message passing step (via graph diffusion)
+    dropout : int
+        Dropout rate between 0 and 1
+    batch_norm : bool, optional
+        If true use batch norm in every layer block between the linearity and activation function, by default False
+    aggr : str, optional
+        The reduce operation to be used in the message passing step to aggregate all incoming node messages
+        Possible values are "sum", "mean","min" or "max". (default: "sum")
+    """
+
     def __init__(self,
-                 num_features: int,
-                 num_classes: int,
-                 hidden_size: int,
-                 nlayers: int,
+                 n_features: int,
+                 n_classes: int,
+                 n_filters: int,
+                 n_layers: int,
                  dropout: float,
                  batch_norm: bool = False,
                  aggr: str = "sum",
                  **kwargs):
         super().__init__()
-        self.mlp = PPRGoMLP(num_features, num_classes,
-                            hidden_size, nlayers, dropout, batch_norm)
+        self.mlp = PPRGoMLP(n_features, n_classes,
+                            n_filters, n_layers, dropout, batch_norm)
         self.aggr = aggr
 
     def forward(self,
@@ -75,7 +108,7 @@ class PPRGo(nn.Module):
                 ppr_idx: torch.Tensor):
         """
         Parameters:
-            X: torch_sparse.SparseTensor of shape (num_ppr_nodes, num_features)
+            X: torch_sparse.SparseTensor of shape (num_ppr_nodes, n_features)
                 The node features for all nodes which were assigned a ppr score
             ppr_scores: torch.Tensor of shape (num_ppr_nodes)
                 The ppr scores are calculate for every node of the batch individually.
@@ -84,10 +117,10 @@ class PPRGo(nn.Module):
                 The id of the batch that the corresponding ppr_score entry belongs to
 
         Returns:
-            propagated_logits: torch.Tensor of shape (batch_size, num_classes)
+            propagated_logits: torch.Tensor of shape (batch_size, n_classes)
 
         """
-        # logits of shape (num_batch_nodes, num_classes)
+        # logits of shape (num_batch_nodes, n_classes)
         logits = self.mlp(X)
         propagated_logits = scatter(logits * ppr_scores[:, None], ppr_idx[:, None],
                                     dim=0, dim_size=ppr_idx[-1] + 1, reduce=self.aggr)
@@ -95,40 +128,79 @@ class PPRGo(nn.Module):
 
 
 class RobustPPRGo(nn.Module):
+    """
+    The robust version of the PPRGo Model of Bojchevski & Klicpera et al
+    which was extended to include the robust aggregation functions:
+    - soft_k_medoid
+    - soft_medoid (not scalable)
+    - k_medoid
+    - medoid (not scalable)
+    - dimmedian
+
+    The core implementation of PPRGo was taken from https://github.com/TUM-DAML/pprgo_pytorch
+
+    @inproceedings{bojchevski2020pprgo,
+    title={Scaling Graph Neural Networks with Approximate PageRank},
+    author={Bojchevski, Aleksandar and Klicpera, Johannes and Perozzi, Bryan and Kapoor, Amol and Blais, Martin and R{\'o}zemberczki, Benedek and Lukasik, Michal and G{\"u}nnemann, Stephan},
+    booktitle = {Proceedings of the 26th ACM SIGKDD International Conference on Knowledge Discovery and Data Mining},
+    year={2020},
+    publisher = {ACM},
+    address = {New York, NY, USA},
+    }
+
+    Parameters
+    ----------
+    n_features : int
+        Number of attributes for each node
+    n_classes : int
+        Number of classes for prediction
+    n_filters : int
+        number of dimensions for the hidden units
+    n_layers : int
+        number of layers before the message passing step (via graph diffusion)
+    dropout : int
+        Dropout rate between 0 and 1
+    batch_norm : bool, optional
+        If true use batch norm in every layer block between the linearity and activation function, by default False
+    mean : str, optional
+        The desired mean (see above for the options), by default 'soft_k_medoid'
+    mean_kwargs : Dict[str, Any], optional
+        Arguments for the mean, by default dict(k=64, temperature=1.0, with_weight_correction=True)
+    """
+
     def __init__(self,
-                 num_features: int,
-                 num_classes: int,
-                 hidden_size: int,
-                 nlayers: int,
+                 n_features: int,
+                 n_classes: int,
+                 n_filters: int,
+                 n_layers: int,
                  dropout: float,
                  batch_norm: bool = False,
                  mean='soft_k_medoid',
-                 mean_kwargs: Dict[str, Any] = dict(k=32,
+                 mean_kwargs: Dict[str, Any] = dict(k=64,
                                                     temperature=1.0,
                                                     with_weight_correction=True),
                  **kwargs):
         super().__init__()
         self._mean = ROBUST_MEANS[mean]
         self._mean_kwargs = mean_kwargs
-        self.mlp = PPRGoMLP(num_features, num_classes,
-                            hidden_size, nlayers, dropout, batch_norm)
+        self.mlp = PPRGoMLP(n_features, n_classes,
+                            n_filters, n_layers, dropout, batch_norm)
 
     def forward(self,
                 X: SparseTensor,
                 ppr_scores: SparseTensor):
         """
         Parameters:
-            X: torch_sparse.SparseTensor of shape (num_ppr_nodes, num_features)
+            X: torch_sparse.SparseTensor of shape (n_neighbors, n_features)
                 The node features of all neighboring from nodes of the ppr_matrix (training nodes)
-            ppr_matrix: torch_sparse.SparseTensor of shape (ppr_num_nonzeros, num_features)
-                The node features of all neighboring nodes of the training nodes in
-                the graph derived from the Personal Page Rank as specified by idx
+            ppr_matrix: torch_sparse.SparseTensor of shape (n_neighbors, num_nodes)
+                The sparse personalized pagerank matrix for all neighbors contained in the feature matrix. 
 
         Returns:
-            propagated_logits: torch.Tensor of shape (batch_size, num_classes)
+            propagated_logits: torch.Tensor of shape (batch_size, n_classes)
 
         """
-        # logits of shape (num_batch_nodes, num_classes)
+        # logits of shape (num_batch_nodes, n_classes)
         logits = self.mlp(X)
 
         if self._mean.__name__ == 'soft_median' and ppr_scores.size(0) == 1 and 'temperature' in self._mean_kwargs:
@@ -163,13 +235,20 @@ class RobustPPRGo(nn.Module):
                           **self._mean_kwargs)
 
 
-class PPRGoWrapperBase():
+class PPRGoWrapperBase(ABC):
+    """
+        The base class for PPRGo wrapper classes defining
+            1) default hyperparameter values
+            2) the custom training procedure of PPRGo models
+            3) a general wrapper around pprgos forward function, calculating the 
+            approximate page rank matrix from the adjacency if ommited in the forward call
+    """
 
     def __init__(self,
                  n_features: int,
                  n_classes: int,
-                 hidden_size: int = 512,
-                 nlayers: int = 4,
+                 n_filters: int = 512,
+                 n_layers: int = 4,
                  dropout: float = 0.0,
                  alpha: float = 0.1,
                  eps: float = 1e-3,
@@ -177,24 +256,65 @@ class PPRGoWrapperBase():
                  ppr_normalization: str = "row",
                  forward_batch_size: int = 128,
                  batch_norm: bool = False,
-                 skip_connection: bool = False,
                  mean: str = 'soft_k_medoid',
-                 mean_kwargs: Dict[str, Any] = dict(k=32,
+                 mean_kwargs: Dict[str, Any] = dict(k=64,
                                                     temperature=1.0,
                                                     with_weight_correction=True),
                  ppr_cache_params: Dict[str, Any] = None,
                  **kwargs):
         """
-        ppr_cache_params: dict
-            data_artifact_dir : str
-            data_storage_type : str
-            dataset : str
-            make_directed : bool
+        Parameters
+        ----------
+        n_features : int
+            Number of attributes for each node
+        n_classes : int
+            Number of classes for prediction
+        n_filters : int
+            number of dimensions for the hidden units
+        n_layers : int
+            number of layers before the message passing step (via graph diffusion)
+        dropout : int
+            Dropout rate between 0 and 1
+        batch_norm : bool, optional
+            If true use batch norm in every layer block between the linearity and activation function, by default False
+        mean : str, optional
+            The desired mean (see above for the options), by default 'soft_k_medoid'
+        mean_kwargs : Dict[str, Any], optional
+            Arguments for the mean, by default dict(k=64, temperature=1.0, with_weight_correction=True)
+        mean : str, optional
+            The desired mean (see above for the options), by default 'soft_k_medoid'
+        forward_batch_size: int, optional
+            In case the forward method does not recieve ppr_scores, this argument specifies how large the batches
+            will be that are processed at once in a single forward pass.
+        alpha: int, optional
+            The alpha value (restart probability) that is used to calculate the approximate topk ppr matrix
+        eps: int, optional
+            The threshold used as stopping criterion for the iterative approximation algorithm used for the ppr matrix
+        topk: int, optional
+            The top k elements to keep in each row of the ppr matrix.
+        ppr_normalization: int, optional
+            The normalization that is applied to the top k ppr matrix before passing it to the PPRGo model.
+            Possible values are 'sym', 'col' and 'row' (by default 'row')
+
+        ppr_cache_params: Dict[str, any]
+            To allow for caching the ppr matrix on the hard drive and loading it from disk the following keys in the
+            dictionary need to provide the necessary information:
+                data_artifact_dir : str
+                    The folder name/path in which to look for the storage (TinyDB) objects
+                data_storage_type : str
+                    The name of the storage (TinyDB) table name that's supposed to be used for caching ppr matrices
+                dataset : str
+                    The name of the dataset for which this model will be applied. This is necessary to make sure the
+                    correct ppr matrix is loaded from the disk for conscutive calls
+                make_directed : bool
+                    Wether the dataset passed to this model will be a directed graph or not. Necessary for the same reason 
+                    as the dataset name
+
         """
-        self.num_features = n_features
-        self.num_classes = n_classes
-        self.hidden_size = hidden_size
-        self.nlayers = nlayers
+        self.n_features = n_features
+        self.n_classes = n_classes
+        self.n_filters = n_filters
+        self.n_layers = n_layers
         self.dropout = dropout
         self.alpha = alpha
         self.eps = eps
@@ -202,11 +322,11 @@ class PPRGoWrapperBase():
         self.ppr_normalization = ppr_normalization
         self.forward_batch_size = forward_batch_size
         self.batch_norm = batch_norm
-        self.skip_connection = skip_connection
         self.mean = mean
         self.mean_kwargs = mean_kwargs
         self.ppr_cache_params = ppr_cache_params
 
+    @abstractmethod
     def model_forward(self, *args, **kwargs):
         pass
 
@@ -218,6 +338,24 @@ class PPRGoWrapperBase():
                         adj: Union[SparseTensor, sp.csr_matrix],
                         ppr_scores: SparseTensor = None,
                         ppr_idx=None):
+        """
+        Wrapper around the forward function of PPRGo models.
+        Fully (auto)-differentiable only iff ppr_scores is not None!
+        If the ppr_scores are not given, they will be calculated on the fly or loaded from cache (disk)
+
+        Parameters
+        ----------
+        attr : Torch.Tensor
+            The feature/attribute matrix of shape (n_nodes, n_features)
+        adj : Union[SparseTensor, sp.csr_matrix],
+            The adjacency matrix used for calculating the personalized page rank matrix.
+            Should be of shape (n_nodes, n_nodes)
+        ppr_scores : SparseTensor
+            The precalculated personalized page rank matrix
+        ppr_idx: np.Array
+            The list of node ids for which the personalized page rank matrix should be calculated from the adjacency
+
+        """
 
         device = next(self.parameters()).device
         if ppr_scores is not None:
@@ -284,7 +422,7 @@ class PPRGoWrapperBase():
             )
             num_predictions = topk_ppr.shape[0]
 
-            logits = torch.zeros(num_predictions, self.num_classes, device="cpu", dtype=torch.float32)
+            logits = torch.zeros(num_predictions, self.n_classes, device="cpu", dtype=torch.float32)
 
             num_batches = len(data_loader)
             display_step = max(int(num_batches / 10), 1)
@@ -529,14 +667,22 @@ class PPRGoWrapperBase():
 
 
 class PPRGoWrapper(PPRGo, PPRGoWrapperBase):
+    """
+        Wrapper class around the Vanilla PPRGo model. 
+        Use this class to instantiate a PPRGo model that includes the calculation and caching of 
+        the ppr matrix as well as the training procedure.
+
+    """
+
     def __init__(self,
                  *args,
                  **kwargs):
+        # using the constructor of the wrapper base class to set/validate the required/optional model params
         PPRGoWrapperBase.__init__(self, *args, **kwargs)
-        PPRGo.__init__(self, self.num_features, self.num_classes,
-                       self.hidden_size, self.nlayers, self.dropout,
-                       batch_norm=self.batch_norm, skip_connection=self.skip_connection,
-                       mean=self.mean, mean_kwargs=self.mean_kwargs)
+
+        PPRGo.__init__(self, self.n_features, self.n_classes,
+                       self.n_filters, self.n_layers, self.dropout,
+                       batch_norm=self.batch_norm, mean=self.mean, mean_kwargs=self.mean_kwargs)
 
     def forward(self, *args, **kwargs):
         return self.forward_wrapper(*args, **kwargs)
@@ -555,10 +701,9 @@ class RobustPPRGoWrapper(RobustPPRGo, PPRGoWrapperBase):
                  *args,
                  **kwargs):
         PPRGoWrapperBase.__init__(self, *args, **kwargs)
-        RobustPPRGo.__init__(self, self.num_features, self.num_classes,
-                             self.hidden_size, self.nlayers, self.dropout,
-                             batch_norm=self.batch_norm, skip_connection=self.skip_connection,
-                             mean=self.mean, mean_kwargs=self.mean_kwargs)
+        RobustPPRGo.__init__(self, self.n_features, self.n_classes,
+                             self.n_filters, self.n_layers, self.dropout,
+                             batch_norm=self.batch_norm, mean=self.mean, mean_kwargs=self.mean_kwargs)
 
     def forward(self, *args, **kwargs):
         return self.forward_wrapper(*args, **kwargs)
