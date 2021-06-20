@@ -81,13 +81,15 @@ class Attack(ABC):
         self.attr_adversary = attr_perturbed.to(self.data_device)
 
     def get_pertubations(self):
+        adj_adversary, attr_adversary = self.adj_adversary, self.attr_adversary
+
         if isinstance(self.adj_adversary, torch.Tensor):
-            self.adj_adversary = SparseTensor.from_dense(self.adj_adversary)
+            adj_adversary = SparseTensor.from_dense(self.adj_adversary)
 
         if isinstance(self.attr_adversary, SparseTensor):
-            self.attr_adversary = self.attr_adversary.to_dense()
+            attr_adversary = self.attr_adversary.to_dense()
 
-        return self.adj_adversary, self.attr_adversary
+        return adj_adversary, attr_adversary
 
     @staticmethod
     @torch.no_grad()
