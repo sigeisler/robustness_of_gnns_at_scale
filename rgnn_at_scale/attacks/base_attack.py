@@ -288,6 +288,10 @@ class SparseLocalAttack(SparseAttack):
             logits = self.get_eval_logits(node_idx, self.adj_adversary)
         return logits, initial_logits
 
+    @staticmethod
+    def evaluate_global(model, attr, adj, labels: torch.Tensor, eval_idx: List[int]):
+        raise NotImplementedError("Can't evaluate globally for a local attack")
+
     def set_eval_model(self, model):
         self.eval_model = deepcopy(model).to(self.device)
 
