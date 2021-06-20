@@ -138,8 +138,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                 logging.info(results[-1])
                 logging.info(
                     f"Completed attack and evaluation of {model_label} using {attack} with pert. edges for node {node} and budget {n_perturbations}")
-                # if hasattr(adversary, 'attack_statistics'):
-                #     results[-1]['attack_statistics'] = adversary.attack_statistics
+
         if hasattr(adversary, "ppr_matrix"):
             adversary.ppr_matrix.save_to_storage()
     assert len(results) > 0

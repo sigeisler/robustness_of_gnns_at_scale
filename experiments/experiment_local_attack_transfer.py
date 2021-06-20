@@ -153,8 +153,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                     logging.error(
                         f"Failed to evaluate model '{eval_model_label}' using {attack} with eps {eps} at node {node}.")
                     continue
-                # if hasattr(adversary, 'attack_statistics'):
-                #     results[-1]['attack_statistics'] = adversary.attack_statistics
+
         if hasattr(adversary, "ppr_matrix"):
             adversary.ppr_matrix.save_to_storage()
     assert len(results) > 0

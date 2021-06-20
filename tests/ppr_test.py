@@ -26,14 +26,6 @@ class TestPPRUpdate():
         p = torch.tensor([[1.0, 1.0, 0, 0.3]],
                          dtype=torch.float32,
                          requires_grad=True)
-        # A_dense = torch.tensor([[0, 1, 0, 1],
-        #                         [1, 0, 1, 0],
-        #                         [0, 0, 0, 1],
-        #                         [1, 1, 1, 0]],
-        #                        dtype=torch.float32)
-        # p = torch.tensor([[0.3, 0.1, 0, 0.3]],
-        #                  dtype=torch.float32,
-        #                  requires_grad=True)
 
         ppr_exact = calc_ppr_exact_row(A_dense.clone(), alpha=alpha)
 
@@ -104,7 +96,7 @@ class TestPPRUpdate():
         eps = 1e-5
         topk = 128
 
-        graph = prep_graph("cora_ml", device,  # dataset_root=data_dir,
+        graph = prep_graph("cora_ml", device,
                            make_undirected=True,
                            binary_attr=False,
                            return_original_split=False)
@@ -153,10 +145,6 @@ class TestPPRUpdate():
         A_sparse = SparseTensor.from_dense(A_dense)
 
         num_nodes = A_dense.shape[0]
-        # p_sample_size = 100
-        # p_idx = torch.randint(num_nodes, (p_sample_size,)).unique()
-        # p_val = torch.rand(p_idx.shape[0])
-
         p_dense = torch.tensor([[0.5, 0.0, 0, 0.0]],
                                dtype=torch.float32,
                                requires_grad=True)
@@ -262,7 +250,7 @@ class TestPPRUpdate():
         eps = 1e-5
         topk = 128
 
-        graph = prep_graph("cora_ml", device,  # dataset_root=data_dir,
+        graph = prep_graph("cora_ml", device,
                            make_undirected=True,
                            binary_attr=False,
                            return_original_split=False)

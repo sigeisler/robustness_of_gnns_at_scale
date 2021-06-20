@@ -793,7 +793,7 @@ class CachedPPRMatrix:
 
             self.csr_ppr, _ = stored_topk_ppr[0] if len(stored_topk_ppr) == 1 else (None, None)
             logging.info(
-                f"Memory after  loading 'Attack' CachedPPRMatrix from storage:{utils.get_max_memory_bytes() / (1024 ** 3)}")
+                f"Memory after loading 'Attack' CachedPPRMatrix: {utils.get_max_memory_bytes() / (1024 ** 3)}")
 
         self.has_missing_ppr_values = True if self.csr_ppr is None else (self.csr_ppr.sum(-1) == 0).any()
 
@@ -856,9 +856,6 @@ class CachedPPRMatrix:
 
             df_cross = df_cross.sort_values(['joint_ppr_unique_len', 'joint_ppr_diff'], ascending=[False, True])
 
-            # df_documents["ppr_idx_len"] = df_documents["ppr_idx"].apply(lambda x: len(x))
-            # df_documents = df_documents.sort_values(['ppr_idx_len'], ascending=[False])
-
             doc_ids_to_read = list(df_cross.iloc[0][["id", "id_1", "id_2"]])
 
             for i in doc_ids_to_read:
@@ -867,11 +864,6 @@ class CachedPPRMatrix:
                                                          doc.doc_id).replace(".pt", ".npz")
                 sparse_matrix = sp.load_npz(path).tocoo()
                 stored_pprs.append((sparse_matrix, doc["params"]["ppr_idx"]))
-
-            # doc = stored_ppr_documents[df_documents.iloc[0][["id"]]
-            # path= self.storage._build_artifact_path(self.ppr_cache_params["data_storage_type"],
-            #                                              doc.doc_id).replace(".pt", ".npz")
-            # sparse_matrix= sp.load_npz(path).tocoo()
 
             logging.info("Memory Usage loading CachedPPRMatrix from storage:")
             logging.info(utils.get_max_memory_bytes() / (1024 ** 3))

@@ -12,13 +12,6 @@ from torch_sparse import SparseTensor
 from rgnn_at_scale.helper import utils
 from rgnn_at_scale.attacks.base_attack import Attack, SparseAttack
 
-"""
-    Topology Attack and Defense for Graph Neural Networks: An Optimization Perspective
-        https://arxiv.org/pdf/1906.04214.pdf
-    Tensorflow Implementation:
-        https://github.com/KaidiXu/GCN_ADV_Train
-"""
-
 
 class PRBCD(SparseAttack):
     """Sampled and hence scalable PGD attack for graph data.
@@ -86,7 +79,7 @@ class PRBCD(SparseAttack):
             accuracy = (
                 logits.argmax(-1)[self.idx_attack] == self.labels[self.idx_attack]
             ).float().mean().item()
-            print(f'\nBefore the attack - Loss: {loss.item()} Accuracy: {100 * accuracy:.3f} %\n')
+            logging.info(f'\nBefore the attack - Loss: {loss.item()} Accuracy: {100 * accuracy:.3f} %\n')
             self._append_attack_statistics(loss.item(), accuracy, 0., 0.)
             del logits
             del loss
@@ -119,7 +112,7 @@ class PRBCD(SparseAttack):
                     logits.argmax(-1)[self.idx_attack] == self.labels[self.idx_attack]
                 ).float().mean().item()
                 if epoch % self.display_step == 0:
-                    print(f'\nEpoch: {epoch} Loss: {loss.item()} Accuracy: {100 * accuracy:.3f} %\n')
+                    logging.info(f'\nEpoch: {epoch} Loss: {loss.item()} Accuracy: {100 * accuracy:.3f} %\n')
 
                 if self.with_early_stropping and best_accuracy > accuracy:
                     best_accuracy = accuracy
@@ -133,7 +126,8 @@ class PRBCD(SparseAttack):
                 if epoch < self.epochs - 1:
                     self.resample_search_space(n_perturbations, edge_index, edge_weight, gradient)
                 elif self.with_early_stropping and epoch == self.epochs - 1:
-                    print(f'Loading search space of epoch {best_epoch} (accuarcy={best_accuracy}) for fine tuning\n')
+                    logging.info(
+                        f'Loading search space of epoch {best_epoch} (accuarcy={best_accuracy}) for fine tuning\n')
                     self.current_search_space = best_search_space.to(self.device)
                     self.modified_edge_index = best_edge_index.to(self.device)
                     self.modified_edge_weight_diff = best_edge_weight_diff.to(self.device)
@@ -209,9 +203,7 @@ class PRBCD(SparseAttack):
         modified_edge_weight = edge_weight[is_in_search_space]
         original_edge_weight = modified_edge_weight - self.modified_edge_weight_diff
         does_original_edge_exist = torch.isclose(original_edge_weight.float(), torch.tensor(1.))
-        # for source, dest in self.modified_edge_index[:, does_original_edge_exist].T:
-        #     weight = self.edge_weight[(self.edge_index[0] == source) & (self.edge_index[1] == dest)]
-        #     assert weight == 1, f'For edge ({source}, {dest}) the weight is not 1, it is {weight}'
+
         return does_original_edge_exist, is_in_search_space
 
     def projection(self, n_perturbations: int, edge_index: torch.Tensor, edge_weight: torch.Tensor) -> float:

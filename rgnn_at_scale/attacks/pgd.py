@@ -10,6 +10,7 @@ not intent to unify the code style, programming paradigms, etc. with the rest of
 import numpy as np
 import torch
 from torch_sparse import SparseTensor
+from tqdm import tqdm
 
 from rgnn_at_scale.attacks.base_attack import DenseAttack
 
@@ -68,7 +69,7 @@ class PGD(DenseAttack):
         self.adj_changes.requires_grad = True
 
         self.attacked_model.eval()
-        for t in range(self.epochs):
+        for t in tqdm(range(self.epochs)):
             modified_adj = self.get_modified_adj()
             logits = self.attacked_model(self.attr, modified_adj)
             loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])

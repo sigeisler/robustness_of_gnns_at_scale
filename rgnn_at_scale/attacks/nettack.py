@@ -1,20 +1,16 @@
 
-from typing import Dict,  Union
 import logging
 
-import math
 from torch_sparse import SparseTensor, coalesce
 import numpy as np
 from numba import jit
 import scipy.sparse as sp
 import torch
-from torch.nn import functional as F
 from torch.nn import Identity
+from tqdm import tqdm
 
 from rgnn_at_scale.models import MODEL_TYPE, BATCHED_PPR_MODELS
 from rgnn_at_scale.helper.utils import sparse_tensor
-from rgnn_at_scale.models import GCN
-from rgnn_at_scale.helper.utils import to_symmetric
 from rgnn_at_scale.attacks.base_attack import SparseLocalAttack
 
 """
@@ -77,7 +73,6 @@ class Nettack(SparseLocalAttack):
                                       perturb_features=False,
                                       direct=True)
 
-        #self.adj_adversary = self.nettack.adj_adversary.to(self.data_device)
         perturbed_idx = self.get_perturbed_edges().T
 
         if self.make_undirected:
@@ -119,23 +114,6 @@ class Nettack(SparseLocalAttack):
             return torch.tensor([])
 
         return torch.tensor(self.nettack.structure_perturbations)
-
-    # @ staticmethod
-    # def classification_statistics(logits, label) -> Dict[str, float]:
-    #     logits, label = F.log_softmax(logits.cpu(), dim=-1), label.cpu()
-    #     logit_target = logits[label].item()
-    #     sorted = logits.argsort()
-    #     logit_best_non_target = logits[sorted[sorted != label][-1]].item()
-    #     confidence_target = F.softmax(logit_target)
-    #     confidence_non_target = F.softmax(logit_best_non_target)
-    #     margin = confidence_target - confidence_non_target
-    #     return {
-    #         'logit_target': logit_target,
-    #         'logit_best_non_target': logit_best_non_target,
-    #         'confidence_target': confidence_target,
-    #         'confidence_non_target': confidence_non_target,
-    #         'margin': margin
-    #     }
 
 
 class OriginalNettack:
@@ -547,10 +525,7 @@ class OriginalNettack:
             self.potential_edges = self.potential_edges[
                 self.adj_orig[self.potential_edges[:, 0], self.potential_edges[:, 1]].toarray().reshape(-1) == 0
             ]
-        for _ in range(n_perturbations):
-            if self.verbose:
-                logging.info(
-                    "##### ...{}/{} perturbations ... #####".format(_ + 1, n_perturbations))
+        for _ in tqdm(range(n_perturbations)):
             if perturb_structure:
 
                 # Do not consider edges that, if removed, result in singleton edges in the graph.

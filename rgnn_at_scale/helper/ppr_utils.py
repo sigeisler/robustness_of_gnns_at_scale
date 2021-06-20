@@ -91,8 +91,6 @@ def topk_ppr_matrix(adj_matrix, alpha, eps, idx, topk, normalization='row'):
         deg_inv_sqrt = 1. / deg_sqrt
 
         row, col = topk_matrix.nonzero()
-        # assert np.all(deg[idx[row]] > 0)
-        # assert np.all(deg[col] > 0)
         topk_matrix.data = deg_sqrt[idx[row]] * topk_matrix.data * deg_inv_sqrt[col]
     elif normalization == 'col':
         # Assume undirected (symmetric) adjacency matrix
@@ -100,8 +98,6 @@ def topk_ppr_matrix(adj_matrix, alpha, eps, idx, topk, normalization='row'):
         deg_inv = 1. / np.maximum(deg, 1e-12)
 
         row, col = topk_matrix.nonzero()
-        # assert np.all(deg[idx[row]] > 0)
-        # assert np.all(deg[col] > 0)
         topk_matrix.data = deg[idx[row]] * topk_matrix.data * deg_inv[col]
     elif normalization == 'row':
         pass

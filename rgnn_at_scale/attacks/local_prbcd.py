@@ -1,5 +1,4 @@
 from collections import defaultdict
-from typing import Dict
 
 import math
 import logging
@@ -7,7 +6,6 @@ import logging
 import numpy as np
 
 import torch
-from torch.nn import functional as F
 import torch_sparse
 from torch_sparse import SparseTensor
 
@@ -107,8 +105,8 @@ class LocalPRBCD(SparseLocalAttack):
                     logits, self.labels[node_idx].to(self.device))
                 if epoch % self.display_step == 0:
                     logging.info(f'\nEpoch: {epoch} Loss: {loss.item()} Statstics: {classification_statistics}\n')
-                    logging.info(
-                        f"Gradient mean {gradient.abs().mean().item()} std {gradient.abs().std().item()} with base learning rate {n_perturbations * self.lr_factor}")
+                    logging.info(f"Gradient mean {gradient.abs().mean().item()} std {gradient.abs().std().item()} "
+                                 f"with base learning rate {n_perturbations * self.lr_factor}")
                     if torch.cuda.is_available():
                         logging.info(torch.cuda.memory_allocated() / (1024 ** 3))
 
@@ -123,7 +121,8 @@ class LocalPRBCD(SparseLocalAttack):
                 if epoch < self.epochs - 1:
                     self.resample_search_space(node_idx, n_perturbations, gradient)
                 elif self.with_early_stropping and epoch == self.epochs - 1:
-                    print(f'Loading search space of epoch {best_epoch} (margin={best_margin}) for fine tuning\n')
+                    logging.info(
+                        f'Loading search space of epoch {best_epoch} (margin={best_margin}) for fine tuning\n')
                     self.current_search_space = best_search_space.clone().to(self.device)
                     self.modified_edge_weight_diff = best_edge_weight_diff.clone().to(self.device)
 
@@ -166,8 +165,7 @@ class LocalPRBCD(SparseLocalAttack):
     def calc_perturbed_edges(self, node_idx: int) -> torch.Tensor:
         source = torch.full_like(self.current_search_space, node_idx).cpu()
         target = self.current_search_space.cpu()
-        #flip_order_mask = source > target
-        #source, target = torch.where(~flip_order_mask, source, target), torch.where(flip_order_mask, source, target)
+
         return torch.stack((source, target), dim=0)
 
     def get_perturbed_edges(self) -> torch.Tensor:
@@ -261,7 +259,7 @@ class LocalPRBCD(SparseLocalAttack):
             new_index = torch.randint(self.n - 1, (number_new_edges,), device=self.device)
             new_index[new_index >= node_idx] += 1
             self.current_search_space = torch.cat((self.current_search_space, new_index))
-            #self.current_search_space = self.current_search_space[node_idx != self.current_search_space]
+
             self.current_search_space, unique_idx = torch.unique(
                 self.current_search_space,
                 sorted=True,

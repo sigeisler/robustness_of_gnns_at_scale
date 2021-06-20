@@ -110,9 +110,9 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
     n_features = attr.shape[1]
     n_classes = int(labels[~labels.isnan()].max() + 1)
 
-    print("Training set size: ", len(idx_train))
-    print("Validation set size: ", len(idx_val))
-    print("Test set size: ", len(idx_test))
+    logging.info(f"Training set size: {len(idx_train)}")
+    logging.info(f"Validation set size: {len(idx_val)}")
+    logging.info(f"Test set size: {len(idx_test)}")
 
     # Collect all hyperparameters of model
     ppr_cache = None

@@ -63,7 +63,6 @@ def _load_ppr(input_dir, dump_suffix, shape):
     batch_id = 0
     last_row = 0
 
-    # incremental_adj = None
     row_list = []
     col_list = []
     val_list = []
@@ -118,14 +117,6 @@ def _load_ppr(input_dir, dump_suffix, shape):
     del val_list
     logging.info(f"Concat took {concat_time} seconds")
     logging.info(f'Memory concat val ppr: {utils.get_max_memory_bytes() / (1024 ** 3)}')
-
-    # if shape is None:
-    #     # guess shape
-    #     max_row = edge_rows.max() + 1
-    #     max_col = edge_cols.max() + 1
-    #     # guess shape is square
-    #     max_nodes = max(max_row, max_col)
-    #     shape = (max_nodes, max_nodes)
 
     concat_start = datetime.now()
     logging.info("try build ppr")

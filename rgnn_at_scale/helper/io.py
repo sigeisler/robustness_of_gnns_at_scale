@@ -448,9 +448,6 @@ class Storage():
             List of loaded matrices, their params and optionally the ids.
         """
 
-        # if "ppr_idx" in match_condition.keys() and not isinstance(match_condition["ppr_idx"], int):
-        #     match_condition["ppr_idx"] = hash(frozenset(match_condition["ppr_idx"]))
-
         raw_documents = Storage.locked_call(
             lambda: self._find_meta(artifact_type, match_condition),
             self._get_lock_path(artifact_type),

@@ -211,7 +211,7 @@ def calc_ppr_update_sparse_result(ppr: sp.csr_matrix,
     """
     num_nodes = ppr.shape[0]
     assert ppr.shape[1] == Ai.size(1), "shapes of ppr and adjacency must be the same"
-    # assert Ai[0, i].nnz() == 0, "The adjacency's must not have self loops"
+
     assert (torch.logical_or(Ai.storage.value() == 1, Ai.storage.value() == 0)).all().item(), \
         "The adjacency must be unweighted"
     assert torch.all(p.storage.value() > 0), "For technical reasons all values in p must be greater than 0"
@@ -298,16 +298,6 @@ def calc_ppr_update_sparse_result(ppr: sp.csr_matrix,
     )
 
     ppr_pert_update = alpha * P_uv_inv
-
-    # This strategy helps to reduce the memory footprint
-    # topk_values, topk_indices = ppr_pert_update.squeeze().topk(p.nnz())
-
-    # return SparseTensor(
-    #     row=torch.zeros(topk_indices.shape[0], device=row.device(), dtype=torch.long),
-    #     col=torch.arange(num_nodes, device=row.device())[col_mask][topk_indices],
-    #     value=topk_values.squeeze(),
-    #     sparse_sizes=(1, num_nodes)
-    # )
 
     return SparseTensor(
         row=torch.zeros(col_mask.sum(), device=row.device(), dtype=torch.long),

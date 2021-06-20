@@ -77,8 +77,9 @@ class DICE(SparseAttack):
             ):
                 delete_budget -= 1
                 pbar.update(1)
-                # * why do we make a set of nodes to be deleted instead of instantly deleting them?
-                # * Because otherwise we might add a connection in the same place where we removed a connection from, that's why we remove the nodes at the end
+                # we make a set of nodes to be deleted instead of instantly deleting them, because otherwise we might
+                # add a connection in the same place where we removed a connection from, that's why we remove the
+                # nodes at the end
                 to_be_deleted_set.add((first_node, second_node))
         pbar.close()
         return to_be_deleted_set

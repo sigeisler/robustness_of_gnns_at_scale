@@ -57,16 +57,16 @@ class PPRGoMLP(nn.Module):
 
 class PPRGo(nn.Module):
     """
-    The vanilla PPRGo Model of Bojchevski & Klicpera et al. 
+    The vanilla PPRGo Model of Bojchevski & Klicpera et al.
     The implementation was taken from https://github.com/TUM-DAML/pprgo_pytorch
 
     @inproceedings{bojchevski2020pprgo,
         title={Scaling Graph Neural Networks with Approximate PageRank},
         author={Bojchevski, Aleksandar and Klicpera, Johannes and Perozzi, Bryan and Kapoor, Amol and Blais, Martin and R{\'o}zemberczki, Benedek and Lukasik, Michal and G{\"u}nnemann, Stephan},
-        booktitle = {Proceedings of the 26th ACM SIGKDD International Conference on Knowledge Discovery and Data Mining},
+        booktitle={Proceedings of the 26th ACM SIGKDD International Conference on Knowledge Discovery and Data Mining},
         year={2020},
-        publisher = {ACM},
-        address = {New York, NY, USA},
+        publisher={ACM},
+        address={New York, NY, USA},
     }
 
     Parameters
@@ -142,10 +142,10 @@ class RobustPPRGo(nn.Module):
     @inproceedings{bojchevski2020pprgo,
     title={Scaling Graph Neural Networks with Approximate PageRank},
     author={Bojchevski, Aleksandar and Klicpera, Johannes and Perozzi, Bryan and Kapoor, Amol and Blais, Martin and R{\'o}zemberczki, Benedek and Lukasik, Michal and G{\"u}nnemann, Stephan},
-    booktitle = {Proceedings of the 26th ACM SIGKDD International Conference on Knowledge Discovery and Data Mining},
+    booktitle={Proceedings of the 26th ACM SIGKDD International Conference on Knowledge Discovery and Data Mining},
     year={2020},
-    publisher = {ACM},
-    address = {New York, NY, USA},
+    publisher={ACM},
+    address={New York, NY, USA},
     }
 
     Parameters
@@ -194,7 +194,7 @@ class RobustPPRGo(nn.Module):
             X: torch_sparse.SparseTensor of shape (n_neighbors, n_features)
                 The node features of all neighboring from nodes of the ppr_matrix (training nodes)
             ppr_matrix: torch_sparse.SparseTensor of shape (n_neighbors, num_nodes)
-                The sparse personalized pagerank matrix for all neighbors contained in the feature matrix. 
+                The sparse personalized pagerank matrix for all neighbors contained in the feature matrix.
 
         Returns:
             propagated_logits: torch.Tensor of shape (batch_size, n_classes)
@@ -223,7 +223,7 @@ class RobustPPRGo(nn.Module):
             # `n` less than `k` and `with_weight_correction` is not implemented
             # so we need to make sure we set with_weight_correction to false if n less than k
             if self._mean_kwargs["k"] > X.size(0):
-                print("no with_weight_correction")
+                logging.info("no with_weight_correction")
                 return self._mean(ppr_scores,
                                   logits,
                                   # we can not manipluate self._mean_kwargs because this would affect
@@ -240,7 +240,7 @@ class PPRGoWrapperBase(ABC):
         The base class for PPRGo wrapper classes defining
             1) default hyperparameter values
             2) the custom training procedure of PPRGo models
-            3) a general wrapper around pprgos forward function, calculating the 
+            3) a general wrapper around pprgos forward function, calculating the
             approximate page rank matrix from the adjacency if ommited in the forward call
     """
 
@@ -307,8 +307,8 @@ class PPRGoWrapperBase(ABC):
                     The name of the dataset for which this model will be applied. This is necessary to make sure the
                     correct ppr matrix is loaded from the disk for conscutive calls
                 make_directed : bool
-                    Wether the dataset passed to this model will be a directed graph or not. Necessary for the same reason 
-                    as the dataset name
+                    Wether the dataset passed to this model will be a directed graph or not. Necessary for the same
+                    reason as the dataset name
 
         """
         self.n_features = n_features
@@ -618,8 +618,8 @@ class PPRGoWrapperBase(ABC):
 
                 step += 1
 
-            epoch_pbar.set_description(f"Training Epoch... acc_train: {epoch_acc_train: .4f}, acc_val: {epoch_acc_val: .4f}",
-                                       refresh=False)
+            epoch_pbar.set_description(f"Training Epoch... acc_train: {epoch_acc_train: .4f},"
+                                       f"acc_val: {epoch_acc_val: .4f}", refresh=False)
 
             if use_annealing_scheduler and scheduler_time == "epoch":
                 logging.info("Scheduler Epoch Step CosineAnnealingWarmRestarts\n")
@@ -668,8 +668,8 @@ class PPRGoWrapperBase(ABC):
 
 class PPRGoWrapper(PPRGo, PPRGoWrapperBase):
     """
-        Wrapper class around the Vanilla PPRGo model. 
-        Use this class to instantiate a PPRGo model that includes the calculation and caching of 
+        Wrapper class around the Vanilla PPRGo model.
+        Use this class to instantiate a PPRGo model that includes the calculation and caching of
         the ppr matrix as well as the training procedure.
 
     """
