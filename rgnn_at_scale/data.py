@@ -662,6 +662,8 @@ def prep_graph(name: str,
         logging.debug(utils.get_max_memory_bytes() / (1024 ** 3))
 
         labels = data.y.squeeze().to(device)
+    else:
+        raise NotImplementedError(f"Dataset `with name '{name}' is not supported")
 
     if binary_attr:
         # NOTE: do not use this for really large datasets.
