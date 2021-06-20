@@ -488,10 +488,10 @@ class TestSoftWeightedMedoidKNeighborhood():
             """
             This particular setting threw an error:
             IndexError: index 2029 is out of bounds for dimension 0 with size 2027
-            This test is to make sure it's fixed now and should just check that 
+            This test is to make sure it's fixed now and should just check that
             no error is thrown anymore
 
-            The cause of the error was the partial_distance_matrix function that couldn't 
+            The cause of the error was the partial_distance_matrix function that couldn't
             handle some batched adjacency matrices.
             """
 

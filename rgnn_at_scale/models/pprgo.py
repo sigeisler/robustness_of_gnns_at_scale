@@ -62,7 +62,8 @@ class PPRGo(nn.Module):
 
     @inproceedings{bojchevski2020pprgo,
         title={Scaling Graph Neural Networks with Approximate PageRank},
-        author={Bojchevski, Aleksandar and Klicpera, Johannes and Perozzi, Bryan and Kapoor, Amol and Blais, Martin and R{\'o}zemberczki, Benedek and Lukasik, Michal and G{\"u}nnemann, Stephan},
+        author={Bojchevski, Aleksandar and Klicpera, Johannes and Perozzi, Bryan and Kapoor, Amol and Blais,
+                Martin and R{\'o}zemberczki, Benedek and Lukasik, Michal and G{\"u}nnemann, Stephan},
         booktitle={Proceedings of the 26th ACM SIGKDD International Conference on Knowledge Discovery and Data Mining},
         year={2020},
         publisher={ACM},
@@ -141,7 +142,8 @@ class RobustPPRGo(nn.Module):
 
     @inproceedings{bojchevski2020pprgo,
     title={Scaling Graph Neural Networks with Approximate PageRank},
-    author={Bojchevski, Aleksandar and Klicpera, Johannes and Perozzi, Bryan and Kapoor, Amol and Blais, Martin and R{\'o}zemberczki, Benedek and Lukasik, Michal and G{\"u}nnemann, Stephan},
+    author={Bojchevski, Aleksandar and Klicpera, Johannes and Perozzi, Bryan and Kapoor, Amol and Blais,
+            Martin and R{\'o}zemberczki, Benedek and Lukasik, Michal and G{\"u}nnemann, Stephan},
     booktitle={Proceedings of the 26th ACM SIGKDD International Conference on Knowledge Discovery and Data Mining},
     year={2020},
     publisher={ACM},

@@ -163,12 +163,6 @@ def load_ppr(
     if split_desc is not None and idx is not None:
         ppr_idx = np.load(Path(input_dir) / f"{dump_suffix}_idx.npy")
 
-    if idx is not None:
-        if len(ppr_idx) != len(idx):
-            # the ppr that was precalculated with for the given configuration was calculated for a different set of nodes
-            # TODO: this is only a very crude check, to make sure the idx actually matches we'd need to fully compare them, but that's expensive...
-            return None, ppr_idx
-
     return _load_ppr(input_dir, dump_suffix, shape), ppr_idx
 
 

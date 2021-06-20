@@ -221,7 +221,8 @@ class Storage():
         else:
             return torch.load(path)
 
-    def find_artifacts(self, artifact_type: str, match_condition: Dict[str, Any], return_documents_only=False) -> List[Dict[str, Any]]:
+    def find_artifacts(self, artifact_type: str, match_condition: Dict[str, Any],
+                       return_documents_only=False) -> List[Dict[str, Any]]:
         """Find all artifacts matching the defined parameters.
 
         Parameters
@@ -419,7 +420,7 @@ class Storage():
                 ppr_idx = np.array(document['params']["ppr_idx"])
 
                 document['params']["ppr_idx"] = hash(frozenset(ppr_idx))
-                ids = Storage.locked_call(
+                Storage.locked_call(
                     lambda: self._update_meta(artifact_type, doc_ids=[document_id], fields=document),
                     self._get_lock_path(artifact_type),
                     self.lock_timeout,

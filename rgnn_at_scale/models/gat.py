@@ -28,7 +28,7 @@ class RGATConv(GATConv):
     def __init__(self, mean='soft_k_medoid',
                  mean_kwargs: Dict[str, Any] = dict(k=64, temperature=1.0, with_weight_correction=True),
                  **kwargs):
-        kwargs['in_channels'] = 2*[kwargs['in_channels']]
+        kwargs['in_channels'] = 2 * [kwargs['in_channels']]
         super().__init__(**kwargs)
         self._mean = ROBUST_MEANS[mean] if mean is not None else None
         self._mean_kwargs = mean_kwargs
