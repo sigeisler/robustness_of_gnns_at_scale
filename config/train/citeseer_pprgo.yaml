@@ -45,8 +45,8 @@ pprgo:
       ppr_normalization: 'row' 
       batch_norm: False
       topk: 64
-      hidden_size: 64
-      nlayers: 2
+      n_filters: 64
+      n_layers: 2
       alpha: 0.203183
       eps: 1e-3
       dropout: 0.1
@@ -63,8 +63,8 @@ soft_medoid_rpprgo_t1_0:
       ppr_normalization: 'row' 
       batch_norm: False
       topk: 64
-      hidden_size: 64
-      nlayers: 2
+      n_filters: 64
+      n_layers: 2
       alpha: 0.196717
       eps: 1e-3
       dropout: 0.5
@@ -86,8 +86,8 @@ soft_medoid_rpprgo_t0_5:
       ppr_normalization: 'row' 
       batch_norm: False
       topk: 64
-      hidden_size: 128
-      nlayers: 2
+      n_filters: 128
+      n_layers: 2
       alpha: 0.166807
       eps: 1e-3
       dropout: 0.1
@@ -109,8 +109,8 @@ soft_medoid_rpprgo_t0_2:
       ppr_normalization: 'row' 
       batch_norm: False
       topk: 64
-      hidden_size: 64
-      nlayers: 2
+      n_filters: 64
+      n_layers: 2
       alpha: 0.069915
       eps: 1e-3
       dropout: 0.5
@@ -132,8 +132,8 @@ soft_median_rpprgo_t1_0:
       ppr_normalization: 'row' 
       batch_norm: False
       topk: 64
-      hidden_size: 64
-      nlayers: 2
+      n_filters: 64
+      n_layers: 2
       alpha: 0.147924
       eps: 1e-3
       dropout: 0.5
@@ -153,8 +153,8 @@ soft_median_rpprgo_t0_5:
       ppr_normalization: 'row' 
       batch_norm: False
       topk: 64
-      hidden_size: 128
-      nlayers: 2
+      n_filters: 128
+      n_layers: 2
       alpha: 0.179727
       eps: 1e-3
       dropout: 0.1
@@ -174,8 +174,8 @@ soft_median_rpprgo_t0_2:
       ppr_normalization: 'row' 
       batch_norm: False
       topk: 64
-      hidden_size: 64
-      nlayers: 2
+      n_filters: 64
+      n_layers: 2
       alpha: 0.136218
       eps: 1e-3
       dropout: 0.5

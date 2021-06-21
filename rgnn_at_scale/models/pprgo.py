@@ -33,10 +33,10 @@ class PPRGoMLP(nn.Module):
         if self.use_batch_norm:
             layers.append(nn.BatchNorm1d(n_filters))
 
-        for i in range(n_filters - 2):
+        for i in range(n_layers - 2):
             layers.append(nn.ReLU())
             layers.append(nn.Dropout(dropout))
-            layers.append(nn.Linear(n_filters, n_layers, bias=False))
+            layers.append(nn.Linear(n_filters, n_filters, bias=False))
             if self.use_batch_norm:
                 layers.append(nn.BatchNorm1d(n_filters))
 

@@ -198,8 +198,8 @@ pprgo:
       model: PPRGo
       ppr_normalization: 'row' 
       batch_norm: False
-      hidden_size: 320
-      nlayers: 2
+      n_filters: 320
+      n_layers: 2
       alpha: 0.1
       topk: 256
       eps: 1e-6
@@ -222,8 +222,8 @@ soft_median_rpprgo_t1_0:
       model: RobustPPRGo
       ppr_normalization: 'row' 
       batch_norm: False
-      hidden_size: 320
-      nlayers: 2
+      n_filters: 320
+      n_layers: 2
       alpha: 0.1
       topk: 256
       eps: 1e-6
@@ -249,8 +249,8 @@ soft_median_rpprgo_t5_0:
       model: RobustPPRGo
       ppr_normalization: 'row' 
       batch_norm: False
-      hidden_size: 320
-      nlayers: 3
+      n_filters: 320
+      n_layers: 3
       alpha: 0.1
       topk: 256
       eps: 1e-6

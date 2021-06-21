@@ -51,8 +51,8 @@ pprgo:
       alpha: 0.1
       ppr_normalization: row
       dropout: 0.0
-      hidden_size: 512
-      nlayers: 4
+      n_filters: 512
+      n_layers: 4
       batch_norm: True
     train_params:
       lr: 1e-2
@@ -74,8 +74,8 @@ soft_median_5_0_pprgo:
       ppr_normalization: row
       batch_norm: True
       dropout: 0.0
-      hidden_size: 512
-      nlayers: 4
+      n_filters: 512
+      n_layers: 4
       mean: soft_median
       mean_kwargs: 
         temperature: 5.0
@@ -98,8 +98,8 @@ soft_median_1_0_pprgo:
       ppr_normalization: row
       batch_norm: True
       dropout: 0.0
-      hidden_size: 512
-      nlayers: 4
+      n_filters: 512
+      n_layers: 4
       mean: soft_median
       mean_kwargs: 
         temperature: 1.0

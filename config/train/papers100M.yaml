@@ -31,8 +31,8 @@ fixed:
       alpha: 0.001
       batch_norm: True
       dropout: 0.0
-      hidden_size: 512
-      nlayers: 7
+      n_filters: 512
+      n_layers: 7
   train_params:
     lr: 1e-3
     max_epochs: 10

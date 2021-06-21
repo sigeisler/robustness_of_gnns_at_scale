@@ -185,8 +185,8 @@ pprgo:
       ppr_normalization: 'row' 
       batch_norm: False
       topk: 256
-      hidden_size: 256
-      nlayers: 2
+      n_filters: 256
+      n_layers: 2
       alpha: 0.1
       eps: 1e-6
       dropout: 0.25
@@ -206,11 +206,11 @@ soft_median_rpprgo_t1_0:
       ppr_normalization: 'row' 
       batch_norm: False
       topk: 256
-      hidden_size: 256
+      n_filters: 256
       alpha: 0.1
       eps: 1e-6
       dropout: 0.25
-      nlayers: 2
+      n_layers: 2
       mean: soft_median
       mean_kwargs: 
         temperature: 1.0
@@ -230,11 +230,11 @@ soft_median_rpprgo_t5_0:
       ppr_normalization: 'row' 
       batch_norm: False
       topk: 256
-      hidden_size: 256
+      n_filters: 256
       alpha: 0.1
       eps: 1e-6
       dropout: 0.25
-      nlayers: 2
+      n_layers: 2
       mean: soft_median
       mean_kwargs: 
         temperature: 5.0
