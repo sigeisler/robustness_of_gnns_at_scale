@@ -10,7 +10,11 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 from pathlib import Path
 
 from sacred import Experiment
-from rgnn_at_scale.helper.local_util import read_config, generate_configs
+
+try:
+    from seml.config import read_config, generate_configs
+except:  # noqa: E722
+    from rgnn_at_scale.helper.local_util import read_config, generate_configs
 
 
 def build_configs_and_run(config_files: Sequence[str], executable: Optional[str] = None,
@@ -47,12 +51,12 @@ def build_configs_and_run(config_files: Sequence[str], executable: Optional[str]
     configs = []
     executable = None
     for config_file in config_files:
-        base_config, _, experiment_config = read_config(config_file)
+        seml_config, _, experiment_config = read_config(config_file)
         if executable is None:
-            executable = base_config['executable']
-        elif executable != base_config['executable']:
+            executable = seml_config['executable']
+        elif executable != seml_config['executable']:
             raise ValueError(
-                f'All configs must be for the same executable! Found {executable} and {base_config["executable"]}.'
+                f'All configs must be for the same executable! Found {executable} and {seml_config["executable"]}.'
             )
         configs.extend(generate_configs(experiment_config))
 

@@ -1,6 +1,6 @@
 # Minimal config for an experiment that runs in < 5 minutes on a command machine with a NVIDIA GTX 1080Ti.
 
-base:
+seml:
   name: rgnn_at_scale_attack_evasion_local_direct
   executable: experiments/experiment_local_attack_direct.py
   project_root_dir: ../..

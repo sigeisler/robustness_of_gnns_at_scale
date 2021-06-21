@@ -9,12 +9,25 @@ import torch
 from rgnn_at_scale.attacks import Attack, create_attack
 from experiments.common import prepare_attack_experiment, run_global_attack
 
+try:
+    import seml
+except:  # noqa: E722
+    seml = None
+
 ex = Experiment()
+
+if seml is not None:
+    seml.setup_logger(ex)
 
 
 @ex.config
 def config():
     overwrite = None
+
+    if seml is not None:
+        db_collection = None
+        if db_collection is not None:
+            ex.observers.append(seml.create_mongodb_observer(db_collection, overwrite=overwrite))
 
     # default params
     dataset = 'cora_ml'

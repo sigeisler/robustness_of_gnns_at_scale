@@ -1,4 +1,4 @@
-base:
+seml:
   name: papers_localprbcd
   executable: experiments/experiment_local_attack_direct.py
   project_root_dir: ../..

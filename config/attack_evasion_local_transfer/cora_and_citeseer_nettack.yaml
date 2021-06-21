@@ -1,4 +1,4 @@
-base:
+seml:
   name: rgnn_at_scale_attack_evasion_local_transfer
   executable: experiments/experiment_local_attack_transfer.py
   project_root_dir: ../..

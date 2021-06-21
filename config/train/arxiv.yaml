@@ -1,4 +1,4 @@
-base:
+seml:
   name: arxiv_rgnn_at_scale_train
   executable: experiments/experiment_train.py
   project_root_dir: ../..

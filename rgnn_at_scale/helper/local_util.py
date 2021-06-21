@@ -83,13 +83,13 @@ class YamlUniqueLoader(yaml.FullLoader):
     """
 
 
-def set_executable_and_working_dir(config_path, base_dict):
+def set_executable_and_working_dir(config_path, seml_dict):
     """
     Determine the working directory of the project and chdir into the working directory.
     Parameters
     ----------
     config_path: Path to the config file
-    base_dict: base config dictionary
+    seml_dict: seml config dictionary
 
     Returns
     -------
@@ -99,25 +99,25 @@ def set_executable_and_working_dir(config_path, base_dict):
 
     working_dir = config_dir
     os.chdir(working_dir)
-    if "executable" not in base_dict:
+    if "executable" not in seml_dict:
         raise ConfigError("Please specify an executable path for the experiment.")
-    executable = base_dict['executable']
+    executable = seml_dict['executable']
     executable_relative_to_config = os.path.exists(executable)
     executable_relative_to_project_root = False
-    if 'project_root_dir' in base_dict:
-        working_dir = str(Path(base_dict['project_root_dir']).expanduser().resolve())
-        base_dict['use_uploaded_sources'] = True
+    if 'project_root_dir' in seml_dict:
+        working_dir = str(Path(seml_dict['project_root_dir']).expanduser().resolve())
+        seml_dict['use_uploaded_sources'] = True
         os.chdir(working_dir)  # use project root as base dir from now on
         executable_relative_to_project_root = os.path.exists(executable)
-        del base_dict['project_root_dir']  # from now on we use only the working dir
+        del seml_dict['project_root_dir']  # from now on we use only the working dir
     else:
-        base_dict['use_uploaded_sources'] = False
-        logging.warning("'project_root_dir' not defined in base config. Source files will not be saved in MongoDB.")
-    base_dict['working_dir'] = working_dir
+        seml_dict['use_uploaded_sources'] = False
+        logging.warning("'project_root_dir' not defined in seml config. Source files will not be saved in MongoDB.")
+    seml_dict['working_dir'] = working_dir
     if not (executable_relative_to_config or executable_relative_to_project_root):
         raise ExecutableError(f"Could not find the executable.")
     executable = str(Path(executable).expanduser().resolve())
-    base_dict['executable'] = (str(Path(executable).relative_to(working_dir)) if executable_relative_to_project_root
+    seml_dict['executable'] = (str(Path(executable).relative_to(working_dir)) if executable_relative_to_project_root
                                else str(Path(executable).relative_to(config_dir)))
 
 
@@ -390,20 +390,20 @@ def read_config(config_path):
     with open(config_path, 'r') as conf:
         config_dict = convert_values(yaml.load(conf, Loader=YamlUniqueLoader))
 
-    if "base" not in config_dict:
-        raise ConfigError("Please specify a 'base' dictionary.")
+    if "seml" not in config_dict:
+        raise ConfigError("Please specify a 'seml' dictionary.")
 
-    base_dict = config_dict['base']
-    del config_dict['base']
+    seml_dict = config_dict['seml']
+    del config_dict['seml']
 
-    for k in base_dict.keys():
+    for k in seml_dict.keys():
         if k not in VALID_CONFIG_VALUES:
-            raise ConfigError(f"{k} is not a valid value in the `base` config block.")
+            raise ConfigError(f"{k} is not a valid value in the `seml` config block.")
 
-    set_executable_and_working_dir(config_path, base_dict)
+    set_executable_and_working_dir(config_path, seml_dict)
 
-    if 'output_dir' in base_dict:
-        base_dict['output_dir'] = str(Path(base_dict['output_dir']).expanduser().resolve())
+    if 'output_dir' in seml_dict:
+        seml_dict['output_dir'] = str(Path(seml_dict['output_dir']).expanduser().resolve())
 
     if 'slurm' in config_dict:
         slurm_dict = config_dict['slurm']
@@ -413,9 +413,9 @@ def read_config(config_path):
             if k not in VALID_SLURM_CONFIG_VALUES:
                 raise ConfigError(f"{k} is not a valid value in the `slurm` config block.")
 
-        return base_dict, slurm_dict, config_dict
+        return seml_dict, slurm_dict, config_dict
     else:
-        return base_dict, None, config_dict
+        return seml_dict, None, config_dict
 
 
 def generate_configs(experiment_config):
