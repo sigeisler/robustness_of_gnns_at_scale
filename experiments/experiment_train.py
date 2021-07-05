@@ -37,27 +37,46 @@ def config():
             ex.observers.append(seml.create_mongodb_observer(db_collection, overwrite=overwrite))
 
     # default params
-    dataset = 'ogbn-arxiv'
-    model_params = {}
-    train_params = {
-        'lr': 1e-2,
-        'weight_decay': 1e-3,
-        'patience': 300,
-        'max_epochs': 3000
-    }
-    binary_attr = False
-    seed = 1
-    artifact_dir = 'cache_debug'
+    data_dir = './datasets'
+    dataset = 'cora_ml'
+    make_undirected = True
+    binary_attr: False
+    data_device = 0
+
+    device = 0
+    seed = 0
+
+    artifact_dir = 'cache'
     model_storage_type = 'pretrained'
-    ppr_cache_params = None
+    model_params = dict(
+        label="Soft Median GDC (T=0.5)",
+        model="RGNN",
+        mean="soft_median",
+        mean_kwargs=dict(temperature=0.5),
+        n_filters=64,
+        dropout=0.5,
+        gdc_params=dict(
+            alpha=0.15,
+            k=64
+        ),
+        do_cache_adj_prep=True,
+        svd_params=None,
+        jaccard_params=None,
+    )
+
+    train_params = dict(
+        lr=1e-2,
+        weight_decay=1e-3,
+        patience=300,
+        max_epochs=3000
+    )
+
     ppr_cache_params = dict(
         data_artifact_dir="cache",
         data_storage_type="ppr"
     )
-    device = 0
-    display_steps = 10
-    data_dir = './datasets'
-    data_device = 0
+
+    display_steps = 100
     debug_level = "info"
 
 
@@ -71,21 +90,42 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
 
     Parameters
     ----------
-    data_dir : str, optional
+    data_dir : str
         Path to data folder that contains the dataset
     dataset : str
         Name of the dataset. Either one of: `cora_ml`, `citeseer`, `pubmed` or an ogbn dataset
     model_params : Dict[str, Any]
         The hyperparameters of the model to be passed as keyword arguments to the constructor of the model class.
-        This dict must contain the key "label" specificing the model class.
+        This dict must contain the key "model" specificing the model class. Supported model classes are:
+            - GCN
+            - DenseGCN
+            - RGCN
+            - RGAT
+            - PPRGo
+            - RobustPPRGo
     train_params : Dict[str, Any]
-
+        The training/hyperparamters to be passed as keyword arguments to the model's ".fit()" method or to 
+        the global "train" method if "model.fit()" is undefined.
     device : Union[int, torch.device]
-        `cpu` or GPU id, by default 0
-    normalize : bool, optional
-        Normalize adjacency matrix with symmetric degree normalization (non-scalable implementation!), by default False
-    binary_attr : bool, optional
-        If true the attributes are binarized (!=0), by default False
+        The device to use for training. Must be `cpu` or GPU id
+    data_device : Union[int, torch.device]
+        The device to use for storing the dataset. For batched models (like PPRGo) this may differ from the device parameter. 
+        In all other cases device takes precedence over data_device
+    make_undirected : bool
+        Normalizes adjacency matrix with symmetric degree normalization (non-scalable implementation!)
+    binary_attr : bool
+        If true the attributes are binarized (!=0)
+    artifact_dir: str
+        The path to the folder that acts as TinyDB Storage for trained models
+    model_storage_type: str
+        The name of the storage (TinyDB) table name the model is stored into.
+    ppr_cache_params: Dict[str, any]
+        Only used for PPRGo based models. Allows caching the ppr matrix on the hard drive and loading it from disk.
+        Tthe following keys in the dictionary need be provided:
+            data_artifact_dir : str
+                The folder name/path in which to look for the storage (TinyDB) objects
+            data_storage_type : str
+                The name of the storage (TinyDB) table name that's supposed to be used for caching ppr matrices
 
     Returns
     -------

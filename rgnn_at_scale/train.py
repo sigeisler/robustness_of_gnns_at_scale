@@ -11,7 +11,7 @@ from rgnn_at_scale.helper.utils import accuracy
 
 def train(model, attr, adj, labels, idx_train, idx_val,
           lr, weight_decay, patience, max_epochs, display_step=50):
-    """Train a model using either standard or adversarial training.
+    """Train a model using either standard training.
     Parameters
     ----------
     model: torch.nn.Module
