@@ -40,7 +40,7 @@ def config():
     data_dir = './datasets'
     dataset = 'cora_ml'
     make_undirected = True
-    binary_attr: False
+    binary_attr = False
     data_device = 0
 
     device = 0
@@ -94,7 +94,7 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
         Path to data folder that contains the dataset
     dataset : str
         Name of the dataset. Either one of: `cora_ml`, `citeseer`, `pubmed` or an ogbn dataset
-    model_params : Dict[str, Any]
+    model_params : Dict[str, Any], optional
         The hyperparameters of the model to be passed as keyword arguments to the constructor of the model class.
         This dict must contain the key "model" specificing the model class. Supported model classes are:
             - GCN
@@ -103,7 +103,7 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
             - RGAT
             - PPRGo
             - RobustPPRGo
-    train_params : Dict[str, Any]
+    train_params : Dict[str, Any], optional
         The training/hyperparamters to be passed as keyword arguments to the model's ".fit()" method or to 
         the global "train" method if "model.fit()" is undefined.
     device : Union[int, torch.device]
@@ -129,8 +129,8 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
 
     Returns
     -------
-    Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-        dense attribute tensor, sparse adjacency matrix (normalized) and labels tensor.
+    Dict[str, any]
+        A dictionary with the test set accuracy, the training & validation loss as well as the path to the trained model. 
     """
     if debug_level is not None and isinstance(debug_level, str):
         logger = logging.getLogger()
