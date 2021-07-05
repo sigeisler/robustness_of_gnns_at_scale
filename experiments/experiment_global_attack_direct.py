@@ -48,7 +48,7 @@ def config():
         do_synchronize=True,
         loss_type="tanhMargin",
     )
-    epsilons = [0.01]
+    epsilons = [0.01, 0.1]
 
     artifact_dir = 'cache'
     model_label = "Soft Median GDC (T=0.5)"

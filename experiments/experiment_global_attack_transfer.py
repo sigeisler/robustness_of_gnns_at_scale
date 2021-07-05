@@ -30,28 +30,34 @@ def config():
             ex.observers.append(seml.create_mongodb_observer(db_collection, overwrite=overwrite))
 
     # default params
-    dataset = 'cora_ml'
     data_dir = './datasets'
-    binary_attr = False
+    dataset = 'cora_ml'
     make_undirected = True
-    seed = 0
-
-    attack = 'PGD'
-    attack_params = {}
-    epsilons = [0.01, 0.1, 0.5, 1.0]
-
-    artifact_dir = 'cache_debug'
-    pert_adj_storage_type = 'evasion_attack_adj'
-    pert_attr_storage_type = 'evasion_attack_attr'
-
-    model_storage_type = 'pretrained'
-    model_label = None
-
-    surrogate_model_storage_type = 'pretrained'
-    surrogate_model_label = "Vanilla Dense GCN"
+    binary_attr = False
+    data_device = 0
 
     device = 0
-    data_device = 0
+    seed = 0
+
+    attack = 'PRBCD'
+    attack_params = dict(
+        epochs=400,
+        fine_tune_epochs=100,
+        keep_heuristic="WeightOnly",
+        search_space_size=1_000_000,
+        do_synchronize=True,
+        loss_type="tanhMargin",
+    )
+    epsilons = [0.01, 0.1]
+
+    artifact_dir = 'cache'
+    model_storage_type = 'pretrained'
+    model_label = "Soft Median PPRGo (T=0.5)"
+    surrogate_model_storage_type = 'pretrained'
+    surrogate_model_label = "Vanilla GCN"
+    pert_adj_storage_type = 'evasion_global_transfer_adj'
+    pert_attr_storage_type = 'evasion_global_transfer_attr'
+
     debug_level = "info"
 
 
@@ -60,6 +66,62 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
         binary_attr: bool, make_undirected: bool, seed: int, artifact_dir: str, pert_adj_storage_type: str,
         pert_attr_storage_type: str, model_label: str, model_storage_type: str, surrogate_model_storage_type: str,
         surrogate_model_label: str, device: Union[str, int], data_device: Union[str, int], debug_level: str):
+    """
+    Instantiates a sacred experiment executing a global transfer attack run for a given model configuration.
+    Caches the perturbed adjacency to storage and evaluates the models perturbed accuracy. 
+    Global evasion attacks allow all nodes of the graph to be perturbed under the given budget.
+    Transfer attacks are used to attack a model via a surrogate model.
+
+    Parameters
+    ----------
+    data_dir : str
+        Path to data folder that contains the dataset
+    dataset : str
+        Name of the dataset. Either one of: `cora_ml`, `citeseer`, `pubmed` or an ogbn dataset
+    device : Union[int, torch.device]
+        The device to use for training. Must be `cpu` or GPU id
+    data_device : Union[int, torch.device]
+        The device to use for storing the dataset. For batched models (like PPRGo) this may differ from the device parameter. 
+        In all other cases device takes precedence over data_device
+    make_undirected : bool
+        Normalizes adjacency matrix with symmetric degree normalization (non-scalable implementation!)
+    binary_attr : bool
+        If true the attributes are binarized (!=0)
+    attack : str
+        The name of the attack class to use. Supported attacks are:
+            - PRBCD
+            - GreedyRBCD
+            - DICE
+            - FGSM
+            - PGD
+    attack_params : Dict[str, Any], optional
+        The attack hyperparams to be passed as keyword arguments to the constructor of the attack class
+    epsilons: List[float]
+        The budgets for which the attack on the model should be executed.
+    model_label : str, optional
+        The name given to the model (to be attack) using the experiment_train.py 
+        This name is used as an identifier in combination with the dataset configuration to retrieve 
+        the model to be attacked from storage. If None, all models that were fit on the given dataset 
+        are attacked.
+    surrogate_model_label : str, optional
+        Same as model_label but for the model used as surrogate for the attack.
+    artifact_dir: str
+        The path to the folder that acts as TinyDB Storage for pretrained models
+    model_storage_type: str
+        The name of the storage (TinyDB) table name the model to be attacked is retrieved from.
+    surrogate_model_storage_type: str
+        The name of the storage (TinyDB) table name the surrogate model is retrieved from.
+    pert_adj_storage_type: str
+        The name of the storage (TinyDB) table name the perturbed adjacency matrix is stored to
+    pert_attr_storage_type: str
+        The name of the storage (TinyDB) table name the perturbed attribute matrix is stored to
+
+    Returns
+    -------
+    List[Dict[str, any]]
+        List of result dictionaries. One for every combination of model and epsilon.
+        Each result dictionary contains the model labels, epsilon value and the perturbed accuracy
+    """
 
     assert surrogate_model_label is not None, "Surrogate model label must not be None"
 
