@@ -1,4 +1,4 @@
-from typing import Any, Dict, Union
+from typing import Any, Dict, Union, List
 
 import logging
 from abc import ABC, abstractmethod
@@ -22,27 +22,23 @@ class PPRGoMLP(nn.Module):
     def __init__(self,
                  n_features: int,
                  n_classes: int,
-                 n_filters: int,
-                 n_layers: int,
+                 n_filters: List[int],
                  dropout: float,
                  batch_norm: bool = False):
         super().__init__()
         self.use_batch_norm = batch_norm
 
-        layers = [nn.Linear(n_features, n_filters, bias=False)]
-        if self.use_batch_norm:
-            layers.append(nn.BatchNorm1d(n_filters))
-
-        for i in range(n_layers - 2):
+        layers = []
+        n_filter_last_layer = n_features
+        for n_filter in n_filters:
+            layers.append(nn.Linear(n_filter_last_layer, n_filter, bias=False))
+            if self.use_batch_norm:
+                layers.append(nn.BatchNorm1d(n_filter))
             layers.append(nn.ReLU())
             layers.append(nn.Dropout(dropout))
-            layers.append(nn.Linear(n_filters, n_filters, bias=False))
-            if self.use_batch_norm:
-                layers.append(nn.BatchNorm1d(n_filters))
+            n_filter_last_layer = n_filter
 
-        layers.append(nn.ReLU())
-        layers.append(nn.Dropout(dropout))
-        layers.append(nn.Linear(n_filters, n_classes, bias=False))
+        layers.append(nn.Linear(n_filter_last_layer, n_classes, bias=False))
 
         self.layers = nn.Sequential(*layers)
 
@@ -76,10 +72,8 @@ class PPRGo(nn.Module):
         Number of attributes for each node
     n_classes : int
         Number of classes for prediction
-    n_filters : int
-        number of dimensions for the hidden units
-    n_layers : int
-        number of layers before the message passing step (via graph diffusion)
+    n_filters : List[int]
+        number of dimensions for the hidden units of each layer.
     dropout : int
         Dropout rate between 0 and 1
     batch_norm : bool, optional
@@ -92,15 +86,13 @@ class PPRGo(nn.Module):
     def __init__(self,
                  n_features: int,
                  n_classes: int,
-                 n_filters: int,
-                 n_layers: int,
+                 n_filters: List[int],
                  dropout: float,
                  batch_norm: bool = False,
                  aggr: str = "sum",
                  **kwargs):
         super().__init__()
-        self.mlp = PPRGoMLP(n_features, n_classes,
-                            n_filters, n_layers, dropout, batch_norm)
+        self.mlp = PPRGoMLP(n_features, n_classes, n_filters, dropout, batch_norm)
         self.aggr = aggr
 
     def forward(self,
@@ -156,10 +148,8 @@ class RobustPPRGo(nn.Module):
         Number of attributes for each node
     n_classes : int
         Number of classes for prediction
-    n_filters : int
-        number of dimensions for the hidden units
-    n_layers : int
-        number of layers before the message passing step (via graph diffusion)
+    n_filters : List[int]
+        number of dimensions for the hidden units of each layer.
     dropout : int
         Dropout rate between 0 and 1
     batch_norm : bool, optional
@@ -173,8 +163,7 @@ class RobustPPRGo(nn.Module):
     def __init__(self,
                  n_features: int,
                  n_classes: int,
-                 n_filters: int,
-                 n_layers: int,
+                 n_filters: List[int],
                  dropout: float,
                  batch_norm: bool = False,
                  mean='soft_k_medoid',
@@ -185,8 +174,7 @@ class RobustPPRGo(nn.Module):
         super().__init__()
         self._mean = ROBUST_MEANS[mean]
         self._mean_kwargs = mean_kwargs
-        self.mlp = PPRGoMLP(n_features, n_classes,
-                            n_filters, n_layers, dropout, batch_norm)
+        self.mlp = PPRGoMLP(n_features, n_classes, n_filters, dropout, batch_norm)
 
     def forward(self,
                 X: SparseTensor,
@@ -249,7 +237,7 @@ class PPRGoWrapperBase(ABC):
     def __init__(self,
                  n_features: int,
                  n_classes: int,
-                 n_filters: int = 512,
+                 n_filters: Union[int, List[int]] = 512,
                  n_layers: int = 4,
                  dropout: float = 0.0,
                  alpha: float = 0.1,
@@ -271,8 +259,10 @@ class PPRGoWrapperBase(ABC):
             Number of attributes for each node
         n_classes : int
             Number of classes for prediction
-        n_filters : int
-            number of dimensions for the hidden units
+        n_filters : Union[int, List[int]]
+            number of dimensions for the hidden units.
+            Either a single integer for all layers or a list of integers to specify the hidden units
+            for each layer individually. If a list of integers is given, the n_layers parameter is ignored
         n_layers : int
             number of layers before the message passing step (via graph diffusion)
         dropout : int
@@ -314,9 +304,14 @@ class PPRGoWrapperBase(ABC):
 
         """
         self.n_features = n_features
+        if isinstance(n_filters, list):
+            self.n_filters = n_filters
+        elif isinstance(n_filters, int):
+            self.n_filters = [n_filters] * (n_layers - 1)
+        else:
+            raise TypeError("n_filters must be integer or list of integers")
+
         self.n_classes = n_classes
-        self.n_filters = n_filters
-        self.n_layers = n_layers
         self.dropout = dropout
         self.alpha = alpha
         self.eps = eps
@@ -682,8 +677,7 @@ class PPRGoWrapper(PPRGo, PPRGoWrapperBase):
         # using the constructor of the wrapper base class to set/validate the required/optional model params
         PPRGoWrapperBase.__init__(self, *args, **kwargs)
 
-        PPRGo.__init__(self, self.n_features, self.n_classes,
-                       self.n_filters, self.n_layers, self.dropout,
+        PPRGo.__init__(self, self.n_features, self.n_classes, self.n_filters, self.dropout,
                        batch_norm=self.batch_norm, mean=self.mean, mean_kwargs=self.mean_kwargs)
 
     def forward(self, *args, **kwargs):
@@ -703,8 +697,7 @@ class RobustPPRGoWrapper(RobustPPRGo, PPRGoWrapperBase):
                  *args,
                  **kwargs):
         PPRGoWrapperBase.__init__(self, *args, **kwargs)
-        RobustPPRGo.__init__(self, self.n_features, self.n_classes,
-                             self.n_filters, self.n_layers, self.dropout,
+        RobustPPRGo.__init__(self, self.n_features, self.n_classes, self.n_filters, self.dropout,
                              batch_norm=self.batch_norm, mean=self.mean, mean_kwargs=self.mean_kwargs)
 
     def forward(self, *args, **kwargs):
