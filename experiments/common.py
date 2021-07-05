@@ -111,7 +111,8 @@ def run_global_attack(epsilon, m, storage, pert_adj_storage_type, pert_attr_stor
             storage.save_artifact(pert_attr_storage_type, {**pert_params, **{'epsilon': epsilon}}, pert_attr)
 
 
-def sample_attack_nodes(logits: torch.Tensor, labels: torch.Tensor, nodes_idx, adj: SparseTensor, topk: int, min_node_degree: int):
+def sample_attack_nodes(logits: torch.Tensor, labels: torch.Tensor, nodes_idx,
+                        adj: SparseTensor, topk: int, min_node_degree: int):
     assert logits.shape[0] == labels.shape[0]
     if isinstance(nodes_idx, torch.Tensor):
         nodes_idx = nodes_idx.cpu()
@@ -125,7 +126,10 @@ def sample_attack_nodes(logits: torch.Tensor, labels: torch.Tensor, nodes_idx, a
     correctly_classifed = confidences.max(-1).indices == labels
 
     logging.info(
-        f"Found {sum(suitable_nodes_mask)} suitable '{min_node_degree}+ degree' nodes out of {len(nodes_idx)} candidate nodes to be sampled from for the attack of which {correctly_classifed.sum().item()} have the correct class label")
+        f"Found {sum(suitable_nodes_mask)} suitable '{min_node_degree}+ degree' nodes out of {len(nodes_idx)} "
+        f"candidate nodes to be sampled from for the attack of which {correctly_classifed.sum().item()} have the "
+        "correct class label")
+
     assert sum(suitable_nodes_mask) >= (topk * 4), \
         f"There are not enough suitable nodes to sample {(topk*4)} nodes from"
 

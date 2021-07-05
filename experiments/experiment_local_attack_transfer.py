@@ -98,7 +98,11 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
     nodes_topk: int
         The number of nodes to be sampled if the nodes parameter is None.
         Nodes are sampled to include 25% high-confidence, 25% low-confidence and 50% random nodes.
-        When sampling nodes, only nodes with a degree > 1/(min(epsilons)) are considered. 
+        When sampling nodes, only nodes with a degree >= 1/(min(epsilons)) are considered. 
+    min_node_degree: int, optional
+        When sampling nodes this overwrite the degree >= 1/(min(epsilons)) constraint to only sample
+        nodes with degree >= min_node_degree. Use this to make sure multiple independent runs of this
+        experiment with different epsilons are comparable. 
     model_label : str, optional
         The name given to the model (to be attack) using the experiment_train.py 
         This name is used as an identifier in combination with the dataset configuration to retrieve 

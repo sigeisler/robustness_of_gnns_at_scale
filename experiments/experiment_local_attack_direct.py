@@ -30,24 +30,30 @@ def config():
             ex.observers.append(seml.create_mongodb_observer(db_collection, overwrite=overwrite))
 
     # default params
-    dataset = 'ogbn-papers100M'
-    attack = 'LocalDICE'
+    dataset = 'cora_ml'
+    attack = 'LocalPRBCD'
     attack_params = {
         "ppr_cache_params": {
             "data_artifact_dir": "cache",
             "data_storage_type": "ppr"
-        }
+        },
+        "epochs": 400,
+        "fine_tune_epochs": 100,
+        "search_space_size": 10_000,
+        "ppr_recalc_at_end": True,
+        "loss_type": "Margin",
+        "lr_factor": 0.05
     }
     nodes = None
     nodes_topk = 40
 
-    epsilons = [0.05, 0.1, 0.25, 0.5]
+    epsilons = [0.05, 0.1]
     min_node_degree = None
     seed = 0
 
     artifact_dir = "cache"
-    model_storage_type = 'pretrained_papers100M'
-    model_label = 'Soft Median PPRGo Diffusion (T=0.1)'
+    model_storage_type = 'pretrained'
+    model_label = 'Vanilla PPRGo'
 
     data_dir = './datasets'
     binary_attr = False
@@ -62,7 +68,65 @@ def config():
 def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any], nodes: str, nodes_topk: int, seed: int,
         epsilons: Sequence[float], min_node_degree: int, binary_attr: bool, make_undirected: bool, artifact_dir: str, model_label: str,
         model_storage_type: str, device: Union[str, int], data_device: Union[str, int], debug_level: str):
+    """
+    Instantiates a sacred experiment executing a direct local attack run for a given model configuration.
+    Local evasion attacks aim to flip the label of a single node only.
+    Direct attacks are used to attack a model without the use of a surrogate model.
 
+    Parameters
+    ----------
+    data_dir : str
+        Path to data folder that contains the dataset
+    dataset : str
+        Name of the dataset. Either one of: `cora_ml`, `citeseer`, `pubmed` or an ogbn dataset
+    device : Union[int, torch.device]
+        The device to use for training. Must be `cpu` or GPU id
+    data_device : Union[int, torch.device]
+        The device to use for storing the dataset. For batched models (like PPRGo) this may differ from the device parameter. 
+        In all other cases device takes precedence over data_device
+    make_undirected : bool
+        Normalizes adjacency matrix with symmetric degree normalization (non-scalable implementation!)
+    binary_attr : bool
+        If true the attributes are binarized (!=0)
+    attack : str
+        The name of the attack class to use. Supported attacks are:
+            - LocalPRBCD
+            - LocalDICE
+            - Nettack
+    attack_params : Dict[str, Any], optional
+        The attack hyperparams to be passed as keyword arguments to the constructor of the attack class
+    epsilons: List[float]
+        The budgets for which the attack on the model should be executed.
+    nodes: List[int], optional
+        The IDs of the nodes to be attacked.
+    nodes_topk: int
+        The number of nodes to be sampled if the nodes parameter is None.
+        Nodes are sampled to include 25% high-confidence, 25% low-confidence and 50% random nodes.
+        When sampling nodes, only nodes with a degree >= 1/(min(epsilons)) are considered. 
+    min_node_degree: int, optional
+        When sampling nodes this overwrite the degree >= 1/(min(epsilons)) constraint to only sample
+        nodes with degree >= min_node_degree. Use this to make sure multiple independent runs of this
+        experiment with different epsilons are comparable. 
+    model_label : str, optional
+        The name given to the model (to be attack) using the experiment_train.py 
+        This name is used as an identifier in combination with the dataset configuration to retrieve 
+        the model to be attacked from storage. If None, all models that were fit on the given dataset 
+        are attacked.
+    artifact_dir: str
+        The path to the folder that acts as TinyDB Storage for pretrained models
+    model_storage_type: str
+        The name of the storage (TinyDB) table name the model to be attacked is retrieved from.
+    pert_adj_storage_type: str
+        The name of the storage (TinyDB) table name the perturbed adjacency matrix is stored to
+    pert_attr_storage_type: str
+        The name of the storage (TinyDB) table name the perturbed attribute matrix is stored to
+
+    Returns
+    -------
+    List[Dict[str, any]]
+        List of result dictionaries. One for every combination of model and epsilon.
+        Each result dictionary contains the model labels, epsilon value and the perturbed accuracy
+    """
     results = []
     surrogate_model_label = False
 

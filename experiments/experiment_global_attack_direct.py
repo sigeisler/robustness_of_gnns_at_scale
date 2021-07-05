@@ -68,7 +68,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
     Instantiates a sacred experiment executing a global direct attack run for a given model configuration.
     Caches the perturbed adjacency to storage and evaluates the models perturbed accuracy. 
     Global evasion attacks allow all nodes of the graph to be perturbed under the given budget.
-    Direct attacks are used to attack a model without the use of a surrogate model. 
+    Direct attacks are used to attack a model without the use of a surrogate model.
 
     Parameters
     ----------
