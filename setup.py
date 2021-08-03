@@ -1,7 +1,7 @@
 import logging
 import subprocess
 
-from setuptools import setup
+from setuptools import setup, find_packages
 
 import torch
 
@@ -38,7 +38,7 @@ install_requires = [
 setup(
     name='rgnn_at_scale',
     version='1.0.0',
-    packages=['rgnn_at_scale'],
+    packages=['rgnn_at_scale'] + find_packages(),
     install_requires=install_requires,
     zip_safe=False,
     package_data={'rgnn_at_scale': ['kernels/csrc/custom.cpp', 'kernels/csrc/custom_kernel.cu']},

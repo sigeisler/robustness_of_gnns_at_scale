@@ -31,7 +31,7 @@ def config():
 
     # default params
     dataset = 'cora_ml'
-    attack = 'LocalPRBCD'
+    attack = 'LocalBatchedPRBCD'
     attack_params = {
         "ppr_cache_params": {
             "data_artifact_dir": "cache",
@@ -47,17 +47,17 @@ def config():
     nodes = None
     nodes_topk = 40
 
-    epsilons = [0.05, 0.1]
+    epsilons = [0.1, 0.25]
     min_node_degree = None
     seed = 0
 
-    artifact_dir = "cache"
+    artifact_dir = "cache_debug"
     model_storage_type = 'pretrained'
     model_label = 'Vanilla PPRGo'
 
     data_dir = './datasets'
     binary_attr = False
-    make_undirected = False
+    make_undirected = True
 
     data_device = "cpu"
     device = 0

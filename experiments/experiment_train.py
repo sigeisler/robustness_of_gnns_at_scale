@@ -49,19 +49,9 @@ def config():
     artifact_dir = 'cache'
     model_storage_type = 'pretrained'
     model_params = dict(
-        label="Soft Median GDC (T=0.5)",
-        model="RGNN",
-        mean="soft_median",
-        mean_kwargs=dict(temperature=0.5),
+        label="Vanilla GCN",
+        model="GCN",
         n_filters=64,
-        dropout=0.5,
-        gdc_params=dict(
-            alpha=0.15,
-            k=64
-        ),
-        do_cache_adj_prep=True,
-        svd_params=None,
-        jaccard_params=None,
     )
 
     train_params = dict(

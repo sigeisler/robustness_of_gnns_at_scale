@@ -30,7 +30,7 @@ grid:
     type: choice
     options:
       - cora_ml
-      - citeseer
+      # - citeseer
 
   seed:
     type: choice
@@ -38,8 +38,6 @@ grid:
       - 0
       - 1
       - 5
-      - 42
-      - 100
 
 gcn:
   fixed:

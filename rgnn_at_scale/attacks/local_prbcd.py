@@ -33,6 +33,11 @@ class LocalPRBCD(SparseLocalAttack):
 
         super().__init__(**kwargs)
 
+        # Late import to prevent circular import
+        from rgnn_at_scale.attacks.local_prbcd_batched import LocalBatchedPRBCD
+        assert isinstance(self, LocalBatchedPRBCD) or type(
+            self.attacked_model) not in BATCHED_PPR_MODELS.__args__, "'LocalPRBCD' does not support batched models, use 'LocalBatchedPRBCD' instead"
+
         self.loss_type = loss_type
         self.n_possible_edges = self.n * (self.n - 1) // 2
 
@@ -84,8 +89,8 @@ class LocalPRBCD(SparseLocalAttack):
 
             gradient = grad_with_checkpoint(loss, self.modified_edge_weight_diff)[0]
 
-            if torch.cuda.is_available():
-                logging.info(torch.cuda.memory_allocated() / (1024 ** 3))
+            # if torch.cuda.is_available():
+            #     logging.info(torch.cuda.memory_allocated() / (1024 ** 3))
 
             if torch.cuda.is_available() and self.do_synchronize:
                 torch.cuda.empty_cache()

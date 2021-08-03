@@ -11,8 +11,8 @@ parser = argparse.ArgumentParser(
     description='Execute experiments contained in yaml.',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter
 )
-parser.add_argument('--config-files', nargs='+', type=str,
-                    default=[os.path.join('config', 'train', 'cora_pprgo.yaml')],
+parser.add_argument('--config-file', nargs='+', type=str,
+                    default=os.path.join('config', 'train', 'cora_pprgo.yaml'),
                     help='Config YAML files. The script deduplicates the configs, but does not check them.')
 parser.add_argument('--kwargs', type=json.loads, default='{}', help='Will overwrite the loaded config')
 parser.add_argument('--output', type=str, default=os.path.join('output'),
@@ -20,7 +20,7 @@ parser.add_argument('--output', type=str, default=os.path.join('output'),
 
 
 def main(args: argparse.Namespace):
-    configs, run = build_configs_and_run(args.config_files, 'experiment_train.py', args.kwargs)
+    configs, run = build_configs_and_run([args.config_file], 'experiment_train.py', args.kwargs)
 
     for config in configs:
         try:

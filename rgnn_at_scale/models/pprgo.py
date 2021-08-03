@@ -1,4 +1,6 @@
 from typing import Any, Dict, Union, List
+from torchtyping import TensorType, patch_typeguard
+from typeguard import typechecked
 
 import logging
 from abc import ABC, abstractmethod
@@ -16,6 +18,8 @@ from rgnn_at_scale.data import RobustPPRDataset
 from rgnn_at_scale.aggregation import ROBUST_MEANS
 from rgnn_at_scale.helper import utils
 from rgnn_at_scale.helper import ppr_utils as ppr
+
+patch_typeguard()
 
 
 class PPRGoMLP(nn.Module):
@@ -95,17 +99,18 @@ class PPRGo(nn.Module):
         self.mlp = PPRGoMLP(n_features, n_classes, n_filters, dropout, batch_norm)
         self.aggr = aggr
 
+    @typechecked
     def forward(self,
-                X: SparseTensor,
-                ppr_scores: torch.Tensor,
-                ppr_idx: torch.Tensor):
+                X: TensorType["num_ppr_nodes", "n_features"],
+                ppr_scores: TensorType["num_ppr_nodes"],
+                ppr_idx: TensorType["num_ppr_nodes"]) -> TensorType["batch_size", "n_classes"]:
         """
         Parameters:
             X: torch_sparse.SparseTensor of shape (num_ppr_nodes, n_features)
                 The node features for all nodes which were assigned a ppr score
             ppr_scores: torch.Tensor of shape (num_ppr_nodes)
                 The ppr scores are calculate for every node of the batch individually.
-                This tensor contains these concatenated ppr scores for every node in the batch.
+                This tensor contains these flattend ppr scores for every node in the batch.
             ppr_idx: torch.Tensor of shape (num_ppr_nodes)
                 The id of the batch that the corresponding ppr_score entry belongs to
 
@@ -234,6 +239,7 @@ class PPRGoWrapperBase(ABC):
             approximate page rank matrix from the adjacency if ommited in the forward call
     """
 
+    @typechecked
     def __init__(self,
                  n_features: int,
                  n_classes: int,
@@ -330,8 +336,9 @@ class PPRGoWrapperBase(ABC):
     def release_cache(self):
         self.ppr_cache_params = None
 
+    @typechecked
     def forward_wrapper(self,
-                        attr: torch.Tensor,
+                        attr: TensorType["n_nodes", "n_classes"],
                         adj: Union[SparseTensor, sp.csr_matrix],
                         ppr_scores: SparseTensor = None,
                         ppr_idx=None):
@@ -438,26 +445,27 @@ class PPRGoWrapperBase(ABC):
 
             return logits
 
+    @typechecked
     def fit(self,
             adj: Union[SparseTensor, sp.csr_matrix],
-            attr: torch.Tensor,
+            attr: TensorType["n_nodes", "n_classes"],
             labels: torch.Tensor,
             idx_train: np.ndarray,
             idx_val: np.ndarray,
-            lr,
-            weight_decay: int,
+            lr: float,
+            weight_decay: float,
             patience: int,
-            use_annealing_scheduler=False,
-            scheduler_warm_restarts=True,
-            annealing_scheduler_T_0=3,
-            scheduler_time="epoch",
-            scheduler_step=20,
-            optim="Adam",
+            use_annealing_scheduler: bool = False,
+            scheduler_warm_restarts: bool = True,
+            annealing_scheduler_T_0: int = 3,
+            scheduler_time: str = "epoch",
+            scheduler_step: int = 20,
+            optim: str = "Adam",
             max_epochs: int = 200,
-            batch_size=512,
-            batch_mult_val=4,
-            eval_step=1,
-            display_step=50,
+            batch_size: int = 512,
+            batch_mult_val: int = 4,
+            eval_step: int = 1,
+            display_step: int = 50,
             # for loading ppr from disk
             ppr_cache_params: dict = None,
             ** kwargs):
@@ -571,18 +579,18 @@ class PPRGoWrapperBase(ABC):
         step = 0
         epoch_pbar = tqdm(range(max_epochs), desc='Training Epoch...')
         for it in epoch_pbar:
-            batch_pbar = tqdm(train_loader, desc="Training Batch...")
+            #batch_pbar = tqdm(train_loader, desc="Training Batch...")
             epoch_loss_val = 0
             epoch_acc_val = 0
             epoch_acc_train = 0
 
-            for batch_train_idx, xbs, yb in batch_pbar:
+            for batch_train_idx, xbs, yb in train_loader:
                 xbs, yb = [xb.to(device) for xb in xbs], yb.to(device)
 
-                logging.info(f"Memory Usage before training batch {step}:")
-                logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
-                if device.type == "cuda":
-                    logging.info(torch.cuda.max_memory_allocated() / (1024 ** 3))
+                # logging.info(f"Memory Usage before training batch {step}:")
+                # logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
+                # if device.type == "cuda":
+                #     logging.info(torch.cuda.max_memory_allocated() / (1024 ** 3))
 
                 loss_train, ncorrect_train = self.__run_batch(xbs, yb, optimizer, train=True)
 
@@ -606,8 +614,8 @@ class PPRGoWrapperBase(ABC):
                 trace_train_acc.append(train_acc)
                 trace_val_acc.append(val_acc)
 
-                batch_pbar.set_description(f"Epoch: {it:}, loss_train: {loss_train: .5f}, loss_val: {loss_val: .5f}",
-                                           refresh=False)
+                # batch_pbar.set_description(f"Epoch: {it:}, loss_train: {loss_train: .5f}, loss_val: {loss_val: .5f}",
+                #                            refresh=False)
                 if use_annealing_scheduler and scheduler_time == "batch":
                     if step % scheduler_step == 0:
                         logging.info("Scheduler Batch Step CosineAnnealingWarmRestarts\n")
@@ -626,18 +634,19 @@ class PPRGoWrapperBase(ABC):
                 best_epoch_loss = epoch_loss_val
                 best_epoch = it
                 best_state = {key: value.cpu() for key, value in self.state_dict().items()}
-                logging.info(f"Save best_state for new best_epoch_loss {best_epoch_loss}\n")
+                # logging.info(f"Save best_state for new best_epoch_loss {best_epoch_loss}\n")
             else:
                 if it >= best_epoch + patience:
                     logging.info(f"Early stopping due to increase in validation loss")
                     break
-                logging.info(f"No decrease in validation loss in epoch {it} since best epoch {best_epoch} ...")
+                # logging.info(f"No decrease in validation loss in epoch {it} since best epoch {best_epoch} ...")
 
             # restore the best validation state
         self.load_state_dict(best_state)
         return {"loss": trace_val_loss, "acc": trace_val_acc}, {"loss": trace_train_loss, "acc": trace_train_acc}
 
-    def __run_batch(self, xbs, yb, optimizer, train):
+    @typechecked
+    def __run_batch(self, xbs: list, yb: TensorType["batch_size"], optimizer, train: bool):
         # Set model to training mode
         if train:
             self.train()
@@ -683,8 +692,9 @@ class PPRGoWrapper(PPRGo, PPRGoWrapperBase):
     def forward(self, *args, **kwargs):
         return self.forward_wrapper(*args, **kwargs)
 
+    @typechecked
     def model_forward(self,
-                      attr: torch.Tensor,
+                      attr: TensorType["n_nodes", "n_features"],
                       ppr_matrix: SparseTensor,
                       **kwargs):
         source_idx, neighbor_idx, ppr_scores = ppr_matrix.coo()
