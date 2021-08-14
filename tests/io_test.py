@@ -10,7 +10,7 @@ import pytest
 from rgnn_at_scale.helper.io import Storage
 
 
-cache_base = 'cache_test'
+cache_base = 'cache_io_test'
 
 
 def chunk(iterable: Iterable, chunk_size: int = 10) -> Generator[List[Any], Iterable, None]:

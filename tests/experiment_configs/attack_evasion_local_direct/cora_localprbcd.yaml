@@ -16,9 +16,9 @@ fixed:
   data_dir: datasets
   artifact_dir: cache_test
   nodes: None
-  nodes_topk: 20
-  attack_params.epochs: 20
-  attack_params.fine_tune_epochs: 5
+  nodes_topk: 8
+  attack_params.epochs: 10
+  attack_params.fine_tune_epochs: 2
   attack_params.search_space_size: 10_000
   attack_params.ppr_recalc_at_end: True
   attack_params.loss_type: Margin
@@ -53,7 +53,7 @@ localprbcd_gcn:
     attack_params:
       lr_factor: 0.05
     make_undirected: True
-    nodes: [2259, 1787, 1933, 264, 1063, 642, 1449, 1827, 2492, 1832, 475, 122, 2111, 1678, 788, 308, 1517, 314, 182, 162]
+    nodes: [2259, 1787, 1516, 732, 1592, 2126, 151, 463]
 
 pprgo_localprbcd:
   fixed:
@@ -62,7 +62,7 @@ pprgo_localprbcd:
     model_storage_type: pretrained
     attack_params:
       lr_factor: 0.05
-    nodes: [1262, 1275, 10, 1352, 1539, 160, 93, 61, 2454, 2722, 2572, 544, 362, 2487, 1551, 1737, 1219, 2362, 874, 150]
+    nodes: [700, 2646, 148, 1871, 1247, 1584, 1840, 1488]
   grid:
     make_undirected:
       type: choice
@@ -76,7 +76,7 @@ median_0_5_pprgo_localprbcd:
     model_storage_type: pretrained
     attack_params:
       lr_factor: 0.25
-    nodes: [1334, 1303, 1259, 1314, 1262, 1933, 586, 2722, 2471, 9, 1341, 2804, 1488, 1449, 1544, 2522, 587, 167, 2015, 2774]
+    nodes: [1334, 1306, 1933, 586, 2424, 1139, 2534, 167]
   grid:
     make_undirected:
       type: choice

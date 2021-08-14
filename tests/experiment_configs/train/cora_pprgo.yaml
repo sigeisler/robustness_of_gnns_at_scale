@@ -16,7 +16,7 @@ fixed:
   data_dir: datasets
   train_params:
     patience: 100
-    max_epochs: 300
+    max_epochs: 50
   artifact_dir: cache_test
   model_storage_type: pretrained
   device: 0
