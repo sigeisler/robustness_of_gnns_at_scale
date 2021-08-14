@@ -209,7 +209,7 @@ class LocalPRBCD(SparseLocalAttack):
         A_idx_row = torch.cat((v_idx, A_idx_row), dim=-1)
         A_vals_row = torch.cat((v_vals, A_vals_row))
 
-        A_idx_row, A_vals_row = torch_sparse.coalesce(A_idx_row, A_vals_row, m=1, n=n, op='sum')
+        A_idx_row, A_vals_row = torch_sparse.coalesce(A_idx_row, A_vals_row, m=n, n=n, op='sum')
 
         is_before = A_rows < row_idx
         is_after = A_rows > row_idx

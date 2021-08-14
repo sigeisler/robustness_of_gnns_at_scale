@@ -339,7 +339,7 @@ class PPRGoWrapperBase(ABC):
     @typechecked
     def forward_wrapper(self,
                         attr: TensorType["n_nodes", "n_classes"],
-                        adj: Union[SparseTensor, sp.csr_matrix],
+                        adj: Union[SparseTensor, sp.csr_matrix] = None,
                         ppr_scores: SparseTensor = None,
                         ppr_idx=None):
         """
@@ -579,7 +579,6 @@ class PPRGoWrapperBase(ABC):
         step = 0
         epoch_pbar = tqdm(range(max_epochs), desc='Training Epoch...')
         for it in epoch_pbar:
-            #batch_pbar = tqdm(train_loader, desc="Training Batch...")
             epoch_loss_val = 0
             epoch_acc_val = 0
             epoch_acc_train = 0
@@ -614,8 +613,6 @@ class PPRGoWrapperBase(ABC):
                 trace_train_acc.append(train_acc)
                 trace_val_acc.append(val_acc)
 
-                # batch_pbar.set_description(f"Epoch: {it:}, loss_train: {loss_train: .5f}, loss_val: {loss_val: .5f}",
-                #                            refresh=False)
                 if use_annealing_scheduler and scheduler_time == "batch":
                     if step % scheduler_step == 0:
                         logging.info("Scheduler Batch Step CosineAnnealingWarmRestarts\n")
