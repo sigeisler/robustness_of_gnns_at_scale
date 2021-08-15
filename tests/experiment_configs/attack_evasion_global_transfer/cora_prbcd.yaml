@@ -15,7 +15,7 @@ slurm:
 
 fixed:
   data_dir: datasets/
-  epsilons: [0, 0.1]
+  epsilons: [0.1]
   artifact_dir: cache_test
   pert_adj_storage_type: evasion_global_transfer_adj
   pert_attr_storage_type: evasion_global_transfer_attr
@@ -52,8 +52,8 @@ prbcd:
     binary_attr: False
     surrogate_model_label: Vanilla GCN
     attack_params:
-      epochs: 50
-      fine_tune_epochs: 10
+      epochs: 10
+      fine_tune_epochs: 1
       keep_heuristic: WeightOnly
       search_space_size: 10_000
       do_synchronize: True

@@ -46,14 +46,10 @@ grid:
      - Vanilla GCN
      - Soft Median GDC (T=0.5)
 
-prbcd:
+greedy_rbcd:
   fixed:
-    binary_attr: False
-    attack: PRBCD
+    attack: GreedyRBCD
     attack_params:
-      epochs: 10
-      fine_tune_epochs: 1
-      keep_heuristic: WeightOnly
-      search_space_size: 10_000
-      do_synchronize: True
-      loss_type: tanhMargin
+      search_space_size: 100_000
+      loss_type: MCE
+      epochs: 5

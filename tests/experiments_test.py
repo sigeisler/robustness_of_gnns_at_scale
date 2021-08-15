@@ -6,6 +6,7 @@ from itertools import groupby
 from shutil import rmtree
 
 # clean cache
+
 if os.path.isdir('cache_test'):
     rmtree('cache_test')
 
@@ -128,22 +129,22 @@ class TestExperimentTrain():
     def test_cora_train_pprgo(self):
         expected_accuracy = {
             "Vanilla PPRGo": {
-                "mean": 0.66,
-                "std": 0.04,
+                "mean": 0.61,
+                "std": 0.06,
                 "mean_tol": 0.02,
                 "std_tol": 0.02
             },
             "Soft Medoid PPRGo (T=0.5)": {
-                "mean": 0.68,
-                "std": 0.05,
+                "mean": 0.41,
+                "std": 0.10,
                 "mean_tol": 0.02,
-                "std_tol": 0.02
+                "std_tol": 0.03
             },
             "Soft Median PPRGo (T=0.5)": {
-                "mean": 0.81,
-                "std": 0.01,
+                "mean": 0.67,
+                "std": 0.11,
                 "mean_tol": 0.02,
-                "std_tol": 0.02
+                "std_tol": 0.03
             }
         }
 
@@ -154,12 +155,6 @@ class TestExperimentTrain():
     def test_cora_attack_direct_prbcd(self):
         expected_accuracy = {
             "Vanilla GCN": {
-                0: {
-                    "mean": 0.80,
-                    "std": 0.004,
-                    "mean_tol": 0.01,
-                    "std_tol": 0.002
-                },
                 0.1: {
                     "mean": 0.68,
                     "std": 0.004,
@@ -168,12 +163,6 @@ class TestExperimentTrain():
                 },
             },
             "Soft Median GDC (T=0.5)": {
-                0: {
-                    "mean": 0.82,
-                    "std": 0.004,
-                    "mean_tol": 0.01,
-                    "std_tol": 0.002
-                },
                 0.1: {
                     "mean": 0.74,
                     "std": 0.004,
@@ -187,88 +176,77 @@ class TestExperimentTrain():
 
         run_global_attack_test(expected_accuracy, config_files)
 
-    def test_cora_attack_transfer_prbcd(self):
+    def test_cora_attack_direct_greedy_rbcd(self):
         expected_accuracy = {
             "Vanilla GCN": {
-                0: {
-                    "mean": 0.80,
-                    "std": 0.004,
+                0.1: {
+                    "mean": 0.75,
+                    "std": 0.01,
                     "mean_tol": 0.01,
                     "std_tol": 0.002
                 },
+            },
+            "Soft Median GDC (T=0.5)": {
                 0.1: {
-                    "mean": 0.66,
-                    "std": 0.07,
+                    "mean": 0.78,
+                    "std": 0.014,
+                    "mean_tol": 0.01,
+                    "std_tol": 0.002
+                },
+            }
+        }
+
+        config_files = [os.path.join('tests', 'experiment_configs',
+                                     'attack_evasion_global_direct', 'cora_greedy_rbcd.yaml')]
+
+        run_global_attack_test(expected_accuracy, config_files)
+
+    def test_cora_attack_transfer_prbcd(self):
+        expected_accuracy = {
+            "Vanilla GCN": {
+                0.1: {
+                    "mean": 0.68,
+                    "std": 0.04,
                     "mean_tol": 0.02,
                     "std_tol": 0.002
                 },
             },
             "Soft Median GDC (T=0.5)": {
-                0: {
-                    "mean": 0.82,
-                    "std": 0.004,
-                    "mean_tol": 0.01,
-                    "std_tol": 0.002
-                },
                 0.1: {
-                    "mean": 0.72,
-                    "std": 0.002,
+                    "mean": 0.73,
+                    "std": 0.006,
                     "mean_tol": 0.02,
                     "std_tol": 0.002
                 },
             },
             "Soft Medoid GDC (T=0.5)": {
-                0: {
-                    "mean": 0.81,
-                    "std": 0.003,
-                    "mean_tol": 0.01,
-                    "std_tol": 0.002
-                },
                 0.1: {
-                    "mean": 0.76,
-                    "std": 0.005,
+                    "mean": 0.75,
+                    "std": 0.002,
                     "mean_tol": 0.02,
                     "std_tol": 0.002
                 },
             },
             "Vanilla PPRGo": {
-                0: {
-                    "mean": 0.66,
-                    "std": 0.04,
-                    "mean_tol": 0.02,
-                    "std_tol": 0.02
-                },
                 0.1: {
-                    "mean": 0.57,
-                    "std": 0.06,
+                    "mean": 0.52,
+                    "std": 0.08,
                     "mean_tol": 0.02,
                     "std_tol": 0.02
                 },
             },
             "Soft Median PPRGo (T=0.5)": {
-                0: {
-                    "mean": 0.81,
-                    "std": 0.01,
-                    "mean_tol": 0.01,
-                    "std_tol": 0.02
-                },
                 0.1: {
-                    "mean": 0.76,
-                    "std": 0.005,
+                    "mean": 0.62,
+                    "std": 0.13,
                     "mean_tol": 0.02,
-                    "std_tol": 0.002
+                    "std_tol": 0.02
                 },
             },
             "Soft Medoid PPRGo (T=0.5)": {
-                0: {
-                    "mean": 0.68,
-                    "std": 0.05,
-                    "mean_tol": 0.02,
-                    "std_tol": 0.02
-                },
                 0.1: {
-                    "mean": 0.64,
-                    "std": 0.06,
+                    "mean": 0.38,
+                    "std": 0.12,
                     "mean_tol": 0.02,
                     "std_tol": 0.02
                 },
@@ -318,6 +296,7 @@ class TestExperimentTrain():
 #     testsuit = TestExperimentTrain()
 #     testsuit.test_cora_train()
 #     testsuit.test_cora_train_pprgo()
+#     testsuit.test_cora_attack_direct_greedy_rbcd()
 #     testsuit.test_cora_attack_direct_prbcd()
 #     testsuit.test_cora_attack_transfer_prbcd()
 #     testsuit.test_cora_attack_direct_localprbcd()
