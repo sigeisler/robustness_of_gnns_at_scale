@@ -1,4 +1,5 @@
 from typing import Dict, Any
+from typeguard import typechecked
 
 import logging
 
@@ -17,10 +18,9 @@ from rgnn_at_scale.data import CachedPPRMatrix
 
 class LocalBatchedPRBCD(LocalPRBCD):
 
-    def __init__(self, ppr_recalc_at_end: bool = True, ppr_cache_params: Dict[str, Any] = None, **kwargs):
-        super().__init__(**kwargs)
-
-        assert type(self.attacked_model) in BATCHED_PPR_MODELS.__args__, "LocalBatchedPRBCD only supports PPRGo models"
+    @typechecked
+    def __init__(self, model: BATCHED_PPR_MODELS, ppr_recalc_at_end: bool = True, ppr_cache_params: Dict[str, Any] = None, **kwargs):
+        super().__init__(model=model, **kwargs)
 
         self.ppr_cache_params = ppr_cache_params
         if self.ppr_cache_params is not None:

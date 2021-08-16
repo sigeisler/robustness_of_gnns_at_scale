@@ -334,7 +334,7 @@ def calc_ppr_update_topk_sparse(ppr: SparseTensor,
 @typechecked
 def calc_ppr_update_dense(ppr: TensorType["n_nodes", "n_nodes"],
                           A: TensorType["n_nodes", "n_nodes"],
-                          p: TensorType["n_nodes"],
+                          p: TensorType[1, "n_nodes"],
                           i: int,
                           alpha: float):
     num_nodes = A.shape[0]
@@ -364,7 +364,7 @@ def calc_ppr_update_dense(ppr: TensorType["n_nodes", "n_nodes"],
 @typechecked
 def calc_ppr_update_topk_dense(ppr: TensorType["n_nodes", "n_nodes"],
                                A: TensorType["n_nodes", "n_nodes"],
-                               p: TensorType["n_nodes"],
+                               p: TensorType[1, "n_nodes"],
                                i: int,
                                alpha: float,
                                topk: int):

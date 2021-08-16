@@ -20,6 +20,43 @@ patch_typeguard()
 
 @typechecked
 class Attack(ABC):
+    """
+    Base class for all attacks providing a uniform interface for all attacks
+    as well as the implementation for all losses proposed or mentioned in our paper.
+
+    Parameters
+    ----------
+    adj : SparseTensor or torch.Tensor
+        [n, n] (sparse) adjacency matrix.
+    attr : torch.Tensor
+        [n, d] feature/attribute matrix.
+    labels : torch.Tensor
+        Labels vector of shape [n].
+    idx_attack : np.ndarray
+        Indices of the nodes which are to be attacked.
+    model : MODEL_TYPE
+        Model to be attacked.
+    device : Union[str, int, torch.device]
+        The cuda device to use for the attack
+    data_device : Union[str, int, torch.device]
+        The cuda device to use for storing the dataset. 
+        For batched models (like PPRGo) this may differ from the device parameter.
+        Other models require the dataset and model to be on the same device.
+    make_undirected: bool
+        Wether the perturbed adjacency matrix should be made undirected (symmetric degree normalization)
+    binary_attr: bool
+        If true the perturbed attributes are binarized (!=0)
+    loss_type: str
+        The loss to be used by a gradient based attack, can be one of the following loss types:
+            - CW: Carlini-Wagner
+            - LCW: Leaky Carlini-Wagner
+            - Margin: Negative classification margin
+            - tanhMargin: Negative TanH of classification margin
+            - eluMargin: Negative Exponential Linear Unit (ELU) of classification margin
+            - CE: Cross Entropy
+            - MCE: Masked Cross Entropy
+            - NCE: Negative Cross Entropy
+    """
 
     def __init__(self,
                  adj: Union[SparseTensor, TensorType["n_nodes", "n_nodes"]],
@@ -75,6 +112,15 @@ class Attack(ABC):
         pass
 
     def attack(self, n_perturbations: int, **kwargs):
+        """
+        Executes the attack on the model updating the attributes
+        self.adj_adversary and self.attr_adversary accordingly.
+
+        Parameters
+        ----------
+        n_perturbations : int
+            number of perturbations (attack budget in terms of node additions/deletions) that constrain the atack
+        """
         if n_perturbations > 0:
             return self._attack(n_perturbations, **kwargs)
         else:
@@ -104,6 +150,9 @@ class Attack(ABC):
                         adj: Union[SparseTensor, TensorType["n_nodes", "n_nodes"]],
                         labels: TensorType["n_nodes"],
                         eval_idx: Union[List[int], np.ndarray]):
+        """
+        Evaluates any model w.r.t. accuracy for a given (perturbed) adjacency and attribute matrix.
+        """
         model.eval()
         if hasattr(model, 'release_cache'):
             model.release_cache()
@@ -119,6 +168,9 @@ class Attack(ABC):
         return pred_logits_target, acc_test_target
 
     def calculate_loss(self, logits, labels):
+        """
+        TODO: maybe add formal definition for all losses? or maybe don't
+        """
         if self.loss_type == 'CW':
             sorted = logits.argsort(-1)
             best_non_target_class = sorted[sorted != labels[:, None]].reshape(logits.size(0), -1)[:, -1]
@@ -238,15 +290,13 @@ class Attack(ABC):
 
 @typechecked
 class SparseAttack(Attack):
+    """
+    Base class for all sparse attacks.
+    Just like the base attack class but automatically casting the adjacency to sparse format.
+    """
+
     def __init__(self,
                  adj: Union[SparseTensor, TensorType["n_nodes", "n_nodes"], sp.csr_matrix],
-                 attr: TensorType["n_nodes", "n_features"],
-                 labels: TensorType["n_nodes"],
-                 idx_attack: np.ndarray,
-                 model: MODEL_TYPE,
-                 device: Union[str, int, torch.device],
-                 data_device: Union[str, int, torch.device],
-                 loss_type: str = 'CE',
                  **kwargs):
 
         if isinstance(adj, torch.Tensor):
@@ -254,19 +304,26 @@ class SparseAttack(Attack):
         elif isinstance(adj, sp.csr_matrix):
             adj = SparseTensor.from_scipy(adj)
 
-        super().__init__(adj, attr, labels, idx_attack, model, device, data_device, loss_type=loss_type, **kwargs)
+        super().__init__(adj, **kwargs)
 
         edge_index_rows, edge_index_cols, edge_weight = adj.coo()
         self.edge_index = torch.stack([edge_index_rows, edge_index_cols], dim=0).to(self.data_device)
         self.edge_weight = edge_weight.to(self.data_device)
         self.n = adj.size(0)
-        self.d = attr.shape[1]
+        self.d = self.attr.shape[1]
 
 
 @typechecked
 class SparseLocalAttack(SparseAttack):
+    """
+    Base class for all local sparse attacks
+    """
+
     @abstractmethod
     def get_perturbed_edges(self) -> torch.Tensor:
+        """
+        returns the edge (in coo format) that should be perturbed (added/deleted)
+        """
         pass
 
     @abstractmethod
@@ -279,27 +336,27 @@ class SparseLocalAttack(SparseAttack):
     def get_eval_logits(self, node_idx: int, perturbed_graph: SparseTensor = None) -> torch.Tensor:
         return self.get_logits(self.eval_model, node_idx, perturbed_graph)
 
+    @torch.no_grad()
     def evaluate_local(self, node_idx: int):
-        with torch.no_grad():
-            self.eval_model.eval()
-            if hasattr(self.eval_model, 'release_cache'):
-                self.eval_model.release_cache()
+        self.eval_model.eval()
+        if hasattr(self.eval_model, 'release_cache'):
+            self.eval_model.release_cache()
 
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-                torch.cuda.synchronize()
-                logging.info("Cuda Memory before local evaluation on clean adjacency")
-                logging.info(torch.cuda.memory_allocated() / (1024 ** 3))
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+            logging.info("Cuda Memory before local evaluation on clean adjacency")
+            logging.info(torch.cuda.memory_allocated() / (1024 ** 3))
 
-            initial_logits = self.get_eval_logits(node_idx)
+        initial_logits = self.get_eval_logits(node_idx)
 
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-                torch.cuda.synchronize()
-                logging.info("Cuda Memory before local evaluation on perturbed adjacency")
-                logging.info(torch.cuda.memory_allocated() / (1024 ** 3))
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+            logging.info("Cuda Memory before local evaluation on perturbed adjacency")
+            logging.info(torch.cuda.memory_allocated() / (1024 ** 3))
 
-            logits = self.get_eval_logits(node_idx, self.adj_adversary)
+        logits = self.get_eval_logits(node_idx, self.adj_adversary)
         return logits, initial_logits
 
     @staticmethod
