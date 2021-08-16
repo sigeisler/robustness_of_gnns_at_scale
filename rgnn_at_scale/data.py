@@ -3,7 +3,12 @@
 import logging
 
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Union, Tuple
+from typing import Any, Dict, Iterable, List, Union, Tuple, Optional
+from torch._C import NoneType
+
+from torchtyping import TensorType, patch_typeguard
+from typeguard import typechecked
+
 import warnings
 
 import numpy as np
@@ -18,6 +23,8 @@ from torch_sparse import SparseTensor
 
 from rgnn_at_scale.helper import utils
 from rgnn_at_scale.helper import ppr_utils as ppr
+
+patch_typeguard()
 
 sparse_graph_properties = [
     'adj_matrix', 'attr_matrix', 'labels', 'node_names', 'attr_names', 'class_names', 'metadata'
@@ -297,6 +304,7 @@ class SparseGraph:
         return SparseGraph(**init_dict)
 
 
+@typechecked
 def largest_connected_components(sparse_graph: SparseGraph, n_components: int = 1, make_undirected=True) -> SparseGraph:
     """Select the largest connected components in the graph.
 
@@ -324,6 +332,7 @@ def largest_connected_components(sparse_graph: SparseGraph, n_components: int = 
     return create_subgraph(sparse_graph, nodes_to_keep=nodes_to_keep)
 
 
+@typechecked
 def remove_self_loops(sparse_graph: SparseGraph) -> SparseGraph:
     """Remove self loops (diagonal entries in the adjacency matrix).
 
@@ -405,6 +414,7 @@ def create_subgraph(
         sparse_graph.class_names, sparse_graph.metadata)
 
 
+@typechecked
 def load_dataset(name: str,
                  directory: Union[Path, str] = './data'
                  ) -> SparseGraph:
@@ -438,6 +448,7 @@ def load_dataset(name: str,
     return dataset
 
 
+@typechecked
 def train_val_test_split_tabular(
         *arrays: Iterable[Union[np.ndarray, sp.spmatrix]],
         train_size: float = 0.5,
@@ -498,7 +509,7 @@ def split(labels, n_per_class=20, seed=None):
 
     Parameters
     ----------
-    labels: array-like [n_nodes]
+    labels: array-like [num_nodes]
         The class labels
     n_per_class : int
         Number of samples per class
@@ -511,7 +522,7 @@ def split(labels, n_per_class=20, seed=None):
         The indices of the training nodes
     split_val: array-like [n_per_class * nc]
         The indices of the validation nodes
-    split_test array-like [n_nodes - 2*n_per_class * nc]
+    split_test array-like [num_nodes - 2*n_per_class * nc]
         The indices of the test nodes
     """
     if seed is not None:
@@ -534,10 +545,13 @@ def split(labels, n_per_class=20, seed=None):
     return split_train, split_val, split_test
 
 
+@typechecked
 def prep_cora_citeseer_pubmed(name: str,
                               dataset_root: str,
-                              device: Union[int, torch.device] = 0,
-                              make_undirected: bool = True) -> Tuple[torch.Tensor, SparseTensor, torch.Tensor]:
+                              device: Union[int, str, torch.device] = 0,
+                              make_undirected: bool = True) -> Tuple[TensorType["num_nodes", "num_features"],
+                                                                     SparseTensor,
+                                                                     TensorType["num_nodes"]]:
     """Prepares and normalizes the desired dataset
 
     Parameters
@@ -548,12 +562,12 @@ def prep_cora_citeseer_pubmed(name: str,
         Path where to find/store the dataset.
     device : Union[int, torch.device], optional
         `cpu` or GPU id, by default 0
-    normalize : bool, optional
+    make_undirected : bool, optional
         Normalize adjacency matrix with symmetric degree normalization (non-scalable implementation!), by default False
 
     Returns
     -------
-    Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    Tuple[torch.Tensor, SparseTensor, torch.Tensor]
         dense attribute tensor, sparse adjacency matrix (normalized) and labels tensor
     """
     graph = load_dataset(name, dataset_root).standardize(
@@ -571,12 +585,15 @@ def prep_cora_citeseer_pubmed(name: str,
     return attr, adj, labels
 
 
+@typechecked
 def prep_graph(name: str,
-               device: Union[int, torch.device] = 0,
+               device: Union[int, str, torch.device] = 0,
                make_undirected: bool = True,
                binary_attr: bool = False,
                dataset_root: str = 'datasets',
-               return_original_split: bool = False) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+               return_original_split: bool = False) -> Tuple[TensorType["num_nodes", "num_features"],
+                                                             SparseTensor,
+                                                             TensorType["num_nodes"]]:
     """Prepares and normalizes the desired dataset
 
     Parameters
@@ -594,7 +611,7 @@ def prep_graph(name: str,
 
     Returns
     -------
-    Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    Tuple[torch.Tensor, torch_sparse.SparseTensor, torch.Tensor]
         dense attribute tensor, sparse adjacency matrix (normalized) and labels tensor.
     """
     split = None
@@ -677,16 +694,23 @@ def prep_graph(name: str,
 
 
 class RobustPPRDataset(torch.utils.data.Dataset):
-    def __init__(self, attr_matrix_all, ppr_matrix, indices, labels_all=None, allow_cache=True):
+
+    @typechecked
+    def __init__(self,
+                 attr_matrix_all: TensorType["num_nodes", "num_features"],
+                 ppr_matrix: sp.csr.csr_matrix,
+                 indices: np.ndarray,
+                 labels_all: TensorType["num_nodes"] = None,
+                 allow_cache: bool = True):
         """
         Parameters:
             attr_matrix_all: torch.Tensor of shape (num_nodes, num_features)
                 Node features / attributes of all nodes in the graph
-            ppr_matrix: scipy.sparse.csr.csr_matrix of shape (num_train_nodes, num_nodes)
+            ppr_matrix: scipy.sparse.csr.csr_matrix of shape (num_training_nodes, num_nodes)
                 The personal page rank vectors for all nodes of the training set
-            indices: array-like of shape (num_train_nodes)
+            indices: array-like of shape (num_training_nodes)
                 The ids of the training nodes
-            labels_all: array-like of shape (num_nodes)
+            labels_all: torch.Tensor of shape (num_nodes)
                 The class labels for all nodes in the graph
         """
         self.attr_matrix_all = attr_matrix_all
@@ -699,24 +723,34 @@ class RobustPPRDataset(torch.utils.data.Dataset):
     def __len__(self):
         return self.indices.shape[0]
 
-    def __getitem__(self, idx):
+    @typechecked
+    def __getitem__(self, idx: Union[np.ndarray, List[int]]) -> Tuple[np.ndarray,
+                                                                      Tuple[TensorType["ppr_nnz",
+                                                                                       "num_features"], SparseTensor],
+                                                                      Optional[TensorType["batch_size"]]]:
         """
         Parameters:
             idx: np.ndarray of shape (batch_size)
-                The node indices to retrieve for the batch
+                The relative id of nodes in the RobustPPRDataset instance
         Returns:
-            A touple (data, labels), where
-                data: touple of
-                    - attr_matrix: torch.SparseTensor of shape (ppr_num_nonzeros, num_features)
+            A tuple (indices, data, labels), where
+                indices:
+                    The absolut indices of the nodes in the batch w.r.t the original
+                    indexing defined by the original dataset (e.g. ogbn-datsets)
+                data: tuple of
+                    - attr_matrix: torch.Tensor of shape (ppr_num_nonzeros, num_features)
                         The node features of all neighboring nodes of the training nodes in
                         the graph derived from the Personal Page Rank as specified by idx
-                    - ppr_matrix: torch.SparseTensor of shape (batch_size, ppr_num_nonzeros)
+                    - ppr_matrix: torch_sparse.SparseTensor of shape (batch_size, ppr_num_nonzeros)
                         The page rank scores of all neighboring nodes of the training nodes in
                         the graph derived from the Personal Page Rank as specified by idx
                 label: np.ndarray of shape (batch_size)
-                    The labels of the training nodes
+                    The labels of the nodes in the batch
         """
-        # idx is a list of indices
+        # for performance reasons just checking if first element
+        # of the batch is cached. If it is, it is assummed that all other
+        # elements of the batch have also been cached. This implicitely
+        # assumes that individual batches always contian the same elements
         key = idx[0]
         if key not in self.cached:
             # shape (batch_size, num_nodes)
@@ -747,6 +781,10 @@ INT_TYPES = (int, np.integer)
 
 
 class CachedPPRMatrix:
+    """
+    TODO: Add docstring
+    """
+
     def __init__(self,
                  adj: SparseTensor,
                  ppr_cache_params: Dict[str, Any],
@@ -920,7 +958,7 @@ class CachedPPRMatrix:
             logging.info(
                 f"Memory after  saving CachedPPRMatrix to storage:{utils.get_max_memory_bytes() / (1024 ** 3)}")
 
-    def _calc_ppr(self, new_ppr_idx: np.ndarray):
+    def _calc_ppr(self, new_ppr_idx: Union[List[int], np.ndarray]):
         if len(new_ppr_idx) > 0:
 
             logging.info(f"Calculating {len(new_ppr_idx)} ppr scores for CachedPPRMatrix...")

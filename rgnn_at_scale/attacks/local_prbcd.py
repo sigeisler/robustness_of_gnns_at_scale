@@ -2,6 +2,7 @@ from collections import defaultdict
 
 import math
 import logging
+from typeguard import typechecked
 
 import numpy as np
 
@@ -18,6 +19,7 @@ from rgnn_at_scale.attacks.base_attack import Attack, SparseLocalAttack
 
 class LocalPRBCD(SparseLocalAttack):
 
+    @typechecked
     def __init__(self,
                  loss_type: str = 'Margin',  # 'CW', 'LeakyCW'  # 'CE', 'MCE', 'Margin'
                  lr_factor: float = 1.0,

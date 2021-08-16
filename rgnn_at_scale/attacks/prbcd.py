@@ -3,6 +3,7 @@ import logging
 from collections import defaultdict
 import math
 from typing import Tuple
+from typeguard import typechecked
 
 from tqdm import tqdm
 import numpy as np
@@ -17,6 +18,7 @@ class PRBCD(SparseAttack):
     """Sampled and hence scalable PGD attack for graph data.
     """
 
+    @typechecked
     def __init__(self,
                  keep_heuristic: str = 'WeightOnly',  # 'InvWeightGradient' 'Gradient', 'WeightOnly'
                  keep_weight: float = .1,

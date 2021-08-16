@@ -13,6 +13,11 @@ from torch_sparse import SparseTensor, SparseStorage, coalesce
 
 from rgnn_at_scale.helper.ppr_utils import ppr_topk
 
+from torchtyping import TensorType, patch_typeguard
+from typeguard import typechecked
+
+patch_typeguard()
+
 
 def grad_with_checkpoint(outputs: Union[torch.Tensor, Sequence[torch.Tensor]],
                          inputs: Union[torch.Tensor, Sequence[torch.Tensor]]) -> Tuple[torch.Tensor, ...]:
@@ -326,9 +331,10 @@ def calc_ppr_update_topk_sparse(ppr: SparseTensor,
     return torch.sparse.FloatTensor(torch.stack([row_idx, col_ind]), values.flatten(), (1, num_nodes)).to_dense()
 
 
-def calc_ppr_update_dense(ppr: torch.Tensor,
-                          A: torch.Tensor,
-                          p: torch.Tensor,
+@typechecked
+def calc_ppr_update_dense(ppr: TensorType["n_nodes", "n_nodes"],
+                          A: TensorType["n_nodes", "n_nodes"],
+                          p: TensorType["n_nodes"],
                           i: int,
                           alpha: float):
     num_nodes = A.shape[0]
@@ -355,9 +361,10 @@ def calc_ppr_update_dense(ppr: torch.Tensor,
     return ppr_pert_update
 
 
-def calc_ppr_update_topk_dense(ppr: torch.Tensor,
-                               A: torch.Tensor,
-                               p: torch.Tensor,
+@typechecked
+def calc_ppr_update_topk_dense(ppr: TensorType["n_nodes", "n_nodes"],
+                               A: TensorType["n_nodes", "n_nodes"],
+                               p: TensorType["n_nodes"],
                                i: int,
                                alpha: float,
                                topk: int):
@@ -369,11 +376,12 @@ def calc_ppr_update_topk_dense(ppr: torch.Tensor,
     return torch.sparse.FloatTensor(torch.stack([row_idx, col_ind]), values.flatten()).coalesce().to_dense()
 
 
-def get_ppr_matrix(adjacency_matrix: torch.Tensor,
+@typechecked
+def get_ppr_matrix(adjacency_matrix: TensorType["n_nodes", "n_nodes"],
                    alpha: float = 0.15,
                    k: int = 32,
                    use_cpu: bool = False,
-                   **kwargs) -> torch.Tensor:
+                   **kwargs) -> TensorType["n_nodes", "n_nodes"]:
     """Calculates the personalized page rank diffusion of the adjacency matrix as proposed in Johannes Klicpera,
     Stefan Weißenberger, and Stephan Günnemann. Diffusion Improves Graph Learning.
 

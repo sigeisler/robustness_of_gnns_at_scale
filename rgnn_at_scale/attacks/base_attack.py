@@ -2,6 +2,8 @@ import warnings
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from typing import Union, List, Dict
+from torchtyping import TensorType, patch_typeguard
+from typeguard import typechecked
 import logging
 
 import numpy as np
@@ -13,13 +15,16 @@ from torch_sparse import SparseTensor
 from rgnn_at_scale.models import MODEL_TYPE, DenseGCN, GCN, RGNN, BATCHED_PPR_MODELS
 from rgnn_at_scale.helper.utils import accuracy
 
+patch_typeguard()
 
+
+@typechecked
 class Attack(ABC):
 
     def __init__(self,
-                 adj: Union[SparseTensor, torch.Tensor],
-                 attr: torch.Tensor,
-                 labels: torch.Tensor,
+                 adj: Union[SparseTensor, TensorType["n_nodes", "n_nodes"]],
+                 attr: TensorType["n_nodes", "n_features"],
+                 labels: TensorType["n_nodes"],
                  idx_attack: np.ndarray,
                  model: MODEL_TYPE,
                  device: Union[str, int, torch.device],
@@ -76,7 +81,8 @@ class Attack(ABC):
             self.attr_adversary = self.attr
             self.adj_adversary = self.adj
 
-    def set_pertubations(self, adj_perturbed, attr_perturbed):
+    def set_pertubations(self, adj_perturbed: Union[SparseTensor, TensorType["n_nodes", "n_nodes"]],
+                         attr_perturbed: TensorType["n_nodes", "n_features"]):
         self.adj_adversary = adj_perturbed.to(self.data_device)
         self.attr_adversary = attr_perturbed.to(self.data_device)
 
@@ -93,7 +99,11 @@ class Attack(ABC):
 
     @staticmethod
     @torch.no_grad()
-    def evaluate_global(model, attr, adj, labels: torch.Tensor, eval_idx: List[int]):
+    def evaluate_global(model,
+                        attr: TensorType["n_nodes", "n_features"],
+                        adj: Union[SparseTensor, TensorType["n_nodes", "n_nodes"]],
+                        labels: TensorType["n_nodes"],
+                        eval_idx: Union[List[int], np.ndarray]):
         model.eval()
         if hasattr(model, 'release_cache'):
             model.release_cache()
@@ -188,7 +198,7 @@ class Attack(ABC):
         return loss
 
     @staticmethod
-    def project(n_perturbations: int, values: torch.tensor, eps: float = 0, inplace: bool = False):
+    def project(n_perturbations: int, values: torch.Tensor, eps: float = 0, inplace: bool = False):
         if not inplace:
             values = values.clone()
 
@@ -226,11 +236,12 @@ class Attack(ABC):
         return miu
 
 
+@typechecked
 class SparseAttack(Attack):
     def __init__(self,
-                 adj: Union[SparseTensor, torch.Tensor, sp.csr_matrix],
-                 attr: torch.Tensor,
-                 labels: torch.Tensor,
+                 adj: Union[SparseTensor, TensorType["n_nodes", "n_nodes"], sp.csr_matrix],
+                 attr: TensorType["n_nodes", "n_features"],
+                 labels: TensorType["n_nodes"],
                  idx_attack: np.ndarray,
                  model: MODEL_TYPE,
                  device: Union[str, int, torch.device],
@@ -252,6 +263,7 @@ class SparseAttack(Attack):
         self.d = attr.shape[1]
 
 
+@typechecked
 class SparseLocalAttack(SparseAttack):
     @abstractmethod
     def get_perturbed_edges(self) -> torch.Tensor:
@@ -297,8 +309,9 @@ class SparseLocalAttack(SparseAttack):
     def set_eval_model(self, model):
         self.eval_model = deepcopy(model).to(self.device)
 
-    @ staticmethod
-    def classification_statistics(logits, label) -> Dict[str, float]:
+    @staticmethod
+    def classification_statistics(logits: TensorType[1, "n_classes"],
+                                  label: TensorType[()]) -> Dict[str, float]:
         logits, label = F.log_softmax(logits.cpu(), dim=-1), label.cpu()
         logits = logits[0]
         logit_target = logits[label].item()
@@ -317,10 +330,12 @@ class SparseLocalAttack(SparseAttack):
 
 
 class DenseAttack(Attack):
+
+    @typechecked
     def __init__(self,
-                 adj: Union[SparseTensor, torch.Tensor],
-                 attr: torch.Tensor,
-                 labels: torch.Tensor,
+                 adj: Union[SparseTensor, TensorType["n_nodes", "n_nodes"]],
+                 attr: TensorType["n_nodes", "n_features"],
+                 labels: TensorType["n_nodes"],
                  idx_attack: np.ndarray,
                  model: DenseGCN,
                  device: Union[str, int, torch.device],

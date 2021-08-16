@@ -449,7 +449,7 @@ class PPRGoWrapperBase(ABC):
     def fit(self,
             adj: Union[SparseTensor, sp.csr_matrix],
             attr: TensorType["n_nodes", "n_classes"],
-            labels: torch.Tensor,
+            labels: TensorType["n_nodes"],
             idx_train: np.ndarray,
             idx_val: np.ndarray,
             lr: float,
