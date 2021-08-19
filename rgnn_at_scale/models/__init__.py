@@ -1,13 +1,15 @@
+import re
 from typing import Any, Dict, Union
 
 from rgnn_at_scale.models.gat import RGAT
 from rgnn_at_scale.models.gcn import GCN, DenseGCN
+from rgnn_at_scale.models.sgc import SGC
 from rgnn_at_scale.models.rgnn import RGNN
 from rgnn_at_scale.models.rgcn import RGCN
 from rgnn_at_scale.models.pprgo import (PPRGoWrapperBase, RobustPPRGoWrapper, PPRGoWrapper)
 
 
-MODEL_TYPE = Union[GCN, RGNN, RGCN, RobustPPRGoWrapper, PPRGoWrapper]
+MODEL_TYPE = Union[SGC, GCN, RGNN, RGCN, RobustPPRGoWrapper, PPRGoWrapper]
 BATCHED_PPR_MODELS = Union[RobustPPRGoWrapper, PPRGoWrapper]
 
 
@@ -21,11 +23,13 @@ def create_model(hyperparams: Dict[str, Any]) -> MODEL_TYPE:
 
     Returns
     -------
-    Union[GCN, RGNN]
+    model: MODEL_TYPE
         The created instance.
     """
     if 'model' not in hyperparams or hyperparams['model'] == 'GCN':
         return GCN(**hyperparams)
+    if hyperparams['model'] == "SGC":
+        return SGC(**hyperparams)
     if hyperparams['model'] == 'RGAT':
         return RGAT(**hyperparams)
     if hyperparams['model'] == 'DenseGCN':
