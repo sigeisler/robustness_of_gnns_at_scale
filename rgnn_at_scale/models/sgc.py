@@ -1,28 +1,60 @@
-from typing import Any, Dict, Union, List
+
+import collections
+from typing import Optional, Tuple, Union, Callable
 from torchtyping import TensorType, patch_typeguard
 from typeguard import typechecked
 
-import collections
-from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
-
 
 import torch
-import torch_geometric
-
+from torch import Tensor
 from torch import nn
 from torch.utils.checkpoint import checkpoint
-
-from torch_geometric.nn import SGConv
-from torch_geometric.data import Data
-from torch_geometric.utils import add_remaining_self_loops
-
-from torch_scatter import scatter_add
 from torch_sparse import coalesce, SparseTensor
 
+import torch_geometric
+from torch_geometric.typing import Adj, OptTensor
+from torch_geometric.data import Data
+from torch_geometric.nn.conv.gcn_conv import gcn_norm
+
+
 from rgnn_at_scale.aggregation import chunked_message_and_aggregate
-from rgnn_at_scale.helper.utils import (get_approx_topk_ppr_matrix, get_ppr_matrix, get_truncated_svd, get_jaccard,
-                                        sparse_tensor_to_tuple, tuple_to_sparse_tensor)
+from rgnn_at_scale.helper.utils import sparse_tensor_to_tuple, tuple_to_sparse_tensor
+from rgnn_at_scale.models.gcn import GCN
+
 patch_typeguard()
+
+
+class SGConv(torch_geometric.nn.SGConv):
+
+    def __init__(self, **kwargs):
+        super(SGConv, self).__init__(**kwargs)
+        self.normalize = True
+
+    def forward(self, x: Tensor, edge_index: Adj,
+                edge_weight: OptTensor = None) -> Tensor:
+        """"""
+        cache = self._cached_x
+        if cache is None:
+            if self.normalize:
+                if isinstance(edge_index, Tensor):
+                    edge_index, edge_weight = gcn_norm(  # yapf: disable
+                        edge_index, edge_weight, x.size(self.node_dim), False,
+                        self.add_self_loops, dtype=x.dtype)
+                elif isinstance(edge_index, SparseTensor):
+                    edge_index = gcn_norm(  # yapf: disable
+                        edge_index, edge_weight, x.size(self.node_dim), False,
+                        self.add_self_loops, dtype=x.dtype)
+
+            for k in range(self.K):
+                # propagate_type: (x: Tensor, edge_weight: OptTensor)
+                x = self.propagate(edge_index, x=x, edge_weight=edge_weight,
+                                   size=None)
+                if self.cached:
+                    self._cached_x = x
+        else:
+            x = cache
+
+        return self.lin(x)
 
 
 @typechecked
@@ -40,7 +72,9 @@ class ChainableSGConv(SGConv):
         self.do_chunk = do_chunk
         self.n_chunks = n_chunks
 
-    def forward(self, arguments: Sequence[torch.Tensor] = None) -> torch.Tensor:
+    def forward(self, arguments: Tuple[TensorType["n_nodes", "n_features"],
+                                       Union[TensorType[2, "nnz"], SparseTensor],
+                                       Optional[TensorType["nnz"]]]) -> TensorType["n_nodes", "n_classes"]:
         """Predictions based on the input.
 
         Parameters
@@ -51,7 +85,7 @@ class ChainableSGConv(SGConv):
         Returns
         -------
         torch.Tensor
-            the output of `GCNConv`.
+            the output of `SGConv`.
 
         Raises
         ------
@@ -88,7 +122,7 @@ ACTIVATIONS = {
 @typechecked
 class SGC(nn.Module):
     """
-    Implementation of Simplifying Graph Convolutional Networks (SGC). 
+    Implementation of Simplifying Graph Convolutional Networks (SGC).
     `Simplifying Graph Convolutional Networks <https://arxiv.org/abs/1902.07153>`
     Pytorch implementation: <https://github.com/Tiiiger/SGC>
 
@@ -106,12 +140,6 @@ class SGC(nn.Module):
             an additive bias. (default: :obj:`True`)
     dropout : int, optional
         Dropout rate, by default 0.5
-    gdc_params : Dict[str, float], optional
-        Parameters for the GCN preprocessing (`alpha`, `k`, `use_cpu`), by default None
-    svd_params : Dict[str, float], optional
-        Parameters for the SVD preprocessing (`rank`), by default None
-    jaccard_params : Dict[str, float], optional
-        Parameters for the Jaccard preprocessing (`threshold`), by default None
     do_cache_adj_prep : bool, optional
         If `True` the preoprocessing of the adjacency matrix is chached for training, by default True
     do_normalize_adj_once : bool, optional
@@ -120,9 +148,6 @@ class SGC(nn.Module):
         If true use SparseTensor internally, by default True
     do_checkpoint : bool, optional
         If true use checkpointing in message passing, by default False
-    row_norm : bool, optional
-        If true use row norm normalization otherwise symmetric (only relevant if do_normalize_adj_once = True),
-        by default False
     n_chunks : int, optional
         Number of chunks for checkpointing, by default 8
     """
@@ -133,17 +158,14 @@ class SGC(nn.Module):
                  activation: Union[str, nn.Module] = nn.ReLU(),
                  K: int = 2,
                  bias: bool = True,
-                 dropout: int = 0.5,
+                 dropout: float = 0.5,
                  with_batch_norm: bool = False,
-                 gdc_params: Optional[Dict[str, float]] = None,
-                 svd_params: Optional[Dict[str, float]] = None,
-                 jaccard_params: Optional[Dict[str, float]] = None,
+                 cached: bool = False,
+                 add_self_loops: bool = True,
                  do_cache_adj_prep: bool = True,
                  do_normalize_adj_once: bool = True,
-                 add_self_loops: bool = True,
                  do_use_sparse_tensor: bool = True,
                  do_checkpoint: bool = False,
-                 row_norm: bool = False,
                  n_chunks: int = 8,
                  **kwargs):
         super().__init__()
@@ -162,46 +184,44 @@ class SGC(nn.Module):
         self.n_classes = n_classes
         self.K = K
         self.bias = bias
+        self.cached = cached
         self.dropout = dropout
         self.with_batch_norm = with_batch_norm
-        self.gdc_params = gdc_params
-        self.svd_params = svd_params
-        self.jaccard_params = jaccard_params
+        self.add_self_loops = add_self_loops
         self.do_cache_adj_prep = do_cache_adj_prep
         self.do_normalize_adj_once = do_normalize_adj_once
-        self.add_self_loops = add_self_loops
         self.do_use_sparse_tensor = do_use_sparse_tensor
         self.do_checkpoint = do_checkpoint
-        self.row_norm = row_norm
         self.n_chunks = n_chunks
         self.adj_preped = None
         self.layers = self._build_layers()
 
     def _build_conv_layer(self, in_channels: int, out_channels: int, K: int):
-        return ChainableSGConv(in_channels=in_channels, out_channels=out_channels, K=K,
+        return ChainableSGConv(in_channels=in_channels, out_channels=out_channels, K=K, cached=self.cached,
                                do_chunk=self.do_checkpoint, n_chunks=self.n_chunks, bias=self.bias)
 
     def _build_layers(self):
         modules = nn.ModuleList([
             nn.Sequential(collections.OrderedDict(
                 [(f'sgc', self._build_conv_layer(in_channels=self.n_features, out_channels=self.n_classes, K=self.K))]
-                + [(f'activation', self.activation),
-                   (f'dropout', nn.Dropout(p=self.dropout))]
             ))
         ])
 
         return modules
 
     def forward(self,
-                data: Optional[Union[Data, torch.Tensor]] = None,
-                adj: Optional[Union[torch.sparse.FloatTensor, Tuple[torch.Tensor, torch.Tensor]]] = None,
-                attr_idx: Optional[torch.Tensor] = None,
-                edge_idx: Optional[torch.Tensor] = None,
+                data: Optional[Union[Data, TensorType["n_nodes", "n_features"]]] = None,
+                adj: Optional[Union[SparseTensor,
+                                    torch.sparse.FloatTensor,
+                                    Tuple[TensorType[2, "nnz"], TensorType["nnz"]]]] = None,
+                attr_idx: Optional[TensorType["n_nodes", "n_features"]] = None,
+                edge_idx: Optional[TensorType[2, "nnz"]] = None,
+                edge_weight: Optional[TensorType["nnz"]] = None,
                 n: Optional[int] = None,
-                d: Optional[int] = None) -> torch.Tensor:
-        x, edge_idx, edge_weight = SGC.parse_forward_input(data, adj, attr_idx, edge_idx, n, d)
+                d: Optional[int] = None) -> TensorType["n_nodes", "n_classes"]:
+        x, edge_idx, edge_weight = SGC.parse_forward_input(data, adj, attr_idx, edge_idx, edge_weight, n, d)
 
-        # Perform preprocessing such as SVD, GDC or Jaccard
+        # Perform preprocessing
         edge_idx, edge_weight = self._cache_if_option_is_set(self._preprocess_adjacency_matrix,
                                                              x, edge_idx, edge_weight)
 
@@ -214,14 +234,17 @@ class SGC(nn.Module):
         return x
 
     @ staticmethod
-    def parse_forward_input(data: Optional[Union[Data, torch.Tensor]] = None,
-                            adj: Optional[Union[SparseTensor, torch.sparse.FloatTensor,
-                                                Tuple[torch.Tensor, torch.Tensor]]] = None,
-                            attr_idx: Optional[torch.Tensor] = None,
-                            edge_idx: Optional[torch.Tensor] = None,
-                            edge_weight: Optional[torch.Tensor] = None,
+    def parse_forward_input(data: Optional[Union[Data, TensorType["n_nodes", "n_features"]]] = None,
+                            adj: Optional[Union[SparseTensor,
+                                                torch.sparse.FloatTensor,
+                                                Tuple[TensorType[2, "nnz"], TensorType["nnz"]]]] = None,
+                            attr_idx: Optional[TensorType["n_nodes", "n_features"]] = None,
+                            edge_idx: Optional[TensorType[2, "nnz"]] = None,
+                            edge_weight: Optional[TensorType["nnz"]] = None,
                             n: Optional[int] = None,
-                            d: Optional[int] = None) -> Tuple[torch.Tensor, torch.Tensor]:
+                            d: Optional[int] = None) -> Tuple[TensorType["n_nodes", "n_features"],
+                                                              TensorType[2, "nnz"],
+                                                              TensorType["nnz"]]:
         edge_weight = None
         # PyTorch Geometric support
         if isinstance(data, Data):
@@ -256,7 +279,10 @@ class SGC(nn.Module):
     def _ensure_contiguousness(self,
                                x: torch.Tensor,
                                edge_idx: Union[torch.Tensor, SparseTensor],
-                               edge_weight: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+                               edge_weight: Optional[torch.Tensor]) -> Tuple[TensorType["n_nodes", "n_features"],
+                                                                             Union[TensorType[2, "nnz"], SparseTensor],
+                                                                             Optional[TensorType["nnz"]]]:
+
         if not x.is_sparse:
             x = x.contiguous()
         if hasattr(edge_idx, 'contiguous'):
@@ -266,45 +292,11 @@ class SGC(nn.Module):
         return x, edge_idx, edge_weight
 
     def _preprocess_adjacency_matrix(self,
-                                     x: torch.Tensor,
-                                     edge_idx: torch.Tensor,
-                                     edge_weight: Optional[torch.Tensor] = None
-                                     ) -> Tuple[Union[torch.Tensor, SparseTensor], Optional[torch.Tensor]]:
-        if self.gdc_params is not None:
-            n = x.shape[0]
-            if 'use_cpu' in self.gdc_params and self.gdc_params['use_cpu']:
-                device = edge_idx.device
-                edge_idx, _ = add_remaining_self_loops(edge_idx.cpu(), None, 1., n)
-                edge_idx, edge_weight = get_approx_topk_ppr_matrix(edge_idx, n, **self.gdc_params)
-                edge_idx, edge_weight = edge_idx.to(device), edge_weight.to(device)
-            else:
-                edge_idx, edge_weight = SGC.normalize(edge_idx, n, edge_weight, self.add_self_loops, self.row_norm)
-                adj = get_ppr_matrix(torch.sparse.FloatTensor(edge_idx, edge_weight), **self.gdc_params)
-                edge_idx, edge_weight = adj.indices(), adj.values()
-                del adj
-        elif self.svd_params is not None:
-            adj = get_truncated_svd(
-                torch.sparse.FloatTensor(
-                    edge_idx,
-                    torch.ones_like(edge_idx[0], dtype=torch.float32)
-                ),
-                **self.svd_params
-            )
-            self._deactivate_normalization()
-            self.do_normalize_adj_once = False
-            edge_idx, edge_weight = adj.indices(), adj.values()
-            del adj
-        elif self.jaccard_params is not None:
-            adj = get_jaccard(
-                torch.sparse.FloatTensor(
-                    edge_idx,
-                    torch.ones_like(edge_idx[0], dtype=torch.float32)
-                ),
-                x,
-                **self.jaccard_params
-            ).coalesce()
-            edge_idx, edge_weight = adj.indices(), adj.values()
-            del adj
+                                     x: TensorType["n_nodes", "n_features"],
+                                     edge_idx: TensorType[2, "nnz"],
+                                     edge_weight: Optional[TensorType["nnz"]] = None
+                                     ) -> Tuple[Union[TensorType[2, "nnz_after"], SparseTensor],
+                                                Optional[TensorType["nnz_after"]]]:
         if self.do_checkpoint and (x.requires_grad or edge_weight.requires_grad):
             if not self.do_use_sparse_tensor:
                 raise NotImplementedError('Checkpointing is only implemented in combination with sparse tensor input')
@@ -321,8 +313,8 @@ class SGC(nn.Module):
             return self._convert_and_normalize(x, edge_idx, edge_weight)
 
     def _cache_if_option_is_set(self,
-                                callable: Callable[[Any], Any],
-                                *inputs) -> Any:
+                                callable: Callable,
+                                *inputs):
         if self.training and self.adj_preped is not None:
             return self.adj_preped
         else:
@@ -331,23 +323,23 @@ class SGC(nn.Module):
         if (
             self.training
             and self.do_cache_adj_prep
-            and (self.gdc_params is not None or self.svd_params is not None or self.jaccard_params is not None
-                 or self.do_normalize_adj_once or self.do_use_sparse_tensor)
+            and (self.do_normalize_adj_once or self.do_use_sparse_tensor)
         ):
             self.adj_preped = adj_preped
 
         return adj_preped
 
     def _convert_and_normalize(self,
-                               x: torch.Tensor,
-                               edge_idx: torch.Tensor,
-                               edge_weight: Optional[torch.Tensor] = None
-                               ) -> Tuple[Union[torch.Tensor, SparseTensor], Optional[torch.Tensor]]:
+                               x: TensorType["n_nodes", "n_features"],
+                               edge_idx: TensorType[2, "nnz"],
+                               edge_weight: Optional[TensorType["nnz"]] = None,
+                               ) -> Tuple[Union[TensorType[2, "nnz_after"], SparseTensor],
+                                          Optional[TensorType["nnz_after"]]]:
         if self.do_normalize_adj_once:
             self._deactivate_normalization()
 
             n = x.shape[0]
-            edge_idx, edge_weight = SGC.normalize(edge_idx, n, edge_weight, self.add_self_loops, self.row_norm)
+            edge_idx, edge_weight = GCN.normalize(edge_idx, n, edge_weight, self.add_self_loops, row_norm=False)
 
         if self.do_use_sparse_tensor:
             if hasattr(SparseTensor, 'from_edge_index'):
@@ -361,27 +353,3 @@ class SGC(nn.Module):
     def _deactivate_normalization(self):
         for layer in self.layers:
             layer[0].normalize = False
-
-    @staticmethod
-    def normalize(edge_idx: torch.Tensor, n: int, edge_weight: Optional[torch.Tensor] = None,
-                  add_self_loops=True, row_norm: bool = False):
-        if edge_weight is None:
-            edge_weight = torch.ones((edge_idx.size(1), ), dtype=torch.float32, device=edge_idx.device)
-
-        if add_self_loops:
-            edge_idx, tmp_edge_weight = add_remaining_self_loops(edge_idx, edge_weight, 1., n)
-            assert tmp_edge_weight is not None
-            edge_weight = tmp_edge_weight
-
-        row, col = edge_idx
-        if row_norm:
-            deg = scatter_add(edge_weight, row, dim=0, dim_size=n)  # Row sum
-            deg.masked_fill_(deg == 0, 1)
-            edge_weight /= deg[row]
-        else:
-            deg = scatter_add(edge_weight, col, dim=0, dim_size=n)  # Column sum
-            deg_inv_sqrt = deg.pow_(-0.5)
-            deg_inv_sqrt.masked_fill_(deg_inv_sqrt == float('inf'), 0)
-            edge_weight = deg_inv_sqrt[row] * edge_weight * deg_inv_sqrt[col]
-
-        return edge_idx, edge_weight

@@ -61,7 +61,7 @@ def calc_and_cache_ppr(dataset: str, data_dir: str, binary_attr: bool, make_undi
                        return_original_split=dataset.startswith('ogbn'))
 
     attr, adj, labels = graph[:3]
-    if len(graph) == 3:
+    if graph[3] is None:
         idx_train, idx_val, idx_test = split(labels.cpu().numpy())
     else:
         idx_train, idx_val, idx_test = graph[3]['train'], graph[3]['valid'], graph[3]['test']

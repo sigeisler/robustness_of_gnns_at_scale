@@ -75,16 +75,17 @@ def calc_ppr_exact_sym(adj_matrix: sp.spmatrix, alpha: float) -> np.ndarray:
     return alpha * np.linalg.inv(A_inner.toarray())
 
 
-def calc_A_row(A):
-    degrees = A.sum(-1)
-    norm_mask = degrees != 0
-    A[norm_mask] = A[norm_mask] / degrees[norm_mask][:, None]
+@typechecked
+def row_norm(A: TensorType["a", "b"]):
+    rowsum = A.sum(-1)
+    norm_mask = rowsum != 0
+    A[norm_mask] = A[norm_mask] / rowsum[norm_mask][:, None]
     return A / A.sum(-1)[:, None]
 
 
 def calc_ppr_exact_row(A, alpha):
     num_nodes = A.shape[0]
-    A_norm = calc_A_row(A)
+    A_norm = row_norm(A)
     return alpha * torch.inverse(torch.eye(num_nodes, device=A.device) + (alpha - 1) * A_norm)
 
 

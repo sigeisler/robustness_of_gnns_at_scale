@@ -1,6 +1,7 @@
 import collections
-from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
-
+from typing import Callable, Dict, Optional, Sequence, Tuple, Union
+from torchtyping import TensorType, patch_typeguard
+from typeguard import typechecked
 
 import torch
 import torch_geometric
@@ -19,7 +20,10 @@ from rgnn_at_scale.aggregation import chunked_message_and_aggregate
 from rgnn_at_scale.helper.utils import (get_approx_topk_ppr_matrix, get_ppr_matrix, get_truncated_svd, get_jaccard,
                                         sparse_tensor_to_tuple, tuple_to_sparse_tensor)
 
+patch_typeguard()
 
+
+@typechecked
 class ChainableGCNConv(GCNConv):
     """Simple extension to allow the use of `nn.Sequential` with `GCNConv`. The arguments are wrapped as a Tuple/List
     are are expanded for Pytorch Geometric.
@@ -34,7 +38,9 @@ class ChainableGCNConv(GCNConv):
         self.do_chunk = do_chunk
         self.n_chunks = n_chunks
 
-    def forward(self, arguments: Sequence[torch.Tensor] = None) -> torch.Tensor:
+    def forward(self, arguments: Tuple[TensorType["n_nodes", "n_features"],
+                                       Union[TensorType[2, "nnz"], SparseTensor],
+                                       Optional[TensorType["nnz"]]]) -> TensorType["n_nodes", "n_classes"]:
         """Predictions based on the input.
 
         Parameters
@@ -79,6 +85,7 @@ ACTIVATIONS = {
 }
 
 
+@typechecked
 class GCN(nn.Module):
     """Two layer GCN implemntation to be extended by the RGNN which supports the adjacency preprocessings:
     - SVD: Negin Entezari, Saba A. Al-Sayouri, Amirali Darvishzadeh, and Evangelos E. Papalexakis. All you need is Low
@@ -128,7 +135,7 @@ class GCN(nn.Module):
                  activation: Union[str, nn.Module] = nn.ReLU(),
                  n_filters: Union[int, Sequence[int]] = 64,
                  bias: bool = True,
-                 dropout: int = 0.5,
+                 dropout: float = 0.5,
                  with_batch_norm: bool = False,
                  gdc_params: Optional[Dict[str, float]] = None,
                  svd_params: Optional[Dict[str, float]] = None,
@@ -195,12 +202,15 @@ class GCN(nn.Module):
         return modules
 
     def forward(self,
-                data: Optional[Union[Data, torch.Tensor]] = None,
-                adj: Optional[Union[torch.sparse.FloatTensor, Tuple[torch.Tensor, torch.Tensor]]] = None,
-                attr_idx: Optional[torch.Tensor] = None,
-                edge_idx: Optional[torch.Tensor] = None,
+                data: Optional[Union[Data, TensorType["n_nodes", "n_features"]]] = None,
+                adj: Optional[Union[SparseTensor,
+                                    torch.sparse.FloatTensor,
+                                    Tuple[TensorType[2, "nnz"], TensorType["nnz"]]]] = None,
+                attr_idx: Optional[TensorType["n_nodes", "n_features"]] = None,
+                edge_idx: Optional[TensorType[2, "nnz"]] = None,
+                edge_weight: Optional[TensorType["nnz"]] = None,
                 n: Optional[int] = None,
-                d: Optional[int] = None) -> torch.Tensor:
+                d: Optional[int] = None) -> TensorType["n_nodes", "n_classes"]:
         x, edge_idx, edge_weight = GCN.parse_forward_input(data, adj, attr_idx, edge_idx, n, d)
 
         # Perform preprocessing such as SVD, GDC or Jaccard
@@ -216,14 +226,17 @@ class GCN(nn.Module):
         return x
 
     @ staticmethod
-    def parse_forward_input(data: Optional[Union[Data, torch.Tensor]] = None,
-                            adj: Optional[Union[SparseTensor, torch.sparse.FloatTensor,
-                                                Tuple[torch.Tensor, torch.Tensor]]] = None,
-                            attr_idx: Optional[torch.Tensor] = None,
-                            edge_idx: Optional[torch.Tensor] = None,
-                            edge_weight: Optional[torch.Tensor] = None,
+    def parse_forward_input(data: Optional[Union[Data, TensorType["n_nodes", "n_features"]]] = None,
+                            adj: Optional[Union[SparseTensor,
+                                                torch.sparse.FloatTensor,
+                                                Tuple[TensorType[2, "nnz"], TensorType["nnz"]]]] = None,
+                            attr_idx: Optional[TensorType["n_nodes", "n_features"]] = None,
+                            edge_idx: Optional[TensorType[2, "nnz"]] = None,
+                            edge_weight: Optional[TensorType["nnz"]] = None,
                             n: Optional[int] = None,
-                            d: Optional[int] = None) -> Tuple[torch.Tensor, torch.Tensor]:
+                            d: Optional[int] = None) -> Tuple[TensorType["n_nodes", "n_features"],
+                                                              TensorType[2, "nnz"],
+                                                              TensorType["nnz"]]:
         edge_weight = None
         # PyTorch Geometric support
         if isinstance(data, Data):
@@ -239,6 +252,7 @@ class GCN(nn.Module):
             x, edge_idx, edge_weight = data, adj[0], adj[1]
         elif isinstance(adj, SparseTensor):
             x = data
+
             edge_idx_rows, edge_idx_cols, edge_weight = adj.coo()
             edge_idx = torch.stack([edge_idx_rows, edge_idx_cols], dim=0)
         else:
@@ -258,7 +272,9 @@ class GCN(nn.Module):
     def _ensure_contiguousness(self,
                                x: torch.Tensor,
                                edge_idx: Union[torch.Tensor, SparseTensor],
-                               edge_weight: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+                               edge_weight: Optional[torch.Tensor]) -> Tuple[TensorType["n_nodes", "n_features"],
+                                                                             Union[TensorType[2, "nnz"], SparseTensor],
+                                                                             Optional[TensorType["nnz"]]]:
         if not x.is_sparse:
             x = x.contiguous()
         if hasattr(edge_idx, 'contiguous'):
@@ -269,9 +285,10 @@ class GCN(nn.Module):
 
     def _preprocess_adjacency_matrix(self,
                                      x: torch.Tensor,
-                                     edge_idx: torch.Tensor,
-                                     edge_weight: Optional[torch.Tensor] = None
-                                     ) -> Tuple[Union[torch.Tensor, SparseTensor], Optional[torch.Tensor]]:
+                                     edge_idx: Union[torch.Tensor, SparseTensor],
+                                     edge_weight: Optional[torch.Tensor]) -> Tuple[Union[TensorType[2, "nnz"],
+                                                                                         SparseTensor],
+                                                                                   Optional[TensorType["nnz"]]]:
         if self.gdc_params is not None:
             n = x.shape[0]
             if 'use_cpu' in self.gdc_params and self.gdc_params['use_cpu']:
@@ -323,8 +340,8 @@ class GCN(nn.Module):
             return self._convert_and_normalize(x, edge_idx, edge_weight)
 
     def _cache_if_option_is_set(self,
-                                callable: Callable[[Any], Any],
-                                *inputs) -> Any:
+                                callable: Callable,
+                                *inputs):
         if self.training and self.adj_preped is not None:
             return self.adj_preped
         else:
@@ -341,10 +358,11 @@ class GCN(nn.Module):
         return adj_preped
 
     def _convert_and_normalize(self,
-                               x: torch.Tensor,
-                               edge_idx: torch.Tensor,
-                               edge_weight: Optional[torch.Tensor] = None
-                               ) -> Tuple[Union[torch.Tensor, SparseTensor], Optional[torch.Tensor]]:
+                               x: TensorType["n_nodes", "n_features"],
+                               edge_idx: TensorType[2, "nnz"],
+                               edge_weight: Optional[TensorType["nnz"]] = None,
+                               ) -> Tuple[Union[TensorType[2, "nnz_after"], SparseTensor],
+                                          Optional[TensorType["nnz_after"]]]:
         if self.do_normalize_adj_once:
             self._deactivate_normalization()
 
@@ -365,8 +383,9 @@ class GCN(nn.Module):
             layer[0].normalize = False
 
     @staticmethod
-    def normalize(edge_idx: torch.Tensor, n: int, edge_weight: Optional[torch.Tensor] = None,
-                  add_self_loops=True, row_norm: bool = False):
+    def normalize(edge_idx: Union[TensorType[2, "nnz_after"], SparseTensor], n: int,
+                  edge_weight: Optional[TensorType["nnz"]] = None,
+                  add_self_loops: bool = True, row_norm: bool = False):
         if edge_weight is None:
             edge_weight = torch.ones((edge_idx.size(1), ), dtype=torch.float32, device=edge_idx.device)
 
@@ -424,6 +443,7 @@ class DenseGraphConvolution(nn.Module):
         return adj_matrix @ x_trans
 
 
+@typechecked
 class DenseGCN(nn.Module):
     """Dense two layer GCN for the FGSM attack that requires a gradient towards the adjacency matrix.
     """
@@ -433,7 +453,7 @@ class DenseGCN(nn.Module):
                  n_classes: int,
                  n_filters: int = 64,
                  activation: nn.Module = nn.ReLU(),
-                 dropout: int = 0.5,
+                 dropout: float = 0.5,
                  ** kwargs):
         """
         Parameters

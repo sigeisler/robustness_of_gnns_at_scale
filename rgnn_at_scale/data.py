@@ -4,7 +4,6 @@ import logging
 
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Union, Tuple, Optional
-from torch._C import NoneType
 
 from torchtyping import TensorType, patch_typeguard
 from typeguard import typechecked
@@ -23,6 +22,7 @@ from torch_sparse import SparseTensor
 
 from rgnn_at_scale.helper import utils
 from rgnn_at_scale.helper import ppr_utils as ppr
+
 
 patch_typeguard()
 
@@ -590,10 +590,12 @@ def prep_graph(name: str,
                device: Union[int, str, torch.device] = 0,
                make_undirected: bool = True,
                binary_attr: bool = False,
+               feat_norm: bool = False,
                dataset_root: str = 'datasets',
                return_original_split: bool = False) -> Tuple[TensorType["num_nodes", "num_features"],
                                                              SparseTensor,
-                                                             TensorType["num_nodes"]]:
+                                                             TensorType["num_nodes"],
+                                                             Optional[Dict[str, np.ndarray]]]:
     """Prepares and normalizes the desired dataset
 
     Parameters
@@ -686,11 +688,13 @@ def prep_graph(name: str,
         # NOTE: do not use this for really large datasets.
         # The mask is a **dense** matrix of the same size as the attribute matrix
         attr[attr != 0] = 1
+    elif feat_norm:
+        attr = utils.row_norm(attr)
 
     if return_original_split and split is not None:
         return attr, adj, labels, split
 
-    return attr, adj, labels
+    return attr, adj, labels, None
 
 
 class RobustPPRDataset(torch.utils.data.Dataset):

@@ -6,7 +6,7 @@ from tqdm.auto import tqdm
 from rgnn_at_scale.helper.ppr_utils import topk_ppr_matrix
 
 from rgnn_at_scale.data import prep_graph, split
-from rgnn_at_scale.helper.utils import calc_ppr_update, calc_ppr_update_dense, calc_ppr_exact_row, calc_A_row
+from rgnn_at_scale.helper.utils import calc_ppr_update, calc_ppr_update_dense, calc_ppr_exact_row, row_norm
 from rgnn_at_scale.helper.utils import calc_ppr_update_sparse_result, matrix_to_torch
 
 device = 0 if torch.cuda.is_available() else 'cpu'
@@ -67,7 +67,7 @@ class TestPPRUpdate():
         num_nodes = A_dense.shape[0]
         ppr_idx = np.arange(num_nodes)
 
-        A_sp = SparseTensor.from_dense(calc_A_row(A_dense.clone())).to_scipy(layout="csr")
+        A_sp = SparseTensor.from_dense(row_norm(A_dense.clone())).to_scipy(layout="csr")
 
         ppr_topk = matrix_to_torch(topk_ppr_matrix(A_sp, alpha, eps, ppr_idx, topk, normalization='row')).to_dense()
 
@@ -113,7 +113,7 @@ class TestPPRUpdate():
 
         ppr_idx = np.arange(num_nodes)
 
-        A_sp = SparseTensor.from_dense(calc_A_row(A_dense.clone())).to_scipy(layout="csr")
+        A_sp = SparseTensor.from_dense(row_norm(A_dense.clone())).to_scipy(layout="csr")
 
         ppr_topk = matrix_to_torch(topk_ppr_matrix(A_sp, alpha, eps, ppr_idx, topk, normalization='row')).to_dense()
 

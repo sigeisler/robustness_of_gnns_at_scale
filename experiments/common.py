@@ -52,7 +52,7 @@ def prepare_attack_experiment(data_dir: str, dataset: str, attack: str, attack_p
                        binary_attr=binary_attr, return_original_split=dataset.startswith('ogbn'))
 
     attr, adj, labels = graph[:3]
-    if len(graph) == 3:
+    if graph[3] is None:
         idx_train, idx_val, idx_test = split(labels.cpu().numpy())
     else:
         idx_train, idx_val, idx_test = graph[3]['train'], graph[3]['valid'], graph[3]['test']
