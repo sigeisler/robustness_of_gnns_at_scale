@@ -53,6 +53,7 @@ def config():
     data_dir = "datasets/"
     binary_attr = False
     make_undirected = True
+    feat_norm = False
 
     data_device = 'cpu'
     device = "cpu"
@@ -60,7 +61,7 @@ def config():
 
 
 @ex.automain
-def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any], nodes: str, seed: int,
+def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any], nodes: str, seed: int, feat_norm: bool,
         epsilons: Sequence[float], min_node_degree: int, binary_attr: bool, make_undirected: bool, artifact_dir: str, nodes_topk: int,
         model_label: str, model_storage_type: str, device: Union[str, int], surrogate_model_storage_type: str,
         surrogate_model_label: str, data_device: Union[str, int], debug_level: str):
@@ -89,6 +90,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
             - LocalPRBCD
             - LocalDICE
             - Nettack
+            - SGA
     attack_params : Dict[str, Any], optional
         The attack hyperparams to be passed as keyword arguments to the constructor of the attack class
     epsilons: List[float]
@@ -137,7 +139,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
     (
         attr, adj, labels, _, _, idx_test, storage, attack_params, _, model_params, _
     ) = prepare_attack_experiment(
-        data_dir, dataset, attack, attack_params, epsilons, binary_attr, make_undirected, seed, artifact_dir,
+        data_dir, dataset, attack, attack_params, epsilons, binary_attr, make_undirected, feat_norm, seed, artifact_dir,
         None, None, model_label, model_storage_type, device, surrogate_model_label, data_device, debug_level, ex
     )
 

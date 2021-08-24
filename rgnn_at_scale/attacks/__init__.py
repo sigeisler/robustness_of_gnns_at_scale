@@ -10,10 +10,11 @@ from .pgd import PGD
 from .prbcd import PRBCD
 from .nettack import Nettack
 from .base_attack import Attack
+from .sga import SGA
 
-ATTACK_TYPE = Union[DICE, FGSM, GreedyRBCD, LocalPRBCD, PGD, PRBCD, Nettack, LocalBatchedPRBCD, LocalDICE]
+ATTACK_TYPE = Union[SGA, DICE, FGSM, GreedyRBCD, LocalPRBCD, PGD, PRBCD, Nettack, LocalBatchedPRBCD, LocalDICE]
 SPARSE_ATTACKS = [GreedyRBCD.__name__, PRBCD.__name__, DICE.__name__]
-LOCAL_ATTACKS = [LocalPRBCD.__name__, Nettack.__name__, LocalBatchedPRBCD.__name__, LocalDICE.__name__]
+LOCAL_ATTACKS = [SGA.__name__, LocalPRBCD.__name__, Nettack.__name__, LocalBatchedPRBCD.__name__, LocalDICE.__name__]
 
 
 def create_attack(attack: str, *args, **kwargs) -> Attack:
@@ -38,4 +39,4 @@ def create_attack(attack: str, *args, **kwargs) -> Attack:
 
 
 __all__ = [FGSM, GreedyRBCD, LocalPRBCD, LocalBatchedPRBCD, LocalDICE,
-           PRBCD, create_attack, ATTACK_TYPE, SPARSE_ATTACKS, Nettack]
+           PRBCD, create_attack, ATTACK_TYPE, SPARSE_ATTACKS, Nettack, SGA]

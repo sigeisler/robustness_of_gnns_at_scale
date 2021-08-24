@@ -353,3 +353,8 @@ class SGC(nn.Module):
     def _deactivate_normalization(self):
         for layer in self.layers:
             layer[0].normalize = False
+
+    def deactivate_caching(self):
+        for layer in self.layers:
+            layer[0].cached = False
+            layer[0]._cached_x = None

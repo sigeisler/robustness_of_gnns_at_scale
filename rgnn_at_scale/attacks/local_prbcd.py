@@ -38,7 +38,8 @@ class LocalPRBCD(SparseLocalAttack):
         # Late import to prevent circular import
         from rgnn_at_scale.attacks.local_prbcd_batched import LocalBatchedPRBCD
         assert isinstance(self, LocalBatchedPRBCD) or type(
-            self.attacked_model) not in BATCHED_PPR_MODELS.__args__, "'LocalPRBCD' does not support batched models, use 'LocalBatchedPRBCD' instead"
+            self.attacked_model) not in BATCHED_PPR_MODELS.__args__, \
+            "'LocalPRBCD' does not support batched models, use 'LocalBatchedPRBCD' instead"
 
         self.loss_type = loss_type
         self.n_possible_edges = self.n * (self.n - 1) // 2

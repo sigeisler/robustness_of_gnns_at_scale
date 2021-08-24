@@ -1,7 +1,7 @@
 import warnings
 from abc import ABC, abstractmethod
 from copy import deepcopy
-from typing import Union, List, Dict
+from typing import Optional, Tuple, Union, List, Dict
 from torchtyping import TensorType, patch_typeguard
 from typeguard import typechecked
 import logging
@@ -39,7 +39,7 @@ class Attack(ABC):
     device : Union[str, int, torch.device]
         The cuda device to use for the attack
     data_device : Union[str, int, torch.device]
-        The cuda device to use for storing the dataset. 
+        The cuda device to use for storing the dataset.
         For batched models (like PPRGo) this may differ from the device parameter.
         Other models require the dataset and model to be on the same device.
     make_undirected: bool
@@ -327,13 +327,26 @@ class SparseLocalAttack(SparseAttack):
         pass
 
     @abstractmethod
-    def get_logits(self, model: MODEL_TYPE, node_idx: int, perturbed_graph: SparseTensor = None):
+    def get_logits(self,
+                   model: MODEL_TYPE,
+                   node_idx: int,
+                   perturbed_graph: Optional[Union[SparseTensor,
+                                                   Tuple[TensorType[2, "nnz"],
+                                                         TensorType["nnz"]]]] = None):
         pass
 
-    def get_surrogate_logits(self, node_idx: int, perturbed_graph: SparseTensor = None) -> torch.Tensor:
+    def get_surrogate_logits(self,
+                             node_idx: int,
+                             perturbed_graph: Optional[Union[SparseTensor,
+                                                             Tuple[TensorType[2, "nnz"],
+                                                                   TensorType["nnz"]]]] = None) -> torch.Tensor:
         return self.get_logits(self.attacked_model, node_idx, perturbed_graph)
 
-    def get_eval_logits(self, node_idx: int, perturbed_graph: SparseTensor = None) -> torch.Tensor:
+    def get_eval_logits(self,
+                        node_idx: int,
+                        perturbed_graph: Optional[Union[SparseTensor,
+                                                        Tuple[TensorType[2, "nnz"],
+                                                              TensorType["nnz"]]]] = None) -> torch.Tensor:
         return self.get_logits(self.eval_model, node_idx, perturbed_graph)
 
     @torch.no_grad()
@@ -341,6 +354,8 @@ class SparseLocalAttack(SparseAttack):
         self.eval_model.eval()
         if hasattr(self.eval_model, 'release_cache'):
             self.eval_model.release_cache()
+        if hasattr(self.eval_model, "deactivate_caching"):
+            self.eval_model.deactivate_caching()
 
         if torch.cuda.is_available():
             torch.cuda.empty_cache()

@@ -211,7 +211,8 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
     logging.info(f'Test accuracy is {test_accuracy} with seed {seed}')
 
     storage = Storage(artifact_dir, experiment=ex)
-    params = dict(dataset=dataset, binary_attr=binary_attr, make_undirected=make_undirected, seed=seed, **hyperparams)
+    params = dict(dataset=dataset, binary_attr=binary_attr, make_undirected=make_undirected,
+                  seed=seed, feat_norm=feat_norm, **hyperparams)
 
     model_path = storage.save_model(model_storage_type, params, model)
 

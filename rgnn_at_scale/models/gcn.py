@@ -383,9 +383,11 @@ class GCN(nn.Module):
             layer[0].normalize = False
 
     @staticmethod
-    def normalize(edge_idx: Union[TensorType[2, "nnz_after"], SparseTensor], n: int,
+    def normalize(edge_idx: Union[TensorType[2, "nnz"], SparseTensor], n: int,
                   edge_weight: Optional[TensorType["nnz"]] = None,
-                  add_self_loops: bool = True, row_norm: bool = False):
+                  add_self_loops: bool = True, row_norm: bool = False) -> Tuple[Union[TensorType[2, "nnz_after"],
+                                                                                      SparseTensor],
+                                                                                Optional[TensorType["nnz_after"]]]:
         if edge_weight is None:
             edge_weight = torch.ones((edge_idx.size(1), ), dtype=torch.float32, device=edge_idx.device)
 
