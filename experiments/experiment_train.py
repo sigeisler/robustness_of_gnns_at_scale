@@ -41,7 +41,6 @@ def config():
     dataset = 'cora_ml'
     make_undirected = True
     binary_attr = False
-    feat_norm = False
     data_device = 0
 
     device = 0
@@ -72,7 +71,7 @@ def config():
 
 
 @ex.automain
-def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params: Dict[str, Any], binary_attr: bool, feat_norm: bool,
+def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params: Dict[str, Any], binary_attr: bool,
         make_undirected: bool, seed: int, artifact_dir: str, model_storage_type: str, ppr_cache_params: Dict[str, str],
         device: Union[str, int], data_device: Union[str, int], display_steps: int, debug_level: str):
     """
@@ -136,7 +135,7 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
 
     logging.info({
         'dataset': dataset, 'model_params': model_params, 'train_params': train_params, 'binary_attr': binary_attr,
-        'feat_norm': feat_norm, 'make_undirected': make_undirected, 'seed': seed, 'artifact_dir': artifact_dir,
+        'make_undirected': make_undirected, 'seed': seed, 'artifact_dir': artifact_dir,
         'model_storage_type': model_storage_type, 'ppr_cache_params': ppr_cache_params, 'device': device,
         'display_steps': display_steps, 'data_device': data_device
     })
@@ -144,7 +143,7 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
     torch.manual_seed(seed)
     np.random.seed(seed)
     graph = prep_graph(dataset, data_device, dataset_root=data_dir, make_undirected=make_undirected,
-                       binary_attr=binary_attr, feat_norm=feat_norm, return_original_split=dataset.startswith('ogbn'))
+                       binary_attr=binary_attr, return_original_split=dataset.startswith('ogbn'))
 
     attr, adj, labels = graph[:3]
     if graph[3] is None:
@@ -212,7 +211,7 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
 
     storage = Storage(artifact_dir, experiment=ex)
     params = dict(dataset=dataset, binary_attr=binary_attr, make_undirected=make_undirected,
-                  seed=seed, feat_norm=feat_norm, **hyperparams)
+                  seed=seed, **hyperparams)
 
     model_path = storage.save_model(model_storage_type, params, model)
 

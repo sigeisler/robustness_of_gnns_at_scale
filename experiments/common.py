@@ -14,7 +14,7 @@ from rgnn_at_scale.helper.utils import accuracy
 
 
 def prepare_attack_experiment(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
-                              epsilons: Sequence[float], binary_attr: bool, make_undirected: bool, feat_norm: bool,
+                              epsilons: Sequence[float], binary_attr: bool, make_undirected: bool,
                               seed: int, artifact_dir: str, pert_adj_storage_type: str, pert_attr_storage_type: str,
                               model_label: str, model_storage_type: str, device: Union[str, int],
                               surrogate_model_label: str, data_device: Union[str, int], debug_level: str,
@@ -49,7 +49,7 @@ def prepare_attack_experiment(data_dir: str, dataset: str, attack: str, attack_p
     np.random.seed(seed)
 
     graph = prep_graph(dataset, data_device, dataset_root=data_dir, make_undirected=make_undirected,
-                       binary_attr=binary_attr, feat_norm=feat_norm, return_original_split=dataset.startswith('ogbn'))
+                       binary_attr=binary_attr, return_original_split=dataset.startswith('ogbn'))
 
     attr, adj, labels = graph[:3]
     if graph[3] is None:
@@ -77,7 +77,6 @@ def prepare_attack_experiment(data_dir: str, dataset: str, attack: str, attack_p
     model_params = dict(dataset=dataset,
                         binary_attr=binary_attr,
                         make_undirected=make_undirected,
-                        feat_norm=feat_norm,
                         seed=seed)
 
     if model_label is not None and model_label:

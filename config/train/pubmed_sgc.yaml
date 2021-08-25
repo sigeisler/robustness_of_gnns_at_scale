@@ -35,10 +35,9 @@ grid:
 sgc_pubmed:
   fixed:
     dataset: pubmed
-    feat_norm: True
     train_params:
-      lr: 1e-1
-      weight_decay: 2e-5
+      lr: 97e-4
+      weight_decay: 17e-5
     model_params:
       label: Vanilla SGC
       model: SGC

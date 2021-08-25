@@ -17,7 +17,7 @@ fixed:
   train_params:
     patience: 300
     max_epochs: 3000
-  artifact_dir: cache_debug
+  artifact_dir: cache
   model_storage_type: pretrained
   device: 0
   data_device: cpu

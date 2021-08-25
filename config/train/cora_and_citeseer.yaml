@@ -30,7 +30,7 @@ grid:
     type: choice
     options:
       - cora_ml
-      # - citeseer
+      - citeseer
 
   seed:
     type: choice

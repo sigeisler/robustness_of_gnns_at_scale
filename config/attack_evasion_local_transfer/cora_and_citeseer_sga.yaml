@@ -7,10 +7,12 @@ seml:
 slurm:
   experiments_per_job: 4
   sbatch_options:
-    gres: gpu:1       # num GPUs
+    # gres: gpu:1       # num GPUs
     mem: 16G          # memory
     cpus-per-task: 4  # num cores
-    time: 1-00:00     # max time, D-HH:MM
+    time: 0-00:30     # max time, D-HH:MM
+    partition: cpu
+    qos: studentpriocpu
 
 fixed:
   data_dir: datasets/
@@ -19,28 +21,67 @@ fixed:
   artifact_dir: cache
   nodes: None
   nodes_topk: 40
-  device: 0
-  data_device: 0
+  device: cpu
+  data_device: cpu
   binary_attr: False
   make_undirected: True
   attack: SGA
+  surrogate_model_label: Vanilla SGC
 
 grid:
   epsilons:
     type: choice
     options:
+      - [0.1]
+      - [0.25]
+      - [0.5]
+      - [0.75]
       - [1.0]
-
   seed:
     type: choice
     options:
       - 0
-      # - 1
-      # - 5
+      - 1
+      - 5
+  dataset:
+    type: choice
+    options:
+      - cora_ml
+      - citeseer
 
-sga_gcn_cora:
+sga_sgc:
   fixed:
-    dataset: cora_ml
     model_label: Vanilla SGC
-    surrogate_model_label: Vanilla SGC
-    feat_norm: False
+
+sga_gcn:
+  fixed:
+    model_label: Vanilla GCN
+
+sga_gdc:
+  fixed:
+    model_label: Vanilla GDC
+
+
+# sga_gdc_mediod:
+#   fixed:
+#     model_label: Soft Medoid GDC (T=0.5)
+
+# sga_gdc_median:
+#   fixed:
+#     model_label: Soft Median GDC (T=0.5)
+
+    
+# sga_pprgo:
+#   fixed:
+#     dataset: cora_ml
+#     model_label:  Vanilla PPRGo
+
+# sga_pprgo_mediod:
+#   fixed:
+#     dataset: cora_ml
+#     model_label: Soft Medoid PPRGo (T=0.5)
+
+# sga_pprgo_median:
+#   fixed:
+#     dataset: cora_ml
+#     model_label: Soft Median PPRGo (T=0.5)
