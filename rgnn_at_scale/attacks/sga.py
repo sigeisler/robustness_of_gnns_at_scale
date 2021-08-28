@@ -65,7 +65,7 @@ class SGA(SparseLocalAttack):
                             potential_nodes,
                             influencer_nodes):
         potential_edge_index = torch.hstack([
-            torch.row_stack([torch.tile(infl.cuda(), (1, len(potential_nodes))), potential_nodes])
+            torch.row_stack([torch.tile(infl.to(self.device), (1, len(potential_nodes))), potential_nodes])
             for infl in influencer_nodes
         ])
         potential_edge_index, _ = remove_self_loops(potential_edge_index)
