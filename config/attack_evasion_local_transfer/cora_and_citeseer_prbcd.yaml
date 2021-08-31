@@ -50,22 +50,40 @@ grid:
 gcn:
   fixed:
     model_label: Vanilla GCN
+    surrogate_model_label: Vanilla GCN
     make_undirected: True
 
 gcn_directed:
   fixed:
     model_label: Vanilla GCN
+    surrogate_model_label: Vanilla GCN
     model_storage_type: pretrained_rownorm
     make_undirected: False
 
-models:
+vanilla_pprgo:
+  fixed:
+    model_label: Vanilla PPRGo
   grid:
-    model_label:
+    surrogate_model_label:
       type: choice
       options:
+        - Vanilla GCN
         - Vanilla PPRGo
-        - Soft Median PPRGo (T=1.0)
+    make_undirected:
+      type: choice
+      options:
+        - True
+        - False
 
+softmedian_pprgo:
+  fixed:
+    model_label: Soft Median PPRGo (T=1.0)
+  grid:
+    surrogate_model_label:
+      type: choice
+      options:
+        - Vanilla GCN
+        - Soft Median PPRGo (T=1.0)
     make_undirected:
       type: choice
       options:
