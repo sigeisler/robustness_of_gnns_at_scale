@@ -1,4 +1,5 @@
 import collections
+from copy import deepcopy
 import logging
 import warnings
 from typing import Any, Dict, Sequence, Union
@@ -6,10 +7,11 @@ from typing import Any, Dict, Sequence, Union
 import numpy as np
 from sacred import Experiment
 
-
+from experiments.common import get_local_attack_nodes, prepare_attack_experiment
 from rgnn_at_scale.attacks import create_attack
 from rgnn_at_scale.helper.io import Storage
-from experiments.common import prepare_attack_experiment, get_local_attack_nodes
+from rgnn_at_scale.train import train
+
 
 try:
     import seml
@@ -33,37 +35,39 @@ def config():
 
     # default params
     dataset = 'cora_ml'
-    attack = 'Nettack'
+    attack = 'LocalPRBCD'
     attack_params = {}
     nodes = None
     nodes_topk = 40
 
     epsilons = [0.5, 0.75, 1]
     min_node_degree = None
-    seed = 1
+    seed = 0
 
-    artifact_dir = "cache"
+    artifact_dir = "cache_debug"
 
     model_storage_type = 'pretrained'
-    model_label = "Vanilla PPRGo"
+    model_label = "Vanilla GCN"
 
     surrogate_model_storage_type = "pretrained"
-    surrogate_model_label = 'Linear GCN'
+    surrogate_model_label = 'Vanilla GCN'
 
     data_dir = "datasets/"
     binary_attr = False
     make_undirected = True
 
     data_device = 'cpu'
-    device = "cpu"
+    device = 0
     debug_level = "info"
+
+    evaluate_poisoning = True
 
 
 @ex.automain
 def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any], nodes: str, seed: int,
         epsilons: Sequence[float], min_node_degree: int, binary_attr: bool, make_undirected: bool, artifact_dir: str, nodes_topk: int,
         model_label: str, model_storage_type: str, device: Union[str, int], surrogate_model_storage_type: str,
-        surrogate_model_label: str, data_device: Union[str, int], debug_level: str):
+        surrogate_model_label: str, data_device: Union[str, int], debug_level: str, evaluate_poisoning: bool):
     """
     Instantiates a sacred experiment executing a local transfer attack run for a given model configuration.
     Local evasion attacks aim to flip the label of a single node only.
@@ -121,6 +125,8 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
         The name of the storage (TinyDB) table name the perturbed adjacency matrix is stored to
     pert_attr_storage_type: str
         The name of the storage (TinyDB) table name the perturbed attribute matrix is stored to
+    evaluate_poisoning: bool
+        If set to `True` also the poisoning performance will be evaluated
 
     Returns
     -------
@@ -136,7 +142,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
     results = []
 
     (
-        attr, adj, labels, _, _, idx_test, storage, attack_params, _, model_params, _
+        attr, adj, labels, idx_train, idx_val, idx_test, storage, attack_params, _, model_params, _
     ) = prepare_attack_experiment(
         data_dir, dataset, attack, attack_params, epsilons, binary_attr, make_undirected, seed, artifact_dir,
         None, None, model_label, model_storage_type, device, surrogate_model_label, data_device, debug_level, ex
@@ -200,29 +206,73 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                     continue
 
                 try:
-                    logits, initial_logits = adversary.evaluate_local(node)
-
-                    results.append({
-                        'label': eval_model_label,
-                        'epsilon': eps,
-                        'n_perturbations': n_perturbations,
-                        'degree': int(degree.item()),
-                        'logits': logits.cpu().numpy().tolist(),
-                        'initial_logits': initial_logits.cpu().numpy().tolist(),
-                        'target': labels[node].item(),
-                        'node_id': node,
-                        'perturbed_edges': adversary.get_perturbed_edges().cpu().numpy().tolist()
-                    })
-
-                    results[-1].update(adversary.classification_statistics(logits.cpu(), labels[node].long().cpu()))
-                    results[-1].update({
-                        f'initial_{key}': value
-                        for key, value
-                        in adversary.classification_statistics(initial_logits.cpu(), labels[node].long().cpu()).items()
-                    })
+                    logits_evasion, initial_logits_evasion = adversary.evaluate_local(node)
 
                     logging.info(
                         f'Evaluated model {eval_model_label} using {attack} with pert. edges for node {node} and budget {n_perturbations}:')
+
+                    results.append({
+                        'label': model_label,
+                        'epsilon': eps,
+                        'n_perturbations': n_perturbations,
+                        'degree': int(degree.item()),
+                        'target': labels[node].item(),
+                        'node_id': node,
+                        'perturbed_edges': adversary.get_perturbed_edges().cpu().numpy().tolist(),
+                        'evasion': {
+                            'logits_evasion': logits_evasion.cpu().numpy().tolist(),
+                            'initial_logits_evasion': initial_logits_evasion.cpu().numpy().tolist(),
+                            **adversary.classification_statistics(
+                                logits_evasion.cpu(), labels[node].long().cpu()),
+                            **{
+                                f'initial_{key}': value
+                                for key, value
+                                in adversary.classification_statistics(
+                                    initial_logits_evasion.cpu(), labels[node].long().cpu()).items()
+                            }
+                        }
+                    })
+
+                    if evaluate_poisoning:
+                        victim = deepcopy(model).to(device)
+                        for module in victim.modules():
+                            if hasattr(module, 'reset_parameters'):
+                                module.reset_parameters()
+
+                        if hasattr(victim, 'fit'):
+                            trace = victim.fit(adversary.adj_adversary.to(device), attr.to(device),
+                                               labels=labels,
+                                               idx_train=idx_train,
+                                               idx_val=idx_val,
+                                               dataset=dataset,
+                                               make_undirected=make_undirected,
+                                               **hyperparams['train_params'])
+
+                            _ = trace if trace is not None else (None, None)
+
+                        else:
+                            _ = train(
+                                model=victim, attr=attr.to(device), adj=adversary.adj_adversary.to(device),
+                                labels=labels.to(device), idx_train=idx_train, idx_val=idx_val, **hyperparams['train_params']
+                            )
+
+                        victim.eval()
+                        adversary.set_eval_model(victim)
+                        logits_poisoning, initial_logits_poisoning = adversary.evaluate_local(node)
+
+                        results[-1]['poisoning'] = {
+                            'logits_poisoning': logits_poisoning.cpu().numpy().tolist(),
+                            'initial_logits_poisoning': initial_logits_poisoning.cpu().numpy().tolist(),
+                            **adversary.classification_statistics(
+                                logits_poisoning.cpu(), labels[node].long().cpu()),
+                            **{
+                                f'initial_{key}': value
+                                for key, value
+                                in adversary.classification_statistics(
+                                    initial_logits_poisoning.cpu(), labels[node].long().cpu()).items()
+                            }
+                        }
+
                     logging.info(results[-1])
 
                 except Exception as e:

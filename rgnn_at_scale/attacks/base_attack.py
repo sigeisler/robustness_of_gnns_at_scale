@@ -360,16 +360,16 @@ class SparseLocalAttack(SparseAttack):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
-            logging.info("Cuda Memory before local evaluation on clean adjacency")
-            logging.info(torch.cuda.memory_allocated() / (1024 ** 3))
+            memory = torch.cuda.memory_allocated() / (1024 ** 3)
+            logging.info(f"Cuda Memory before local evaluation on clean adjacency {memory}")
 
         initial_logits = self.get_eval_logits(node_idx)
 
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
-            logging.info("Cuda Memory before local evaluation on perturbed adjacency")
-            logging.info(torch.cuda.memory_allocated() / (1024 ** 3))
+            memory = torch.cuda.memory_allocated() / (1024 ** 3)
+            logging.info(f"Cuda Memory before local evaluation on perturbed adjacency {memory}")
 
         logits = self.get_eval_logits(node_idx, self.adj_adversary)
         return logits, initial_logits

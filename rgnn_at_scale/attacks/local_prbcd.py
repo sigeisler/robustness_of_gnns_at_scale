@@ -116,7 +116,7 @@ class LocalPRBCD(SparseLocalAttack):
                     logging.info(f"Gradient mean {gradient.abs().mean().item()} std {gradient.abs().std().item()} "
                                  f"with base learning rate {n_perturbations * self.lr_factor}")
                     if torch.cuda.is_available():
-                        logging.info(torch.cuda.memory_allocated() / (1024 ** 3))
+                        logging.info(f'Cuda memory {torch.cuda.memory_allocated() / (1024 ** 3)}')
 
                 if self.with_early_stropping and best_margin > classification_statistics['margin']:
                     best_margin = classification_statistics['margin']

@@ -46,7 +46,7 @@ def config():
     device = 0
     seed = 0
 
-    artifact_dir = 'cache'
+    artifact_dir = 'cache_debug'
     model_storage_type = 'pretrained'
     model_params = dict(
         label="Vanilla GCN",
@@ -146,7 +146,7 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
                        binary_attr=binary_attr, return_original_split=dataset.startswith('ogbn'))
 
     attr, adj, labels = graph[:3]
-    if graph[3] is None:
+    if len(graph) == 3 or graph[3] is None: # TODO: This is weird
         idx_train, idx_val, idx_test = split(labels.cpu().numpy())
     else:
         idx_train, idx_val, idx_test = graph[3]['train'], graph[3]['valid'], graph[3]['test']
@@ -170,7 +170,8 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
     hyperparams.update({
         'n_features': n_features,
         'n_classes': n_classes,
-        'ppr_cache_params': ppr_cache
+        'ppr_cache_params': ppr_cache,
+        'train_params': train_params
     })
 
     model = create_model(hyperparams).to(device)
