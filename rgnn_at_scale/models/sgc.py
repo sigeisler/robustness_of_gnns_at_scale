@@ -26,9 +26,10 @@ patch_typeguard()
 
 class SGConv(torch_geometric.nn.SGConv):
 
-    def __init__(self, **kwargs):
+    def __init__(self, dropout=0.5, **kwargs):
         super(SGConv, self).__init__(**kwargs)
         self.normalize = True
+        self.dropout = nn.Dropout(p=dropout)
 
     def forward(self, x: Tensor, edge_index: Adj,
                 edge_weight: OptTensor = None) -> Tensor:
@@ -54,7 +55,7 @@ class SGConv(torch_geometric.nn.SGConv):
         else:
             x = cache
 
-        return self.lin(x)
+        return self.lin(self.dropout(x))
 
 
 @typechecked
@@ -162,7 +163,6 @@ class SGC(nn.Module):
     def __init__(self,
                  n_features: int,
                  n_classes: int,
-                 activation: Union[str, nn.Module] = nn.ReLU(),
                  K: int = 2,
                  bias: bool = True,
                  dropout: float = 0.5,
@@ -178,14 +178,6 @@ class SGC(nn.Module):
         super().__init__()
 
         assert K > 0, "K must be positiv"
-
-        if isinstance(activation, str):
-            if activation in ACTIVATIONS.keys():
-                self.activation = ACTIVATIONS[activation]
-            else:
-                raise AttributeError(f"Activation {activation} is not defined.")
-        else:
-            self.activation = activation
 
         self.n_features = n_features
         self.n_classes = n_classes
@@ -205,12 +197,15 @@ class SGC(nn.Module):
 
     def _build_conv_layer(self, in_channels: int, out_channels: int, K: int):
         return ChainableSGConv(in_channels=in_channels, out_channels=out_channels, K=K, cached=self.cached,
-                               do_chunk=self.do_checkpoint, n_chunks=self.n_chunks, bias=self.bias)
+                               do_chunk=self.do_checkpoint, n_chunks=self.n_chunks, bias=self.bias,
+                               dropout=self.dropout)
 
     def _build_layers(self):
         modules = nn.ModuleList([
             nn.Sequential(collections.OrderedDict(
-                [(f'sgc', self._build_conv_layer(in_channels=self.n_features, out_channels=self.n_classes, K=self.K))]
+                [
+                    (f'sgc', self._build_conv_layer(in_channels=self.n_features,
+                                                    out_channels=self.n_classes, K=self.K))]
             ))
         ])
 
