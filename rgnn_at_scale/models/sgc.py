@@ -99,6 +99,13 @@ class ChainableSGConv(SGConv):
             x, edge_index, edge_weight = arguments
         else:
             raise NotImplementedError("This method is just implemented for two or three arguments")
+
+        if self.training:
+            self.cached = True
+        else:
+            self.cached = False
+            self._cached_x = None
+
         embedding = super(ChainableSGConv, self).forward(x, edge_index, edge_weight=edge_weight)
         if int(torch_geometric.__version__.split('.')[1]) < 6:
             embedding = super(ChainableSGConv, self).update(embedding)

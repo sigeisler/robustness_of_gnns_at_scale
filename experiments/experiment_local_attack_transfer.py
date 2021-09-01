@@ -247,9 +247,11 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                             labels=labels.to(device), idx_train=idx_train, idx_val=idx_val, **hyperparams['train_params']
                         )
 
-                    victim.eval()
+                    victim.eval() # TODO: Required?
+                    # TODO: Maybe rather pass to `evaluate_local`
                     adversary.set_eval_model(victim)
                     logits_poisoning, _ = adversary.evaluate_local(node)
+                    adversary.set_eval_model(model)
 
                     results[-1]['poisoning'] = {
                         'logits': logits_poisoning.cpu().numpy().tolist(),
@@ -263,6 +265,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                                 initial_logits_evasion.cpu(), labels[node].long().cpu()).items()
                         }
                     }
+
 
                 logging.info(results[-1])
 
