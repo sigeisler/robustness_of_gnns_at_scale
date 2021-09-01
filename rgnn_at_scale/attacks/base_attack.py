@@ -400,6 +400,9 @@ class SparseLocalAttack(SparseAttack):
             'margin': margin
         }
 
+    def adj_adversary_for_poisoning(self):
+        return self.adj_adversary
+
 
 class DenseAttack(Attack):
 

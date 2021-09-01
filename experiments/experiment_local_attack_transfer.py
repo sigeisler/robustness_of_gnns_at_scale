@@ -35,22 +35,22 @@ def config():
 
     # default params
     dataset = 'cora_ml'
-    attack = 'LocalPRBCD'
+    attack = 'Nettack'
     attack_params = {}
     nodes = None
     nodes_topk = 40
 
-    epsilons = [0.5, 0.75, 1]
+    epsilons = [1]
     min_node_degree = None
     seed = 0
 
-    artifact_dir = "cache_debug"
+    artifact_dir = "cache"
 
     model_storage_type = 'pretrained'
     model_label = "Vanilla GCN"
 
-    surrogate_model_storage_type = "pretrained"
-    surrogate_model_label = 'Vanilla GCN'
+    surrogate_model_storage_type = "pretrained_linear"
+    surrogate_model_label = 'Linear GCN'
 
     data_dir = "datasets/"
     binary_attr = False
@@ -164,17 +164,13 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
     logging.error(f"Found {len(models_and_hyperparams)} models with label '{model_label}' to attack.")
     for model, hyperparams in models_and_hyperparams:
         eval_model_label = hyperparams['label']
-        try:
-            adversary = create_attack(attack, attr=attr, adj=adj, labels=labels, model=surrogate_model,
-                                      idx_attack=idx_test, device=device,  data_device=data_device,
-                                      binary_attr=binary_attr, make_undirected=make_undirected, **attack_params)
-            adversary.set_eval_model(model)
-            if hasattr(adversary, "ppr_matrix"):
-                adversary.ppr_matrix.save_to_storage()
-        except Exception as e:
-            logging.exception(e)
-            logging.error(f"Failed to instantiate attack {attack} for model '{surrogate_model}'.")
-            continue
+
+        adversary = create_attack(attack, attr=attr, adj=adj, labels=labels, model=surrogate_model,
+                                  idx_attack=idx_test, device=device,  data_device=data_device,
+                                  binary_attr=binary_attr, make_undirected=make_undirected, **attack_params)
+        adversary.set_eval_model(model)
+        if hasattr(adversary, "ppr_matrix"):
+            adversary.ppr_matrix.save_to_storage()
 
         tmp_nodes = np.array(nodes)
         if nodes is None or not isinstance(nodes, collections.Sequence) or not nodes:
@@ -197,89 +193,78 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                         f"Skipping attack for model '{surrogate_model}' using {attack} with eps {eps} at node {node}.")
                     continue
 
-                try:
-                    adversary.attack(n_perturbations, node_idx=node)
-                except Exception as e:
-                    logging.exception(e)
-                    logging.error(
-                        f"Failed to attack model '{surrogate_model}' using {attack} with eps {eps} at node {node}.")
-                    continue
+                adversary.attack(n_perturbations, node_idx=node)
 
-                try:
-                    logits_evasion, initial_logits_evasion = adversary.evaluate_local(node)
+                logits_evasion, initial_logits_evasion = adversary.evaluate_local(node)
 
-                    logging.info(
-                        f'Evaluated model {eval_model_label} using {attack} with pert. edges for node {node} and budget {n_perturbations}:')
+                logging.info(
+                    f'Evaluated model {eval_model_label} using {attack} with pert. edges for node {node} and budget {n_perturbations}:')
 
-                    results.append({
-                        'label': model_label,
-                        'epsilon': eps,
-                        'n_perturbations': n_perturbations,
-                        'degree': int(degree.item()),
-                        'target': labels[node].item(),
-                        'node_id': node,
-                        'perturbed_edges': adversary.get_perturbed_edges().cpu().numpy().tolist(),
-                        'evasion': {
-                            'logits_evasion': logits_evasion.cpu().numpy().tolist(),
-                            'initial_logits_evasion': initial_logits_evasion.cpu().numpy().tolist(),
-                            **adversary.classification_statistics(
-                                logits_evasion.cpu(), labels[node].long().cpu()),
-                            **{
-                                f'initial_{key}': value
-                                for key, value
-                                in adversary.classification_statistics(
-                                    initial_logits_evasion.cpu(), labels[node].long().cpu()).items()
-                            }
+                results.append({
+                    'label': model_label,
+                    'epsilon': eps,
+                    'n_perturbations': n_perturbations,
+                    'degree': int(degree.item()),
+                    'target': labels[node].item(),
+                    'node_id': node,
+                    'perturbed_edges': adversary.get_perturbed_edges().cpu().numpy().tolist(),
+                    'evasion': {
+                        'logits': logits_evasion.cpu().numpy().tolist(),
+                        'initial_logits': initial_logits_evasion.cpu().numpy().tolist(),
+                        **adversary.classification_statistics(
+                            logits_evasion.cpu(), labels[node].long().cpu()),
+                        **{
+                            f'initial_{key}': value
+                            for key, value
+                            in adversary.classification_statistics(
+                                initial_logits_evasion.cpu(), labels[node].long().cpu()).items()
                         }
-                    })
+                    }
+                })
 
-                    if evaluate_poisoning:
-                        victim = deepcopy(model).to(device)
-                        for module in victim.modules():
-                            if hasattr(module, 'reset_parameters'):
-                                module.reset_parameters()
+                if evaluate_poisoning:
+                    victim = deepcopy(model).to(device)
+                    for module in victim.modules():
+                        if hasattr(module, 'reset_parameters'):
+                            module.reset_parameters()
 
-                        if hasattr(victim, 'fit'):
-                            trace = victim.fit(adversary.adj_adversary.to(device), attr.to(device),
-                                               labels=labels,
-                                               idx_train=idx_train,
-                                               idx_val=idx_val,
-                                               dataset=dataset,
-                                               make_undirected=make_undirected,
-                                               **hyperparams['train_params'])
+                    adj_adversary = adversary.adj_adversary_for_poisoning()
 
-                            _ = trace if trace is not None else (None, None)
+                    if hasattr(victim, 'fit'):
+                        if hasattr(victim, 'ppr_cache_params'):  # TODO: How to do this porperly?
+                            victim.ppr_cache_params = None
 
-                        else:
-                            _ = train(
-                                model=victim, attr=attr.to(device), adj=adversary.adj_adversary.to(device),
-                                labels=labels.to(device), idx_train=idx_train, idx_val=idx_val, **hyperparams['train_params']
-                            )
+                        _ = victim.fit(adj_adversary.to(device), attr.to(device),
+                                       labels=labels.to(device),
+                                       idx_train=idx_train,
+                                       idx_val=idx_val,
+                                       dataset=dataset,
+                                       make_undirected=make_undirected,
+                                       **hyperparams['train_params'])
+                    else:
+                        _ = train(
+                            model=victim, attr=attr.to(device), adj=adj_adversary.to(device),
+                            labels=labels.to(device), idx_train=idx_train, idx_val=idx_val, **hyperparams['train_params']
+                        )
 
-                        victim.eval()
-                        adversary.set_eval_model(victim)
-                        logits_poisoning, initial_logits_poisoning = adversary.evaluate_local(node)
+                    victim.eval()
+                    adversary.set_eval_model(victim)
+                    logits_poisoning, _ = adversary.evaluate_local(node)
 
-                        results[-1]['poisoning'] = {
-                            'logits_poisoning': logits_poisoning.cpu().numpy().tolist(),
-                            'initial_logits_poisoning': initial_logits_poisoning.cpu().numpy().tolist(),
-                            **adversary.classification_statistics(
-                                logits_poisoning.cpu(), labels[node].long().cpu()),
-                            **{
-                                f'initial_{key}': value
-                                for key, value
-                                in adversary.classification_statistics(
-                                    initial_logits_poisoning.cpu(), labels[node].long().cpu()).items()
-                            }
+                    results[-1]['poisoning'] = {
+                        'logits': logits_poisoning.cpu().numpy().tolist(),
+                        'initial_logits': initial_logits_evasion.cpu().numpy().tolist(),
+                        **adversary.classification_statistics(
+                            logits_poisoning.cpu(), labels[node].long().cpu()),
+                        **{
+                            f'initial_{key}': value
+                            for key, value
+                            in adversary.classification_statistics(
+                                initial_logits_evasion.cpu(), labels[node].long().cpu()).items()
                         }
+                    }
 
-                    logging.info(results[-1])
-
-                except Exception as e:
-                    logging.exception(e)
-                    logging.error(
-                        f"Failed to evaluate model '{eval_model_label}' using {attack} with eps {eps} at node {node}.")
-                    continue
+                logging.info(results[-1])
 
         if hasattr(adversary, "ppr_matrix"):
             adversary.ppr_matrix.save_to_storage()

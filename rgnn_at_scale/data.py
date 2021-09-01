@@ -850,7 +850,7 @@ class CachedPPRMatrix:
         if self.csr_ppr is None:
             self.csr_ppr = sp.csr_matrix(self.shape, dtype=self.adj.dtype)
 
-        if self.coo_ppr is None and self.ppr_values_on_demand:
+        if self.coo_ppr is None and (self.ppr_values_on_demand or self.has_missing_ppr_values):
             self.coo_ppr = self.csr_ppr.tocoo()
             logging.info(f'Memory after initalizing coo_ppr: {utils.get_max_memory_bytes() / (1024 ** 3)}')
 

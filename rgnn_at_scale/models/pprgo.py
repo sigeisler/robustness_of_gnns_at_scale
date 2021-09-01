@@ -51,8 +51,6 @@ class PPRGoMLP(nn.Module):
         embs = self.layers(X)
         return embs
 
-    def reset_parameters(self):
-        self.layers.reset_parameters()
 
 
 class PPRGo(nn.Module):

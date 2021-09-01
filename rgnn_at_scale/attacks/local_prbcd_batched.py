@@ -37,6 +37,9 @@ class LocalBatchedPRBCD(LocalPRBCD):
         logging.info(f'self.ppr_matrix is of shape {self.ppr_matrix.shape}')
         logging.info(f'Memory after initalizing attack: {utils.get_max_memory_bytes() / (1024 ** 3)}')
 
+        # For poisoning attack we also need the full adjacency matrix
+        self._adj_adversary_for_poisoning = None
+
     def get_logits(self, model: MODEL_TYPE, node_idx: int, perturbed_graph: SparseTensor = None) -> torch.Tensor:
         if perturbed_graph is None:
             perturbed_graph = SparseTensor.from_scipy(self.ppr_matrix[node_idx])
@@ -62,6 +65,8 @@ class LocalBatchedPRBCD(LocalPRBCD):
                     adj = SparseTensor(row=torch.cat((adj.storage.row(), disconnected_nodes)),
                                        col=torch.cat((adj.storage.col(), disconnected_nodes)),
                                        value=torch.cat((adj.storage.col(), torch.full_like(disconnected_nodes, 1e-9))))
+
+            self._adj_adversary_for_poisoning = adj.cpu()
 
             sp_adj = adj.to_scipy(layout="csr")
             perturbed_graph = ppr.topk_ppr_matrix(sp_adj,
@@ -94,3 +99,7 @@ class LocalBatchedPRBCD(LocalPRBCD):
         updated_adj = LocalPRBCD.mod_row(modified_edge_weight_diff.to(device), self.adj, node_idx, self.make_undirected)
 
         return updated_adj
+
+    def adj_adversary_for_poisoning(self):
+        assert self._adj_adversary_for_poisoning is not None, 'For poisoning you must set `ppr_recalc_at_end = True`'
+        return self._adj_adversary_for_poisoning

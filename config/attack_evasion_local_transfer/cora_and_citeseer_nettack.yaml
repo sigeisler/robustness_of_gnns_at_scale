@@ -23,6 +23,8 @@ fixed:
   data_device: cpu
   binary_attr: False
   attack: Nettack
+  surrogate_model_label: 'Linear GCN'
+  evaluate_poisoning: False
 
 grid:
   epsilons:
@@ -52,11 +54,11 @@ gcn:
     model_label: Vanilla GCN
     make_undirected: True
 
-gcn_directed:
-  fixed:
-    model_label: Vanilla GCN
-    model_storage_type: pretrained_rownorm
-    make_undirected: False
+# gcn_directed:
+#   fixed:
+#     model_label: Vanilla GCN
+#     model_storage_type: pretrained_rownorm
+    # make_undirected: False
 
 models:
   grid:
@@ -70,4 +72,4 @@ models:
       type: choice
       options:
         - True
-        - False
+        # - False

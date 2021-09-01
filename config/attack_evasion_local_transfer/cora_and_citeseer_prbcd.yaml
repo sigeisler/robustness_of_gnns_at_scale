@@ -23,6 +23,7 @@ fixed:
   data_device: cpu
   binary_attr: False
   attack: LocalPRBCD
+  evaluate_poisoning: True
 
 grid:
   epsilons:
@@ -52,40 +53,71 @@ gcn:
     model_label: Vanilla GCN
     surrogate_model_label: Vanilla GCN
     make_undirected: True
+    attack_params:
+      lr_factor: 0.05
 
-gcn_directed:
-  fixed:
-    model_label: Vanilla GCN
-    surrogate_model_label: Vanilla GCN
-    model_storage_type: pretrained_rownorm
-    make_undirected: False
+# gcn_directed:
+#   fixed:
+#     model_label: Vanilla GCN
+#     surrogate_model_label: Vanilla GCN
+#     model_storage_type: pretrained_rownorm
+#     surrogate_model_storage_type: pretrained_rownorm
+#     make_undirected: False
+    # attack_params:
+    #   lr_factor: 0.05
 
-vanilla_pprgo:
-  fixed:
-    model_label: Vanilla PPRGo
-  grid:
-    surrogate_model_label:
-      type: choice
-      options:
-        - Vanilla GCN
-        - Vanilla PPRGo
-    make_undirected:
-      type: choice
-      options:
-        - True
-        - False
+# vanilla_pprgo_with_surrogate:
+#   fixed:
+#     model_label: Vanilla PPRGo
+#     surrogate_model_label: Vanilla GCN
+#     attack_params:
+#       lr_factor: 0.05
+#   grid:
+#     make_undirected:
+#       type: choice
+#       options:
+#         - True
+#         # - False
 
-softmedian_pprgo:
-  fixed:
-    model_label: Soft Median PPRGo (T=1.0)
-  grid:
-    surrogate_model_label:
-      type: choice
-      options:
-        - Vanilla GCN
-        - Soft Median PPRGo (T=1.0)
-    make_undirected:
-      type: choice
-      options:
-        - True
-        - False
+# softmedian_pprgo_with_surrogate:
+#   fixed:
+#     model_label: Soft Median PPRGo (T=1.0)
+#     surrogate_model_label: Vanilla GCN
+#     attack_params:
+#       lr_factor: 0.05
+#   grid:
+#     make_undirected:
+#       type: choice
+#       options:
+#         - True
+#         # - False
+
+# vanilla_pprgo_no_surrogate:
+#   fixed:
+#     model_label: Vanilla PPRGo
+#     surrogate_model_label: Vanilla PPRGo
+#     attack: LocalBatchedPRBCD
+#     attack_params:
+#       lr_factor: 0.05
+#       ppr_recalc_at_end: True
+#   grid:
+#     make_undirected:
+#       type: choice
+#       options:
+#         - True
+#         # - False
+
+# softmedian_pprgo_no_surrogate:
+#   fixed:
+#     model_label: Soft Median PPRGo (T=1.0)
+#     surrogate_model_label: Soft Median PPRGo (T=1.0)
+#     attack: LocalBatchedPRBCD
+#     attack_params:
+#       lr_factor: 0.25
+#       ppr_recalc_at_end: True
+#   grid:
+#     make_undirected:
+#       type: choice
+#       options:
+#         - True
+#         # - False
