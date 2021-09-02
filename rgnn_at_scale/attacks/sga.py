@@ -13,6 +13,7 @@ from torch_geometric.utils import (k_hop_subgraph, remove_self_loops, add_remain
 
 from rgnn_at_scale.attacks.base_attack import SparseLocalAttack
 from rgnn_at_scale.models import MODEL_TYPE, BATCHED_PPR_MODELS, SGC
+from rgnn_at_scale.helper.utils import to_symmetric
 
 
 patch_typeguard()
@@ -130,7 +131,7 @@ class SGA(SparseLocalAttack):
     def _attack(self,
                 n_perturbations: int, node_idx: int,
                 **kwargs):
-        
+
         # prohibit normalization of the adjacency matrix (SGA handles this)
         self.attacked_model.normalize = False
 
@@ -300,6 +301,9 @@ class SGA(SparseLocalAttack):
 
         A_idx, A_weights, = coalesce(A_idx, A_weights, m=self.n, n=self.n, op='sum')
 
+        if self.make_undirected:
+            A_idx, A_weights = to_symmetric(A_idx, A_weights, n=self.n, op='max')
+
         # make sure there were only valid additions & deletions of edges
         assert torch.all((A_weights == 1) | (A_weights == 0))
 
@@ -308,10 +312,9 @@ class SGA(SparseLocalAttack):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
- 
+
         # reactivate normalization of the adjacency matrix (SGA handles this)
         self.attacked_model.normalize = True
-
 
     def get_logits(self,
                    model: MODEL_TYPE,
