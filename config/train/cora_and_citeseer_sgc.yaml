@@ -41,8 +41,8 @@ sgc_cora:
   fixed:
     dataset: cora_ml
     train_params:
-      lr: 5e-2
-      weight_decay: 1e-4
+      lr: 0.2
+      weight_decay: 1.3026973714043257e-05 # official value
     model_params:
       label: Vanilla SGC
       model: SGC
@@ -54,8 +54,8 @@ sgc_citeseer:
   fixed:
     dataset: citeseer
     train_params:
-      lr: 3e-4
-      weight_decay: 9e-3
+      lr: 0.2
+      weight_decay: 2.3545587233182368e-05 # official value
     model_params:
       label: Vanilla SGC
       model: SGC

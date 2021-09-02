@@ -165,7 +165,7 @@ class SGC(nn.Module):
                  n_classes: int,
                  K: int = 2,
                  bias: bool = True,
-                 dropout: float = 0.5,
+                 dropout: float = 0,
                  with_batch_norm: bool = False,
                  cached: bool = False,
                  add_self_loops: bool = True,
