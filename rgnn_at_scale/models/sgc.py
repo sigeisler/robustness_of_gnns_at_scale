@@ -228,6 +228,8 @@ class SGC(nn.Module):
         if self.normalize:
             edge_idx, edge_weight = self._cache_if_option_is_set(self._preprocess_adjacency_matrix,
                                                                  x, edge_idx, edge_weight)
+        else:
+            self._deactivate_normalization()
 
         # Enforce that the input is contiguous
         x, edge_idx, edge_weight = self._ensure_contiguousness(x, edge_idx, edge_weight)

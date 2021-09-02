@@ -9,11 +9,13 @@ import numpy as np
 import torch
 from torch_sparse import SparseTensor, coalesce
 from torch_scatter import scatter_add
-from torch_geometric.utils import (k_hop_subgraph, remove_self_loops, add_remaining_self_loops, to_undirected)
+from torch_geometric.utils import (k_hop_subgraph,
+                                   remove_self_loops,
+                                   add_remaining_self_loops)
 
 from rgnn_at_scale.attacks.base_attack import SparseLocalAttack
 from rgnn_at_scale.models import MODEL_TYPE, BATCHED_PPR_MODELS, SGC
-
+from rgnn_at_scale.helper.utils import to_symmetric
 
 patch_typeguard()
 
@@ -130,7 +132,7 @@ class SGA(SparseLocalAttack):
     def _attack(self,
                 n_perturbations: int, node_idx: int,
                 **kwargs):
-        
+
         # prohibit normalization of the adjacency matrix (SGA handles this)
         self.attacked_model.normalize = False
 
@@ -290,9 +292,11 @@ class SGA(SparseLocalAttack):
         added_edges_mask = potential_edge_weight == 1
 
         deleted_edges_idx = k_hop_edge_index[:, deleted_edges_mask]
+        deleted_edges_idx = torch.cat([deleted_edges_idx, deleted_edges_idx[[1, 0]]], dim=-1)
         deleted_edges_weights = -torch.ones(deleted_edges_idx.shape[1], dtype=torch.float32, device=self.device)
 
         added_edges_idx = potential_edge_index[:, added_edges_mask]
+        added_edges_idx = torch.cat([added_edges_idx, added_edges_idx[[1, 0]]], dim=-1)
         added_edges_weights = torch.ones(added_edges_idx.shape[1], dtype=torch.float32, device=self.device)
 
         A_idx = torch.cat([self.edge_index, deleted_edges_idx,  added_edges_idx], dim=-1)
@@ -300,18 +304,21 @@ class SGA(SparseLocalAttack):
 
         A_idx, A_weights, = coalesce(A_idx, A_weights, m=self.n, n=self.n, op='sum')
 
+        eliminate_zeros_mask = A_weights != 0
+        A_idx = A_idx[:, eliminate_zeros_mask]
+        A_weights = A_weights[eliminate_zeros_mask]
+
         # make sure there were only valid additions & deletions of edges
-        assert torch.all((A_weights == 1) | (A_weights == 0))
+        assert torch.all((A_weights == 1))
 
         self.adj_adversary = SparseTensor.from_edge_index(A_idx, A_weights, (self.n, self.n))
 
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
- 
+
         # reactivate normalization of the adjacency matrix (SGA handles this)
         self.attacked_model.normalize = True
-
 
     def get_logits(self,
                    model: MODEL_TYPE,
