@@ -225,8 +225,9 @@ class SGC(nn.Module):
         x, edge_idx, edge_weight = SGC.parse_forward_input(data, adj, attr_idx, edge_idx, edge_weight, n, d)
 
         # Perform preprocessing
-        edge_idx, edge_weight = self._cache_if_option_is_set(self._preprocess_adjacency_matrix,
-                                                             x, edge_idx, edge_weight)
+        if self.normalize:
+            edge_idx, edge_weight = self._cache_if_option_is_set(self._preprocess_adjacency_matrix,
+                                                                 x, edge_idx, edge_weight)
 
         # Enforce that the input is contiguous
         x, edge_idx, edge_weight = self._ensure_contiguousness(x, edge_idx, edge_weight)
@@ -338,7 +339,7 @@ class SGC(nn.Module):
                                edge_weight: Optional[TensorType["nnz"]] = None,
                                ) -> Tuple[Union[TensorType[2, "nnz_after"], SparseTensor],
                                           Optional[TensorType["nnz_after"]]]:
-        if self.do_normalize_adj_once and self.normalize:
+        if self.do_normalize_adj_once:
             self._deactivate_normalization()
             n = x.shape[0]
             edge_idx, edge_weight = GCN.normalize(edge_idx, n, edge_weight, self.add_self_loops, row_norm=False)
@@ -353,7 +354,6 @@ class SGC(nn.Module):
         return edge_idx, edge_weight
 
     def _deactivate_normalization(self):
-        self.normalize = False
         for layer in self.layers:
             layer[0].normalize = False
 

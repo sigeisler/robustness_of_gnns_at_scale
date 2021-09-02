@@ -24,7 +24,7 @@ fixed:
   binary_attr: False
   attack: Nettack
   surrogate_model_label: 'Linear GCN'
-  evaluate_poisoning: False
+  evaluate_poisoning: True
 
 grid:
   epsilons:
@@ -40,7 +40,7 @@ grid:
     type: choice
     options:
       - cora_ml
-      - citeseer
+      # - citeseer
 
   seed:
     type: choice
@@ -49,10 +49,10 @@ grid:
       - 1
       - 5
 
-gcn:
-  fixed:
-    model_label: Vanilla GCN
-    make_undirected: True
+# gcn:
+#   fixed:
+#     model_label: Vanilla GCN
+#     make_undirected: True
 
 # gcn_directed:
 #   fixed:
@@ -66,7 +66,7 @@ models:
       type: choice
       options:
         - Vanilla PPRGo
-        - Soft Median PPRGo (T=1.0)
+        # - Soft Median PPRGo (T=1.0)
 
     make_undirected:
       type: choice

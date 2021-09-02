@@ -130,6 +130,9 @@ class SGA(SparseLocalAttack):
     def _attack(self,
                 n_perturbations: int, node_idx: int,
                 **kwargs):
+        
+        # prohibit normalization of the adjacency matrix (SGA handles this)
+        self.attacked_model.normalize = False
 
         neighbors = self.adj[node_idx].coo()[1]
         self.full_adj_degree = None
@@ -305,6 +308,10 @@ class SGA(SparseLocalAttack):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
+ 
+        # reactivate normalization of the adjacency matrix (SGA handles this)
+        self.attacked_model.normalize = True
+
 
     def get_logits(self,
                    model: MODEL_TYPE,

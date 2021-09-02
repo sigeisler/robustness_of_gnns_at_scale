@@ -121,3 +121,19 @@ gcn:
 #       options:
 #         - True
 #         # - False
+
+vanilla_sgc_with_surrogate:
+  fixed:
+    model_label: Vanilla SGC
+    surrogate_model_label: Vanilla GCN
+    attack_params:
+      lr_factor: 0.05
+    make_undirected: True
+
+vanilla_sgc_no_surrogate:
+  fixed:
+    model_label: Vanilla SGC
+    surrogate_model_label: Vanilla SGC
+    attack_params:
+      lr_factor: 0.05
+    make_undirected: True
