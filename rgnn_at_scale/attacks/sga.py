@@ -9,7 +9,7 @@ import numpy as np
 import torch
 from torch_sparse import SparseTensor, coalesce
 from torch_scatter import scatter_add
-from torch_geometric.utils import k_hop_subgraph, remove_self_loops, add_remaining_self_loops
+from torch_geometric.utils import (k_hop_subgraph, remove_self_loops, add_remaining_self_loops, to_undirected)
 
 from rgnn_at_scale.attacks.base_attack import SparseLocalAttack
 from rgnn_at_scale.models import MODEL_TYPE, BATCHED_PPR_MODELS, SGC
@@ -55,7 +55,7 @@ class SGA(SparseLocalAttack):
         self.direct = direct
         self.n_influencers = n_influencers
         self.full_adj_degree = None
-
+        self.loss_fn = torch.nn.CrossEntropyLoss()
         # prohibit caching in the surrogate model
         self.attacked_model.deactivate_caching()
 
@@ -93,13 +93,21 @@ class SGA(SparseLocalAttack):
     def _build_adjacency(self, potential_nodes, potential_edge_index, potential_edge_weight,
                          k_hop_neighbors, k_hop_edge_index, k_hop_edge_weight):
 
-        self_loops_index = torch.cat([k_hop_neighbors, potential_nodes]).expand(2, -1)
+        self_loops_index = torch.unique(torch.cat([k_hop_neighbors, potential_nodes])).expand(2, -1)
         self_loops_weight = torch.ones(self_loops_index.shape[1],
                                        dtype=torch.float32,
                                        device=self.device,)
 
-        A_sub_edge_index = torch.cat([k_hop_edge_index, potential_edge_index, self_loops_index], dim=-1)
-        A_sub_edge_weight = torch.cat([k_hop_edge_weight, potential_edge_weight, self_loops_weight], dim=-1)
+        A_sub_edge_index = torch.cat([k_hop_edge_index,
+                                      k_hop_edge_index[[1, 0]],
+                                      potential_edge_index,
+                                      potential_edge_index[[1, 0]],
+                                      self_loops_index], dim=-1)
+        A_sub_edge_weight = torch.cat([k_hop_edge_weight,
+                                       k_hop_edge_weight,
+                                       potential_edge_weight,
+                                       potential_edge_weight,
+                                       self_loops_weight], dim=-1)
 
         A_sub_edge_index, A_sub_edge_weight = self.normalize_subgraph(A_sub_edge_index,
                                                                       A_sub_edge_weight)
@@ -110,9 +118,10 @@ class SGA(SparseLocalAttack):
         logits = self.get_surrogate_logits(node_idx, (A_sub_edge_index, A_sub_edge_weight))
 
         # model calibration
-        logits = logits.view(1, -1) / eps
+        logits = (logits.view(1, -1) / eps)
 
-        loss = self.calculate_loss(logits, self.labels[node_idx][None])
+        loss = self.loss_fn(logits, self.labels[node_idx].view(-1)) - \
+            self.loss_fn(logits, self.best_non_target_class)
         gradient = torch.autograd.grad(loss,
                                        input_tensors,
                                        create_graph=False)
@@ -135,8 +144,8 @@ class SGA(SparseLocalAttack):
         # 1. predict the next most probable class of target t (node_idx)
         logits = self.get_surrogate_logits(node_idx)
         sorted_logits = logits.argsort(-1)
-        best_non_target_class = sorted_logits[sorted_logits !=
-                                              self.labels[node_idx, None]].reshape(logits.size(0), -1)[:, -1]
+        self.best_non_target_class = sorted_logits[sorted_logits !=
+                                                   self.labels[node_idx, None]].reshape(logits.size(0), -1)[:, -1]
 
         # 2. Extract the k-hop subgraph centered at t
         (k_hop_neighbors,
@@ -145,18 +154,24 @@ class SGA(SparseLocalAttack):
          preserved_edge_mask  # indicating which edges were preserved
          ) = k_hop_subgraph(node_idx, self.K, self.edge_index, num_nodes=self.n)
 
+        # we are only interested in the directed version
+        directed_mask = k_hop_edge_index[0] >= k_hop_edge_index[1]
+        k_hop_edge_index = k_hop_edge_index[:, directed_mask]
+
         # 3. Initialize the subgraph G_(sub) = (A_(sub), X) via Eq.(13);
         # 3.1. Determine all possible/potential candiate nodes to be added to the k-hop subgraph
         # potential nodes: V_p = { u | c_u = c'_t, u in V}
         # where c'_t = argmax_{c' != c_t} T_{t_c'} is second most likely class label
-        potential_nodes_mask = self.labels == best_non_target_class
+        potential_nodes_mask = self.labels == self.best_non_target_class
         potential_nodes = torch.where(potential_nodes_mask)[0]
 
         # potential nodes must be outside the k-hop subgraph
         # this is because the potential nodes are the nodes that should be considered
         # to be added to the k-hop neighborhood of the target node
-        potential_nodes = potential_nodes[~(potential_nodes == k_hop_neighbors[:, None]).any(0)]
 
+        # this is different from the referenz impl.
+        # potential_nodes = potential_nodes[~(potential_nodes == k_hop_neighbors[:, None]).any(0)]
+        potential_nodes = potential_nodes[~(potential_nodes == neighbors[:, None]).any(0)]
         # potential edges: E_p = A x V_p
         # where A are the influencer (attacker) nodes
         # A = {t} is target node for direct attacks
@@ -210,7 +225,7 @@ class SGA(SparseLocalAttack):
                            potential_edge_gradient) = self._compute_gradient(node_idx,
                                                                              A_sub_edge_index, A_sub_edge_weight,
                                                                              [k_hop_edge_weight, potential_edge_weight])
-            if it >= 225:
+            if it >= 4:
                 print("debug")
 
             with torch.no_grad():
@@ -220,18 +235,18 @@ class SGA(SparseLocalAttack):
 
                 # 4.3 Select e = (u, v) with largest structure score S_{u,v}
                 best_edge_idx = torch.cat([k_hop_edge_gradient, potential_edge_gradient]).argmax()
-                _, sorted_edge_idx = torch.cat([k_hop_edge_gradient, potential_edge_gradient]).sort()
+                # _, sorted_edge_idx = torch.cat([k_hop_edge_gradient, potential_edge_gradient]).sort()
 
-                # in case a edge has already been added or removed do not try to add/remove them again
-                # instead use the next best edge to be added/removed
-                i = 1
-                best_edge_idx = sorted_edge_idx[-i]
-                u, v = A_sub_edge_index[:, best_edge_idx]
-                while (self.perturbed_edges is not None
-                       and torch.any(torch.all(torch.Tensor([u, v]) == self.perturbed_edges.T, dim=1))):
-                    i += 1
-                    best_edge_idx = sorted_edge_idx[-i]
-                    u, v = A_sub_edge_index[:, best_edge_idx]
+                # # in case a edge has already been added or removed do not try to add/remove them again
+                # # instead use the next best edge to be added/removed
+                # i = 1
+                # best_edge_idx = sorted_edge_idx[-i]
+
+                # while (self.perturbed_edges is not None
+                #        and torch.any(torch.all(torch.Tensor([u, v]) == self.perturbed_edges.T, dim=1))):
+                #     i += 1
+                #     best_edge_idx = sorted_edge_idx[-i]
+                #     u, v = A_sub_edge_index[:, best_edge_idx]
 
                 # 4.4 Update the k-hop & potential edges according to
 
@@ -239,13 +254,14 @@ class SGA(SparseLocalAttack):
 
                 if best_edge_idx < offset:  # the best edge to flip is an existing edge in the k hop subgraph
                     # hence it should be set to 0
-
+                    u, v = k_hop_edge_index[:, best_edge_idx]
                     k_hop_edge_weight[best_edge_idx] = 0
                     self.full_adj_degree[u] -= 1
                     self.full_adj_degree[v] -= 1
                 else:
                     # the best edge to flip is one of the potentiel edges
                     # hence it should be set to 1
+                    u, v = potential_edge_index[:, best_edge_idx - offset]
                     potential_edge_weight[best_edge_idx - offset] = 1.0
                     self.full_adj_degree[u] += 1
                     self.full_adj_degree[v] += 1

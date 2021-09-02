@@ -193,6 +193,7 @@ class SGC(nn.Module):
         self.do_checkpoint = do_checkpoint
         self.n_chunks = n_chunks
         self.adj_preped = None
+        self.normalize = True
         self.layers = self._build_layers()
 
     def _build_conv_layer(self, in_channels: int, out_channels: int, K: int):
@@ -337,9 +338,8 @@ class SGC(nn.Module):
                                edge_weight: Optional[TensorType["nnz"]] = None,
                                ) -> Tuple[Union[TensorType[2, "nnz_after"], SparseTensor],
                                           Optional[TensorType["nnz_after"]]]:
-        if self.do_normalize_adj_once:
+        if self.do_normalize_adj_once and self.normalize:
             self._deactivate_normalization()
-
             n = x.shape[0]
             edge_idx, edge_weight = GCN.normalize(edge_idx, n, edge_weight, self.add_self_loops, row_norm=False)
 
@@ -353,6 +353,7 @@ class SGC(nn.Module):
         return edge_idx, edge_weight
 
     def _deactivate_normalization(self):
+        self.normalize = False
         for layer in self.layers:
             layer[0].normalize = False
 
