@@ -146,7 +146,7 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
                        binary_attr=binary_attr, return_original_split=dataset.startswith('ogbn'))
 
     attr, adj, labels = graph[:3]
-    if len(graph) == 3 or graph[3] is None: # TODO: This is weird
+    if len(graph) == 3 or graph[3] is None:  # TODO: This is weird
         idx_train, idx_val, idx_test = split(labels.cpu().numpy())
     else:
         idx_train, idx_val, idx_test = graph[3]['train'], graph[3]['valid'], graph[3]['test']
@@ -192,8 +192,9 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
         trace_val, trace_train = trace if trace is not None else (None, None)
 
     else:
-        trace_val, trace_train, _, _ = train(model=model, attr=attr, adj=adj, labels=labels, idx_train=idx_train,
-                                             idx_val=idx_val, display_step=display_steps, **train_params)
+        trace_val, trace_train, _, _ = train(
+            model=model, attr=attr.to(device), adj=adj.to(device), labels=labels.to(device),
+            idx_train=idx_train, idx_val=idx_val, display_step=display_steps, **train_params)
 
     model.eval()
 

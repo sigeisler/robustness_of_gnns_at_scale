@@ -6,6 +6,7 @@ from typing import Any, Dict, Sequence, Union
 
 import numpy as np
 from sacred import Experiment
+import torch
 
 from experiments.common import get_local_attack_nodes, prepare_attack_experiment
 from rgnn_at_scale.attacks import create_attack
@@ -193,7 +194,11 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                         f"Skipping attack for model '{surrogate_model}' using {attack} with eps {eps} at node {node}.")
                     continue
 
+                print(f'MAX MEMORY BEFORE: {torch.cuda.memory_stats()["allocated_bytes.all.peak"] / 1e9}')
+
                 adversary.attack(n_perturbations, node_idx=node)
+
+                print(f'MAX MEMORY AFTER: {torch.cuda.memory_stats()["allocated_bytes.all.peak"] / 1e9}')
 
                 logits_evasion, initial_logits_evasion = adversary.evaluate_local(node)
 
@@ -247,7 +252,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                             labels=labels.to(device), idx_train=idx_train, idx_val=idx_val, **hyperparams['train_params']
                         )
 
-                    victim.eval() # TODO: Required?
+                    victim.eval()  # TODO: Required?
                     # TODO: Maybe rather pass to `evaluate_local`
                     adversary.set_eval_model(victim)
                     logits_poisoning, _ = adversary.evaluate_local(node)
@@ -265,7 +270,6 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                                 initial_logits_evasion.cpu(), labels[node].long().cpu()).items()
                         }
                     }
-
 
                 logging.info(results[-1])
 

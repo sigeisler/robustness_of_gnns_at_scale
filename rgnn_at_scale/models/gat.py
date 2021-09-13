@@ -3,7 +3,7 @@ from typing import Any, Dict, Tuple
 import torch
 
 from torch_geometric.nn import GATConv
-from torch_sparse import SparseTensor
+from torch_sparse import SparseTensor, set_diag
 
 from rgnn_at_scale.aggregation import ROBUST_MEANS
 from rgnn_at_scale.models.gcn import GCN
@@ -60,7 +60,33 @@ class RGATConv(GATConv):
             raise NotImplementedError("This method is just implemented for two or three arguments")
         assert isinstance(edge_index, SparseTensor), 'GAT requires a SparseTensor as input'
         assert edge_weight is None, 'The weights must be passed via a SparseTensor'
-        _, attention_matrix = super().forward(x, edge_index, return_attention_weights=True)
+
+        H, C = self.heads, self.out_channels
+
+        assert x.dim() == 2, 'Static graphs not supported in `GATConv`.'
+        x_l = x_r = self.lin_l(x).view(-1, H, C)
+        alpha_l = (x_l * self.att_l).sum(dim=-1)
+        alpha_r = (x_r * self.att_r).sum(dim=-1)
+
+        if self.add_self_loops:
+            edge_index = set_diag(edge_index)
+
+        # propagate_type: (x: OptPairTensor, alpha: OptPairTensor)
+        out = self.propagate(edge_index, x=(x_l, x_r),
+                             alpha=(alpha_l, alpha_r))
+
+        alpha = self._alpha * edge_index.storage.value()[:, None]
+        self._alpha = None
+
+        if self.concat:
+            out = out.view(-1, self.heads * self.out_channels)
+        else:
+            out = out.mean(dim=1)
+
+        if self.bias is not None:
+            out += self.bias
+
+        attention_matrix = edge_index.set_value(alpha, layout='coo')
         attention_matrix.storage._value = attention_matrix.storage._value.squeeze()
 
         x = self.lin_l(x)
@@ -110,3 +136,6 @@ class RGAT(GCN):
     def _build_conv_layer(self, in_channels: int, out_channels: int):
         return RGATConv(mean=self._mean, mean_kwargs=self._mean_kwargs,
                         in_channels=in_channels, out_channels=out_channels)
+
+    def _cache_if_option_is_set(self, callback, x, edge_idx, edge_weight):
+        return SparseTensor.from_edge_index(edge_idx, edge_weight, (x.shape[0], x.shape[0])), None

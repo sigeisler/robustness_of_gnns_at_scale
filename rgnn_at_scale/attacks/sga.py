@@ -15,7 +15,6 @@ from torch_geometric.utils import (k_hop_subgraph,
 
 from rgnn_at_scale.attacks.base_attack import SparseLocalAttack
 from rgnn_at_scale.models import MODEL_TYPE, BATCHED_PPR_MODELS, SGC
-from rgnn_at_scale.helper.utils import to_symmetric
 
 patch_typeguard()
 
@@ -49,7 +48,6 @@ class SGA(SparseLocalAttack):
         super().__init__(**kwargs)
         assert isinstance(self.attacked_model,
                           SGC), "The Simplfied Gradient-based Attack is only implemented for the surrogate model SGC"
-        assert self.data_device == self.device, "For SGA the data and model device have to match"
         assert self.make_undirected, "SGA is only implemented for undirected graphs"
 
         self.K = self.attacked_model.K
@@ -136,28 +134,32 @@ class SGA(SparseLocalAttack):
         # prohibit normalization of the adjacency matrix (SGA handles this)
         self.attacked_model.normalize = False
 
-        neighbors = self.adj[node_idx].coo()[1]
+        neighbors = self.adj[node_idx].coo()[1].to(self.device)
         self.full_adj_degree = None
         self.perturbed_edges = None
 
         with torch.no_grad():
+            # To save memory
+            device = self.device
+            self.device = self.data_device
+            self.attacked_model = self.attacked_model.to(self.device)
             logits = self.get_surrogate_logits(node_idx)
             classification_statistics = SGA.classification_statistics(
                 logits, self.labels[node_idx].to(self.device))
             logging.info(f'Initial Statstics: {classification_statistics}\n')
+            self.device = device
+            self.attacked_model = self.attacked_model.to(self.device)
+            logits = logits.to(self.device)
 
         # 1. predict the next most probable class of target t (node_idx)
-        logits = self.get_surrogate_logits(node_idx)
+        #logits = self.get_surrogate_logits(node_idx)
         sorted_logits = logits.argsort(-1)
         self.best_non_target_class = sorted_logits[sorted_logits !=
                                                    self.labels[node_idx, None]].reshape(logits.size(0), -1)[:, -1]
 
         # 2. Extract the k-hop subgraph centered at t
-        (k_hop_neighbors,
-         k_hop_edge_index,
-         k_hop_node_idx,  # the idx of the target node in the k-hop subgraph
-         preserved_edge_mask  # indicating which edges were preserved
-         ) = k_hop_subgraph(node_idx, self.K, self.edge_index, num_nodes=self.n)
+        (k_hop_neighbors, k_hop_edge_index, _, _) = k_hop_subgraph(node_idx, self.K, self.edge_index, num_nodes=self.n)
+        k_hop_neighbors, k_hop_edge_index = k_hop_neighbors.to(self.device), k_hop_edge_index.to(self.device)
 
         # we are only interested in the directed version
         directed_mask = k_hop_edge_index[0] >= k_hop_edge_index[1]
@@ -182,7 +184,7 @@ class SGA(SparseLocalAttack):
         # A = {t} is target node for direct attacks
         # A = {N(t)} is the neighborhood of the target node for influence attacks
         if self.direct:
-            influencer_nodes = torch.tensor([node_idx])
+            influencer_nodes = torch.tensor([node_idx], device=self.device)
         else:
             influencer_nodes = neighbors
 
@@ -299,6 +301,11 @@ class SGA(SparseLocalAttack):
         added_edges_idx = torch.cat([added_edges_idx, added_edges_idx[[1, 0]]], dim=-1)
         added_edges_weights = torch.ones(added_edges_idx.shape[1], dtype=torch.float32, device=self.device)
 
+        deleted_edges_idx = deleted_edges_idx.to(self.data_device)
+        added_edges_idx = added_edges_idx.to(self.data_device)
+        deleted_edges_weights = deleted_edges_weights.to(self.data_device)
+        added_edges_weights = added_edges_weights.to(self.data_device)
+
         A_idx = torch.cat([self.edge_index, deleted_edges_idx,  added_edges_idx], dim=-1)
         A_weights = torch.cat([self.edge_weight, deleted_edges_weights, added_edges_weights], dim=-1)
 
@@ -331,7 +338,18 @@ class SGA(SparseLocalAttack):
         if type(model) in BATCHED_PPR_MODELS.__args__:
             return model.forward(self.attr, perturbed_graph, ppr_idx=np.array([node_idx]))
         else:
-            return model(data=self.attr, adj=perturbed_graph)[node_idx:node_idx + 1]
+            if isinstance(perturbed_graph, tuple):
+                edge_index, edge_weight = perturbed_graph
+            else:
+                edge_index = torch.stack((perturbed_graph.storage.row(), perturbed_graph.storage.col()))
+                edge_weight = perturbed_graph.storage.value()
+
+            (_, adj, _, mask) = k_hop_subgraph(node_idx, self.K, edge_index, num_nodes=self.n)
+            if edge_weight is not None:
+                edge_weight = edge_weight[mask].to(self.device)
+            adj = SparseTensor.from_edge_index(adj.to(self.device), edge_weight)
+            
+            return model(data=self.attr.to(self.device), adj=adj)[node_idx:node_idx + 1]
 
     def normalize_subgraph(self, sub_edge_idx: TensorType[2, "nnz"],
                            sub_edge_weight: TensorType["nnz"],) -> Tuple[TensorType[2, "nnz_after"],
@@ -349,7 +367,7 @@ class SGA(SparseLocalAttack):
         row, col = sub_edge_idx
         deg_inv_sqrt = torch.pow(self.full_adj_degree, -0.5)
         deg_inv_sqrt.masked_fill_(deg_inv_sqrt == float('inf'), 0)
-        sub_edge_weight = deg_inv_sqrt[row] * sub_edge_weight * deg_inv_sqrt[col]
+        sub_edge_weight = deg_inv_sqrt[row].to(self.device) * sub_edge_weight * deg_inv_sqrt[col].to(self.device)
 
         return sub_edge_idx, sub_edge_weight
 
