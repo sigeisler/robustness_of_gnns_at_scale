@@ -86,27 +86,27 @@ prbcd:
     attack_params: 
       type: choice
       options:
-        - epochs: 50
+        - epochs: 300
           fine_tune_epochs: 250
           search_space_size: 2_000
           loss_type: tanhMargin
-        - epochs: 50
+        - epochs: 300
           fine_tune_epochs: 250
           search_space_size: 5_000
           loss_type: tanhMargin
-        - epochs: 50
+        - epochs: 300
           fine_tune_epochs: 250
           search_space_size: 10_000
           loss_type: tanhMargin
-        - epochs: 50
+        - epochs: 300
           fine_tune_epochs: 250
           search_space_size: 100_000
           loss_type: tanhMargin
-        - epochs: 50
+        - epochs: 300
           fine_tune_epochs: 250
           search_space_size: 1_000_000
           loss_type: tanhMargin
-        - epochs: 50
+        - epochs: 300
           fine_tune_epochs: 250
           search_space_size: 10_000_000
           loss_type: tanhMargin

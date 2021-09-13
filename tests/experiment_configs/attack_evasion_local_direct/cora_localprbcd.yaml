@@ -17,7 +17,7 @@ fixed:
   artifact_dir: cache_test
   nodes: None
   nodes_topk: 8
-  attack_params.epochs: 5
+  attack_params.epochs: 6
   attack_params.fine_tune_epochs: 1
   attack_params.search_space_size: 10_000
   attack_params.ppr_recalc_at_end: True

@@ -23,7 +23,7 @@ fixed:
   data_device: cpu
   debug_level: info
   nodes_topk: 40
-  attack_params.epochs: 30
+  attack_params.epochs: 35
   attack_params.fine_tune_epochs: 5
   attack_params.display_step: 2
   attack_params.do_synchronize: True

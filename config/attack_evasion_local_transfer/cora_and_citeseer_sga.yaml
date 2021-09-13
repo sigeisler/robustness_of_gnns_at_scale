@@ -47,17 +47,21 @@ grid:
       - cora_ml
       - citeseer
 
-sga_sgc:
-  fixed:
-    model_label: Vanilla SGC
+# sga_sgc:
+#   fixed:
+#     model_label: Vanilla SGC
 
-sga_gcn:
-  fixed:
-    model_label: Vanilla GCN
+# sga_gcn:
+#   fixed:
+#     model_label: Vanilla GCN
 
-sga_gdc:
+# sga_gdc:
+#   fixed:
+#     model_label: Vanilla GDC
+
+sga_gat:
   fixed:
-    model_label: Vanilla GDC
+    model_label: Vanilla GAT
 
 
 # sga_gdc_mediod:

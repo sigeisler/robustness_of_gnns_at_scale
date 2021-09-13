@@ -39,10 +39,10 @@ def config():
     device = 0
     seed = 0
 
-    attack = 'PRBCD'
+    attack = 'GreedyRBCD'
     attack_params = dict(
-        epochs=400,
-        fine_tune_epochs=100,
+        epochs=5,  # 400,
+        fine_tune_epochs=5,  # 100,
         keep_heuristic="WeightOnly",
         search_space_size=1_000_000,
         do_synchronize=True,
@@ -50,9 +50,9 @@ def config():
     )
     epsilons = [0.01, 0.1]
 
-    artifact_dir = 'cache'
+    artifact_dir = 'cache_debug'
     model_storage_type = 'pretrained'
-    model_label = "Soft Median PPRGo (T=0.5)"
+    model_label = None# "Soft Median PPRGo (T=0.5)"
     surrogate_model_storage_type = 'pretrained'
     surrogate_model_label = "Vanilla GCN"
     pert_adj_storage_type = 'evasion_global_transfer_adj'

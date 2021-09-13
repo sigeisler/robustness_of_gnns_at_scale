@@ -73,6 +73,14 @@ def run_global_attack_test(expected_accuracy, config_files):
                 (f"The {model_label} model's test accuracy standard deviation for eps = {eps} is {pert_acc_std:.3} and"
                     f" not smaller then {expectation['std']:.3} +- {expectation['std_tol']:.3}")
 
+            # assert np.abs(pert_acc_mean - expectation["mean"]) <= expectation["mean_tol"],\
+            #     (f"The {model_label} model's test accuracy mean for eps = {eps} is {pert_acc_mean:.3} and"
+            #      f" not smaller then {expectation['mean']:.3} +- {expectation['mean_tol']:.3}")
+
+            # assert np.abs(pert_acc_std - expectation["std"]) <= expectation["std_tol"],\
+            #     (f"The {model_label} model's test accuracy standard deviation for eps = {eps} is {pert_acc_std:.3} and"
+            #         f" not smaller then {expectation['std']:.3} +- {expectation['std_tol']:.3}")
+
 
 def run_local_attack_test(expected_margin, config_files):
     results = run_config_test(expected_margin, config_files)
@@ -296,7 +304,7 @@ class TestExperimentTrain():
 #     testsuit = TestExperimentTrain()
 #     testsuit.test_cora_train()
 #     testsuit.test_cora_train_pprgo()
-#     testsuit.test_cora_attack_direct_greedy_rbcd()
-#     testsuit.test_cora_attack_direct_prbcd()
-#     testsuit.test_cora_attack_transfer_prbcd()
+#     #testsuit.test_cora_attack_direct_greedy_rbcd()
+#     #testsuit.test_cora_attack_direct_prbcd()
+#     #testsuit.test_cora_attack_transfer_prbcd()
 #     testsuit.test_cora_attack_direct_localprbcd()

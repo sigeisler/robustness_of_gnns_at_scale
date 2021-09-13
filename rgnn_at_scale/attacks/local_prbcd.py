@@ -47,6 +47,7 @@ class LocalPRBCD(SparseLocalAttack):
         self.display_step = display_step
         self.epochs = epochs
         self.fine_tune_epochs = fine_tune_epochs
+        self.epochs_resampling = epochs - fine_tune_epochs
         self.search_space_size = search_space_size
         self.with_early_stropping = with_early_stropping
         self.eps = eps
@@ -74,7 +75,7 @@ class LocalPRBCD(SparseLocalAttack):
             del logits_orig
             del loss_orig
 
-        for epoch in tqdm(range(self.epochs + self.fine_tune_epochs)):
+        for epoch in tqdm(range(self.epochs)):
             self.modified_edge_weight_diff.requires_grad = True
             perturbed_graph = self.perturb_graph(node_idx)
 
@@ -91,9 +92,6 @@ class LocalPRBCD(SparseLocalAttack):
                 logging.info(f'Initial: Loss: {loss.item()} Statstics: {classification_statistics}\n')
 
             gradient = grad_with_checkpoint(loss, self.modified_edge_weight_diff)[0]
-
-            # if torch.cuda.is_available():
-            #     logging.info(torch.cuda.memory_allocated() / (1024 ** 3))
 
             if torch.cuda.is_available() and self.do_synchronize:
                 torch.cuda.empty_cache()
@@ -126,9 +124,9 @@ class LocalPRBCD(SparseLocalAttack):
 
                 self._append_attack_statistics(loss.item(), classification_statistics)
 
-                if epoch < self.epochs - 1:
+                if epoch < self.epochs_resampling - 1:
                     self.resample_search_space(node_idx, n_perturbations, gradient)
-                elif self.with_early_stropping and epoch == self.epochs - 1:
+                elif self.with_early_stropping and epoch == self.epochs_resampling - 1:
                     logging.info(
                         f'Loading search space of epoch {best_epoch} (margin={best_margin}) for fine tuning\n')
                     self.current_search_space = best_search_space.clone().to(self.device)
@@ -230,7 +228,7 @@ class LocalPRBCD(SparseLocalAttack):
 
     def update_edge_weights(self, n_perturbations: int, epoch: int, gradient: torch.Tensor):
         lr_factor = n_perturbations * self.lr_factor
-        lr = lr_factor / np.sqrt(max(0, epoch - self.epochs) + 1)
+        lr = lr_factor / np.sqrt(max(0, epoch - self.epochs_resampling) + 1)
         self.modified_edge_weight_diff.data.add_(lr * gradient)
 
     def _append_attack_statistics(self, loss, statistics):

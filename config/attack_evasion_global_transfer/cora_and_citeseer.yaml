@@ -121,7 +121,7 @@ prbcd:
     binary_attr: False
     surrogate_model_label: Vanilla GCN
     attack_params:
-      epochs: 400
+      epochs: 500
       fine_tune_epochs: 100
       keep_heuristic: WeightOnly
       search_space_size: 1_000_000

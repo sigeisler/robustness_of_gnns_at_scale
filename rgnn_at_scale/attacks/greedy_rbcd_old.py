@@ -24,11 +24,18 @@ class GreedyRBCD(PRBCD):
 
         self.n_perturbations = 0
 
-    def _greedy_update(self, step_size: int, gradient: torch.Tensor):
+    def _greedy_update(self, step_size: int, edge_index: torch.Tensor,
+                       edge_weight: torch.Tensor, gradient: torch.Tensor):
+        does_original_edge_exist = self.match_search_space_on_edges(edge_index, edge_weight)[0]
+        edge_weight_factor = 2 * (0.5 - does_original_edge_exist.float())
+        gradient *= edge_weight_factor
+
+        # FIXME: Consider only edges that have not been previously modified
         _, topk_edge_index = torch.topk(gradient, step_size)
 
         add_edge_index = self.modified_edge_index[:, topk_edge_index]
-        add_edge_weight = torch.ones_like(add_edge_index[0], dtype=torch.float32)
+        add_edge_weight = edge_weight_factor[topk_edge_index]
+        n_newly_added = int(add_edge_weight.sum().item())
 
         if self.make_undirected:
             add_edge_index, add_edge_weight = utils.to_symmetric(add_edge_index, add_edge_weight, self.n)
@@ -38,10 +45,14 @@ class GreedyRBCD(PRBCD):
             add_edge_index, add_edge_weight, m=self.n, n=self.n, op='sum'
         )
 
+        if self.make_undirected:
+            assert torch.isclose(self.edge_weight.sum() + 2 * n_newly_added, edge_weight.sum())
+        else:
+            assert torch.isclose(self.edge_weight.sum() + n_newly_added, edge_weight.sum())
         is_one_mask = torch.isclose(edge_weight, torch.tensor(1.))
         self.edge_index = edge_index[:, is_one_mask]
         self.edge_weight = edge_weight[is_one_mask]
-        #self.edge_weight = torch.ones_like(self.edge_weight)
+        self.edge_weight = torch.ones_like(self.edge_weight)
         assert self.edge_index.size(1) == self.edge_weight.size(0)
 
     def _attack(self, n_perturbations: int):
@@ -59,10 +70,6 @@ class GreedyRBCD(PRBCD):
         n_perturbations -= self.n_perturbations
         self.n_perturbations += n_perturbations
 
-        # To assert the number of perturbations later on
-        clean_edges = self.edge_index.shape[1]
-
-        # Determine the number of edges to be flipped in each attach step / epoch
         step_size = n_perturbations // self.epochs
         if step_size > 0:
             steps = self.epochs * [step_size]
@@ -72,42 +79,33 @@ class GreedyRBCD(PRBCD):
             steps = [1] * n_perturbations
 
         for step_size in tqdm(steps):
-            # Sample initial search space (Algorithm 2, line 3-4)
-            self.sample_random_block(step_size)
-            # Retreive sparse perturbed adjacency matrix `A \oplus p_{t-1}` (Algorithm 2, line 7)
+            self.sample_search_space(step_size)
             edge_index, edge_weight = self.get_modified_adj()
 
             if torch.cuda.is_available() and self.do_synchronize:
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
 
-            # Calculate logits for each node (Algorithm 2, line 7) 
-            logits = self._get_logits(self.attr, edge_index, edge_weight)
-            # Calculate loss combining all each node (Algorithm 2, line 8)
+            logits = self.attacked_model(data=self.attr.to(self.device), adj=(edge_index, edge_weight))
             loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
-            # Retreive gradient towards the current block (Algorithm 2, line 8)
-            gradient = utils.grad_with_checkpoint(loss, self.perturbed_edge_weight)[0]
+
+            gradient = utils.grad_with_checkpoint(loss, self.modified_edge_weight_diff)[0]
 
             if torch.cuda.is_available() and self.do_synchronize:
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
 
             with torch.no_grad():
-                # Greedy update of edges (Algorithm 2, line 8)
-                self._greedy_update(step_size, gradient)
+                self._greedy_update(step_size, edge_index, edge_weight, gradient)
 
             del logits
             del loss
             del gradient
 
-        allowed_perturbations = 2 * n_perturbations if self.make_undirected else n_perturbations
-        edges_after_attack = self.edge_index.shape[1]
-        assert (edges_after_attack >= clean_edges - allowed_perturbations
-                and edges_after_attack <= clean_edges + allowed_perturbations), \
-            f'{edges_after_attack} out of range with {clean_edges} clean edges and {n_perturbations} pertutbations'
-
+        edge_index, edge_weight = self.get_modified_adj(is_final=True)
+        edge_weight = edge_weight.round()
+        edge_mask = edge_weight == 1
         self.adj_adversary = SparseTensor.from_edge_index(
-            self.edge_index, self.edge_weight, (self.n, self.n)
+            edge_index[:, edge_mask], edge_weight[edge_mask], (self.n, self.n)
         ).coalesce().detach()
-
         self.attr_adversary = self.attr

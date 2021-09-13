@@ -23,7 +23,7 @@ fixed:
   device: 0
   data_device: cpu
   debug_level: info
-  attack_params.epochs: 30
+  attack_params.epochs: 40
   attack_params.fine_tune_epochs: 10
   attack_params.display_step: 1
   attack_params.do_synchronize: True
