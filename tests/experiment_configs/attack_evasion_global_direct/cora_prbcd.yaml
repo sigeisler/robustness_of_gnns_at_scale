@@ -51,7 +51,7 @@ prbcd:
     binary_attr: False
     attack: PRBCD
     attack_params:
-      epochs_regular: 11
+      epochs: 11
       fine_tune_epochs: 1
       keep_heuristic: WeightOnly
       search_space_size: 10_000
