@@ -23,7 +23,7 @@ class PRBCD(SparseAttack):
                  keep_heuristic: str = 'WeightOnly',
                  lr_factor: float = 100,
                  display_step: int = 20,
-                 epochs: int = 500,
+                 epochs: int = 400,
                  fine_tune_epochs: int = 100,
                  search_space_size: int = 1_000_000,
                  with_early_stopping: bool = True,

@@ -40,14 +40,7 @@ def config():
     seed = 0
 
     attack = 'GreedyRBCD'
-    attack_params = dict(
-        epochs=5,  # 400,
-        fine_tune_epochs=5,  # 100,
-        keep_heuristic="WeightOnly",
-        search_space_size=1_000_000,
-        do_synchronize=True,
-        loss_type="tanhMargin",
-    )
+    attack_params = {}
     epsilons = [0.01, 0.1]
 
     artifact_dir = 'cache_debug'

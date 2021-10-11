@@ -15,7 +15,7 @@ slurm:
 
 fixed:
   data_dir: datasets/
-  epsilons: [0, 0.01, 0.05, 0.1, 0.25, 0.5, 1]
+  epsilons: [0,0.1] #[0, 0.01, 0.05, 0.1, 0.25, 0.5, 1]
   artifact_dir: cache
   pert_adj_storage_type: evasion_global_transfer_adj
   pert_attr_storage_type: evasion_global_transfer_attr
@@ -41,24 +41,24 @@ grid:
     type: choice
     options:
       - Vanilla GCN
-      - Vanilla Dense GCN
-      - Vanilla GAT
+      # - Vanilla Dense GCN
+      # - Vanilla GAT
       - Vanilla GDC
       - Soft Medoid GDC (T=0.5)
-      - Soft Median GDC (T=1.0)
-      - Soft Median GDC (T=0.5)
       - Soft Median GDC (T=0.2)
+      # - Soft Median GDC (T=0.5)
+      # - Soft Median GDC (T=1.0)
       - SVD GCN (rank=50)
-      - SVD GCN (rank=100)
+      # - SVD GCN (rank=100)
       - Jaccard GCN
-      - RGCN
+      # - RGCN
       - Vanilla PPRGo
-      - Soft Medoid PPRGo (T=1.0)
-      - Soft Medoid PPRGo (T=0.5)
-      - Soft Medoid PPRGo (T=0.2)
-      - Soft Median PPRGo (T=1.0)
+      # - Soft Medoid PPRGo (T=1.0)
+      # - Soft Medoid PPRGo (T=0.5)
+      # - Soft Medoid PPRGo (T=0.2)
+      # - Soft Median PPRGo (T=1.0)
       - Soft Median PPRGo (T=0.5)
-      - Soft Median PPRGo (T=0.2)
+      # - Soft Median PPRGo (T=0.2)
 
 
 fgsm:
@@ -66,46 +66,19 @@ fgsm:
     attack: FGSM
     binary_attr: False
     surrogate_model_label: Vanilla Dense GCN
-  grid: 
     attack_params:
-      type: parameter_collection
-      params:
-        loss_type: 
-          type: choice
-          options:
-            # - CE
-            # - CW
-            # - NCE
-            - MCE
-            # - tanhMargin
-            # - Margin
-            # - eluMargin
-            # - tanhMarginMCE-0.5
+      loss_type: MCE
 
 pgd:
   fixed:
     attack: PGD
     binary_attr: False
     surrogate_model_label: Vanilla Dense GCN
-  grid: 
     attack_params:
-      type: parameter_collection
-      params:
-        loss_type: 
-          type: choice
-          options:
-            # - CE
-            # - CW
-            # - NCE
-            # - MCE
-            - tanhMargin
-            # - Margin
-            # - eluMargin
-            # - tanhMarginMCE-0.75
-        base_lr: 
-          type: choice
-          options:
-            - 1e-1
+      epochs: 200
+      epsilon: 1e-5
+      base_lr: 1e-1
+      loss_type: tanhMargin
 
 greedy_rbcd:
   fixed:
@@ -113,6 +86,7 @@ greedy_rbcd:
     binary_attr: False
     surrogate_model_label: Vanilla GCN
     attack_params: 
+      epochs: 500
       loss_type: MCE
 
 prbcd:
@@ -132,3 +106,4 @@ dice:
   fixed:
     attack: DICE
     binary_attr: False
+    attack_params.add_ratio: 0.6
