@@ -86,14 +86,14 @@ def build_configs_and_run(config_files: Sequence[str], executable: Optional[str]
     return configs, run
 
 
-def setup_logging():
+def setup_logging(logging_mode=logging.DEBUG):
     """Setup logging for standard out
     """
     root = logging.getLogger()
-    root.setLevel(logging.DEBUG)
+    root.setLevel(logging_mode)
 
     handler = logging.StreamHandler(sys.stdout)
-    handler.setLevel(logging.DEBUG)
+    handler.setLevel(logging_mode)
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     handler.setFormatter(formatter)
     root.addHandler(handler)

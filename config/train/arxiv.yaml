@@ -1,5 +1,5 @@
 seml:
-  name: arxiv_rgnn_at_scale_train
+  name: gnn_arxiv
   executable: experiments/experiment_train.py
   project_root_dir: ../..
   output_dir: config/train/output
@@ -24,7 +24,7 @@ fixed:
   data_device: cpu
   make_undirected: True
   binary_attr: False
-
+  data_dir: data
   dataset: ogbn-arxiv
 
 grid:      

@@ -52,7 +52,6 @@ class PPRGoMLP(nn.Module):
         return embs
 
 
-
 class PPRGo(nn.Module):
     """
     The vanilla PPRGo Model of Bojchevski & Klicpera et al.
@@ -337,7 +336,7 @@ class PPRGoWrapperBase(ABC):
     @typechecked
     def forward_wrapper(self,
                         attr: TensorType["n_nodes", "n_classes"],
-                        adj: Union[SparseTensor, sp.csr_matrix] = None,
+                        adj: Union[SparseTensor, sp.csr_matrix, TensorType["n_nodes", "n_nodes"]] = None,
                         ppr_scores: SparseTensor = None,
                         ppr_idx=None):
         """
@@ -360,6 +359,10 @@ class PPRGoWrapperBase(ABC):
         """
 
         device = next(self.parameters()).device
+
+        if isinstance(adj, torch.Tensor):
+            adj = SparseTensor.from_dense(adj.cpu()).to(device)
+
         if ppr_scores is not None:
 
             source_idx, neighbor_idx, ppr_vals = ppr_scores.coo()

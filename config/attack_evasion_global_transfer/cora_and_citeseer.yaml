@@ -73,14 +73,14 @@ fgsm:
         loss_type: 
           type: choice
           options:
-            - CE
-            - CW
-            - NCE
+            # - CE
+            # - CW
+            # - NCE
             - MCE
-            - tanhMargin
-            - Margin
-            - eluMargin
-            - tanhMarginMCE-0.5
+            # - tanhMargin
+            # - Margin
+            # - eluMargin
+            # - tanhMarginMCE-0.5
 
 pgd:
   fixed:
@@ -94,14 +94,14 @@ pgd:
         loss_type: 
           type: choice
           options:
-            - CE
-            - CW
-            - NCE
-            - MCE
+            # - CE
+            # - CW
+            # - NCE
+            # - MCE
             - tanhMargin
-            - Margin
-            - eluMargin
-            - tanhMarginMCE-0.75
+            # - Margin
+            # - eluMargin
+            # - tanhMarginMCE-0.75
         base_lr: 
           type: choice
           options:

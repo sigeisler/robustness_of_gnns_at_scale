@@ -52,7 +52,7 @@ def config():
 
     artifact_dir = 'cache_debug'
     model_storage_type = 'pretrained'
-    model_label = None# "Soft Median PPRGo (T=0.5)"
+    model_label = None  # "Soft Median PPRGo (T=0.5)"
     surrogate_model_storage_type = 'pretrained'
     surrogate_model_label = "Vanilla GCN"
     pert_adj_storage_type = 'evasion_global_transfer_adj'
@@ -156,8 +156,8 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                           pert_params, adversary, surrogate_model_label)
 
         # Clear to save GPU memory
-        adj_adversary = adversary.adj_adversary
-        attr_adversary = adversary.attr_adversary
+        adj_adversary, attr_adversary = adversary.get_pertubations()
+
         del adversary
 
         for model, hyperparams in models_and_hyperparams:

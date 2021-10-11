@@ -455,7 +455,7 @@ cache_old
 data
 datasets
 cache_debug/*
-cache
+cache/*
 extension/*
 kernels/build
 kernels/dist
@@ -464,4 +464,6 @@ datasets/*
 train.sh
 runs/
 cache_test/
+cache_rebuttal/
 cache_io_test/
+neurips_rebutal

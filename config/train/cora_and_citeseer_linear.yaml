@@ -1,5 +1,5 @@
 seml:
-  name: rgnn_at_scale_train
+  name: lin_cora_citeseer
   executable: experiments/experiment_train.py
   project_root_dir: ../..
   output_dir: config/train/output

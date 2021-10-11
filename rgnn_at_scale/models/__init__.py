@@ -9,7 +9,7 @@ from rgnn_at_scale.models.rgcn import RGCN
 from rgnn_at_scale.models.pprgo import (PPRGoWrapperBase, RobustPPRGoWrapper, PPRGoWrapper)
 
 
-MODEL_TYPE = Union[SGC, GCN, RGNN, RGCN, RobustPPRGoWrapper, PPRGoWrapper]
+MODEL_TYPE = Union[SGC, GCN, DenseGCN, RGNN, RGCN, RobustPPRGoWrapper, PPRGoWrapper]
 BATCHED_PPR_MODELS = Union[RobustPPRGoWrapper, PPRGoWrapper]
 
 
