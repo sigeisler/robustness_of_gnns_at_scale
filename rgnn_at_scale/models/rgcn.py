@@ -35,7 +35,10 @@ class RGCN(RGCN):
                 torch.ones_like(edge_idx[0], dtype=torch.float32),
                 torch.Size([n, n])
             )
-        adj = adj.to_dense()
+        if isinstance(adj, SparseTensor):
+            adj = adj.to_torch_sparse_coo_tensor()
+        if adj.is_sparse:
+            adj = adj.to_dense()
 
         self.features = x
         self.adj_norm1 = self._normalize_adj(adj, power=-1 / 2)
