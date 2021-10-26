@@ -214,6 +214,14 @@ class GCN(nn.Module):
                 d: Optional[int] = None) -> TensorType["n_nodes", "n_classes"]:
         x, edge_idx, edge_weight = GCN.parse_forward_input(data, adj, attr_idx, edge_idx, n, d)
 
+        device = next(self.parameters()).device
+        if x.device != device:
+            x = x.to(device)
+        if edge_idx.device != device:
+            edge_idx = edge_idx.to(device)
+        if edge_weight is not None and edge_weight.device != device:
+            edge_weight = edge_weight.to(device)
+
         # Perform preprocessing such as SVD, GDC or Jaccard
         edge_idx, edge_weight = self._cache_if_option_is_set(self._preprocess_adjacency_matrix,
                                                              x, edge_idx, edge_weight)
