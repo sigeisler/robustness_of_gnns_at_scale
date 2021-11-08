@@ -1,6 +1,6 @@
 _Not yet final and, therfore, more will follow. Stay tuned._
 
-# Reliable Graph Neural Networks via Robust Aggregation
+# Robustness of Graph Neural Networks at Scale
 
 ## Structure
 
