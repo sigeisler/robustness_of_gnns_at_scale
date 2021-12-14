@@ -149,8 +149,9 @@ plots/
 plots*/
 *.pickle
 
-# SEML
+# CONFIGS
 *.out
+output/
 
 ##### LATEX #####
 
@@ -438,15 +439,31 @@ TSWLatexianTemp*
 */*DS_Store
 
 # VS CODE
-*/.vscode
+.vscode
 
 # Misc
 *.txt
+#debug files
+cache/*
+
+#downloaded ogbn-products file
+datasets/*
 
 # Local
+cache_debug
+cache_old
+data
+datasets
 cache_debug/*
+cache/*
 extension/*
 kernels/build
 kernels/dist
 kernels/kernels.egg-info
-seml/*/output 
+datasets/*
+train.sh
+runs/
+cache_test/
+cache_rebuttal/
+cache_io_test/
+neurips_rebutal

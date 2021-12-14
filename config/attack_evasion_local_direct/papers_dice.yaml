@@ -1,0 +1,88 @@
+seml:
+  name: papers_dice
+  executable: experiments/experiment_local_attack_direct.py
+  project_root_dir: ../..
+  output_dir: config/attack_evasion_local_direct/output
+
+slurm:
+  experiments_per_job: 1
+  sbatch_options:
+    gres: gpu:1       # num GPUs
+    mem: 256G          # memory
+    cpus-per-task: 4  # num cores
+    time: 1-00:00     # max time, D-HH:MM
+
+fixed:
+  data_dir: data/
+  dataset: ogbn-papers100M
+  binary_attr: False
+  min_node_degree: 20
+  model_storage_type: pretrained
+  artifact_dir: cache
+  nodes: None
+  nodes_topk: 40
+  device: 0
+  data_device: cpu
+  debug_level: info
+
+grid:
+  seed:
+    type: choice
+    options:
+      - 0
+      - 1
+      - 5
+  make_undirected:
+    type: choice
+    options:
+      - False
+  epsilons:
+    type: choice
+    options:
+      - [0.05]
+      - [0.1]
+      - [0.25]
+      - [0.5]
+      - [1.0]
+
+
+dice_pprgo_vanilla:
+  fixed:
+    attack: LocalDICE
+    model_label: Vanilla PPRGo
+
+
+dice_pprgo_median20:
+  fixed:
+    attack: LocalDICE
+    model_label: Soft Median PPRGo (T=10.0)
+
+
+dice_pprgo_median20:
+  fixed:
+    attack: LocalDICE
+    model_label: Soft Median PPRGo (T=20.0)
+
+
+dice_pprgo_median50:
+  fixed:
+    attack: LocalDICE
+    model_label: Soft Median PPRGo (T=50.0)
+
+
+dice_pprgo_median100:
+  fixed:
+    attack: LocalDICE
+    model_label: Soft Median PPRGo (T=100.0)
+
+
+dice_pprgo_median200:
+  fixed:
+    attack: LocalDICE
+    model_label: Soft Median PPRGo (T=200.0)
+
+
+dice_pprgo_median500:
+  fixed:
+    attack: LocalDICE
+    model_label: Soft Median PPRGo (T=500.0)

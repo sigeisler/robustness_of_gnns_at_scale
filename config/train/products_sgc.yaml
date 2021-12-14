@@ -1,0 +1,51 @@
+seml:
+  name: sgc_products
+  executable: experiments/experiment_train.py
+  project_root_dir: ../..
+  output_dir: config/train/output
+
+slurm:
+  experiments_per_job: 1
+  sbatch_options:
+    gres: gpu:1       # num GPUs
+    mem: 32G          # memory
+    cpus-per-task: 4  # num cores
+    time: 0-01:00     # max time, D-HH:MM
+    partition: gpu_large
+    qos: studentprio
+
+fixed:
+  data_dir: data/
+  train_params:
+    patience: 300
+    max_epochs: 5000
+  artifact_dir: cache
+  model_storage_type: pretrained
+  device: 0
+  data_device: 0
+  make_undirected: True
+  binary_attr: False
+
+grid:
+  dataset:
+    type: choice
+    options:
+      - ogbn-products
+  seed:
+    type: choice
+    options:
+      - 0
+      - 1
+      - 5
+
+sgc:
+  fixed:
+    train_params:
+      lr: 5e-4
+      weight_decay: 1.81e-06
+    model_params:
+      label: Vanilla SGC
+      model: SGC
+      K: 2
+      cached: True
+

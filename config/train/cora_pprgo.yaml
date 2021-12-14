@@ -1,0 +1,182 @@
+seml:
+  name: pprgo_cora_citeseer
+  executable: experiments/experiment_train.py
+  project_root_dir: ../..
+  output_dir: config/train/output
+
+slurm:
+  experiments_per_job: 1
+  sbatch_options:
+    gres: gpu:1       # num GPUs
+    mem: 16G
+    cpus-per-task: 4  # num cores
+    time: 0-05:00     # max time, D-HH:MM
+
+fixed:
+  data_dir: data/
+  train_params:
+    patience: 300
+    max_epochs: 3000
+  artifact_dir: cache
+  model_storage_type: pretrained
+  device: 0
+  data_device: cpu
+  binary_attr: False
+  dataset: cora_ml
+
+grid:
+  seed:
+    type: choice
+    options:
+      - 0
+      - 1
+      - 5
+  make_undirected:
+    type: choice
+    options:
+      - True
+      # - False
+
+#0.826798
+pprgo:
+  fixed:
+    model_params:
+      label: Vanilla PPRGo
+      model: PPRGo
+      ppr_normalization: 'row' 
+      batch_norm: False
+      topk: 64
+      n_filters: 64
+      n_layers: 2
+      alpha: 0.098678
+      eps: 1e-3
+      dropout: 0.1
+    train_params:
+      lr: 1e-3
+      weight_decay: 1e-3
+
+soft_medoid_rpprgo_t1_0:
+  fixed:
+    model_params:
+      label: Soft Medoid PPRGo (T=1.0)
+      model: RobustPPRGo
+      ppr_normalization: 'row' 
+      batch_norm: False
+      topk: 64
+      n_filters: 64
+      n_layers: 2
+      alpha: 0.051798
+      eps: 1e-3
+      dropout: 0.5
+      mean: soft_k_medoid
+      mean_kwargs: 
+        k: 64
+        temperature: 1.0
+        with_weight_correction: True
+    train_params:
+      lr: 1e-2
+      weight_decay: 1e-3
+
+soft_medoid_rpprgo_t0_5:
+  fixed:
+    model_params:
+      label: Soft Medoid PPRGo (T=0.5)
+      model: RobustPPRGo
+      ppr_normalization: 'row' 
+      batch_norm: False
+      topk: 64
+      n_filters: 128
+      n_layers: 2
+      alpha: 0.153470
+      eps: 1e-3
+      dropout: 0.1
+      mean: soft_k_medoid
+      mean_kwargs: 
+        k: 64
+        temperature: 0.5
+        with_weight_correction: True
+    train_params:
+      lr: 1e-2
+      weight_decay: 1e-2
+
+soft_medoid_rpprgo_t0_2:
+  fixed:
+    model_params:
+      label: Soft Medoid PPRGo (T=0.2)
+      model: RobustPPRGo
+      ppr_normalization: 'row' 
+      batch_norm: False
+      topk: 64
+      n_filters: 64
+      n_layers: 2
+      alpha: 0.152372
+      eps: 1e-4
+      dropout: 0.5
+      mean: soft_k_medoid
+      mean_kwargs: 
+        k: 64
+        temperature: 0.2
+        with_weight_correction: True
+    train_params:
+      lr: 1e-3
+      weight_decay: 1e-3
+
+soft_median_rpprgo_t1_0:
+  fixed:
+    model_params:
+      label: Soft Median PPRGo (T=1.0)
+      model: RobustPPRGo
+      ppr_normalization: 'row' 
+      batch_norm: False
+      topk: 64
+      n_filters: 64
+      n_layers: 2
+      alpha: 0.125073
+      eps: 1e-3
+      dropout: 0.5
+      mean: soft_median
+      mean_kwargs: 
+        temperature: 1.0
+    train_params:
+      lr: 1e-3
+      weight_decay: 1e-3
+
+soft_median_rpprgo_t0_5:
+  fixed:
+    model_params:
+      label: Soft Median PPRGo (T=0.5)
+      model: RobustPPRGo
+      ppr_normalization: 'row' 
+      batch_norm: False
+      topk: 64
+      n_filters: 128
+      n_layers: 2
+      alpha: 0.197724
+      eps: 1e-4
+      dropout: 0.5
+      mean: soft_median
+      mean_kwargs: 
+        temperature: 0.5
+    train_params:
+      lr: 1e-2
+      weight_decay: 1e-2
+
+soft_median_rpprgo_t0_2:
+  fixed:
+    model_params:
+      label: Soft Median PPRGo (T=0.2)
+      model: RobustPPRGo
+      ppr_normalization: 'row' 
+      batch_norm: False
+      topk: 64
+      n_filters: 64
+      n_layers: 2
+      alpha: 0.177051
+      eps: 1e-4
+      dropout: 0.5
+      mean: soft_median
+      mean_kwargs: 
+        temperature: 0.2
+    train_params:
+      lr: 1e-2
+      weight_decay: 1e-2

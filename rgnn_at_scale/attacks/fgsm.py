@@ -1,18 +1,14 @@
 """Contains a greedy FGSM implementation. In each iteration the edge is flipped, determined by the largest gradient
 towards increasing the loss.
 """
-from copy import deepcopy
-from typing import Optional, Union
-
-import numpy as np
+from tqdm import tqdm
 import torch
-import torch.nn.functional as F
+from torch_sparse import SparseTensor
 
-from rgnn_at_scale.models import DenseGCN
-from rgnn_at_scale.attacks.prbcd import PRBCD
+from rgnn_at_scale.attacks.base_attack import DenseAttack
 
 
-class FGSM():
+class FGSM(DenseAttack):
     """Greedy Fast Gradient Signed Method.
 
     Parameters
@@ -29,33 +25,19 @@ class FGSM():
         Model to be attacked.
     """
 
-    def __init__(self,
-                 adj: torch.sparse.FloatTensor,
-                 X: torch.Tensor,
-                 labels: torch.Tensor,
-                 idx_attack: np.ndarray,
-                 model: DenseGCN,
-                 device: Union[str, int, torch.device],
-                 stop_optimizing_if_label_flipped: bool = False,
-                 loss_type: Optional[str] = None,
-                 **kwargs):
-        super().__init__()
-        assert adj.device == X.device, 'The device of the features and adjacency matrix must match'
-        self.device = device
-        self.original_adj = adj.to_dense().to(device)
-        self.adj = self.original_adj.clone().requires_grad_(True)
-        self.X = X.to(device)
-        self.labels = labels.to(device)
-        self.idx_attack = idx_attack
-        self.model = deepcopy(model).to(self.device)
-        self.stop_optimizing_if_label_flipped = stop_optimizing_if_label_flipped
-        self.loss_type = loss_type
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
-        self.attr_adversary = None
-        self.adj_adversary = None
+        assert self.make_undirected, 'Attack only implemented for undirected graphs'
+
+        self.adj_perturbed = self.adj.clone().requires_grad_(True).to(self.device)
         self.n_perturbations = 0
 
-    def attack(self, n_perturbations: int):
+        self.adj = self.adj.to(self.device)
+        self.attr = self.attr.to(self.device)
+        self.attacked_model = self.attacked_model.to(self.device)
+
+    def _attack(self, n_perturbations: int):
         """Perform attack
 
         Parameters
@@ -70,33 +52,22 @@ class FGSM():
         n_perturbations -= self.n_perturbations
         self.n_perturbations += n_perturbations
 
-        for i in range(n_perturbations):
-            logits = self.model.to(self.device)(self.X, self.adj)
+        for i in tqdm(range(n_perturbations)):
+            logits = self.attacked_model(self.attr, self.adj_perturbed)
 
-            if self.loss_type is not None:
-                loss = PRBCD.calculate_loss(self.loss_type, logits[self.idx_attack], self.labels[self.idx_attack])
-            else:
-                not_yet_flipped_mask = logits[self.idx_attack].argmax(-1) == self.labels[self.idx_attack]
-                if self.stop_optimizing_if_label_flipped and not_yet_flipped_mask.sum() > 0:
-                    loss = F.cross_entropy(logits[self.idx_attack][not_yet_flipped_mask],
-                                           self.labels[self.idx_attack][not_yet_flipped_mask])
-                else:
-                    loss = F.cross_entropy(logits[self.idx_attack], self.labels[self.idx_attack])
+            loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
 
-            gradient = torch.autograd.grad(loss, self.adj)[0]
-            gradient[self.original_adj != self.adj] = 0
-            gradient *= 2 * (0.5 - self.adj)
-
-            # assert torch.all(gradient.nonzero()[:, 0] < gradient.nonzero()[:, 1]),\
-            #     'Only upper half should get nonzero gradient'
+            gradient = torch.autograd.grad(loss, self.adj_perturbed)[0]
+            gradient[self.adj != self.adj_perturbed] = 0
+            gradient *= 2 * (0.5 - self.adj_perturbed)
 
             maximum = torch.max(gradient)
             edge_pert = (maximum == gradient).nonzero()
 
             with torch.no_grad():
-                new_edge_value = -self.adj[edge_pert[0][0], edge_pert[0][1]] + 1
-                self.adj[edge_pert[0][0], edge_pert[0][1]] = new_edge_value
-                self.adj[edge_pert[0][1], edge_pert[0][0]] = new_edge_value
+                new_edge_value = -self.adj_perturbed[edge_pert[0][0], edge_pert[0][1]] + 1
+                self.adj_perturbed[edge_pert[0][0], edge_pert[0][1]] = new_edge_value
+                self.adj_perturbed[edge_pert[0][1], edge_pert[0][0]] = new_edge_value
 
-        self.attr_adversary = self.X
-        self.adj_adversary = self.adj.to_sparse().detach()
+        self.attr_adversary = self.attr
+        self.adj_adversary = SparseTensor.from_dense(self.adj_perturbed.detach())

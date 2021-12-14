@@ -1,0 +1,46 @@
+seml:
+  name: sgc_pubmed
+  executable: experiments/experiment_train.py
+  project_root_dir: ../..
+  output_dir: config/train/output
+
+slurm:
+  experiments_per_job: 1
+  sbatch_options:
+    gres: gpu:1       # num GPUs
+    mem: 16G          # memory
+    cpus-per-task: 4  # num cores
+    time: 0-00:05     # max time, D-HH:MM
+
+fixed:
+  data_dir: data/
+  train_params:
+    patience: 300
+    max_epochs: 3000
+  artifact_dir: cache
+  model_storage_type: pretrained
+  device: 0
+  data_device: 0
+  make_undirected: True
+  binary_attr: False
+
+grid:
+  seed:
+    type: choice
+    options:
+      - 0
+      - 1
+      - 5
+
+sgc_pubmed:
+  fixed:
+    dataset: pubmed
+    train_params:
+      lr: 97e-4
+      weight_decay: 17e-5
+    model_params:
+      label: Vanilla SGC
+      model: SGC
+      K: 2
+      cached: True
+

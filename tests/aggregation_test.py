@@ -310,7 +310,7 @@ class TestSoftWeightedMedoidKNeighborhood():
     def test_disconnected_node_weighted_k2_sparse(self):
         """
         There was a bug in the soft_weighted_medoid_k_neighborhood method where nodes which have
-        no outgoing edges will result in a RuntimeError caused by a size missmatch when trying to do 
+        no outgoing edges will result in a RuntimeError caused by a size missmatch when doing
         the final matrix multuply when using the sparse implementation
         """
 
@@ -318,7 +318,6 @@ class TestSoftWeightedMedoidKNeighborhood():
                           [0.3, 0.2, 0, 0],
                           [0, 0, 0.9, 0],
                           [0, 0, 0, 0]],
-                         #  requires_grad=True,
                          dtype=torch.float32,
                          device=device)
         x = torch.tensor([[-10, 10, 10],
@@ -356,7 +355,6 @@ class TestSoftWeightedMedoidKNeighborhood():
         # just checking that we *can* compute the gradient,
         # not whether its actually correct
         medoids.sum().backward()
-        # assert A.grad is not None
         assert x.grad is not None
 
     def test_disconnected_node_weighted_k2(self):
@@ -369,7 +367,6 @@ class TestSoftWeightedMedoidKNeighborhood():
                           [0.3, 0.2, 0, 0],
                           [0, 0, 0.9, 0.3],
                           [0.4, 0, 0.4, 0.4]],
-                         #  requires_grad=True,
                          dtype=torch.float32,
                          device=device)
         x = torch.tensor([[-10, 10, 10],
@@ -403,7 +400,6 @@ class TestSoftWeightedMedoidKNeighborhood():
                 or torch.all(medoids[layer_idx] == row_sum[layer_idx] * (x[2] + x[3]) / 2))
 
         medoids.sum().backward()
-        # assert A.grad is not None
         assert x.grad is not None
 
     def test_batched_node_weighted_k2_sparse(self):
@@ -446,7 +442,6 @@ class TestSoftWeightedMedoidKNeighborhood():
         # just checking that we *can* compute the gradient,
         # not whether its actually correct
         medoids.sum().backward()
-        # assert A.grad is not None
         assert x.grad is not None
 
     def test_batched_node_weighted_k2(self):
@@ -454,7 +449,6 @@ class TestSoftWeightedMedoidKNeighborhood():
         A = torch.tensor([[0.5, 0.3, 0, 0.3],
                           [0.0, 0.0, 0.9, 0],
                           [0.4, 0, 0.4, 0.4]],
-                         #  requires_grad=True,
                          dtype=torch.float32,
                          device=device)
         x = torch.tensor([[-10, 10, 10],
@@ -487,7 +481,6 @@ class TestSoftWeightedMedoidKNeighborhood():
         # just checking that we *can* compute the gradient,
         # not whether its actually correct
         medoids.sum().backward()
-        # assert A.grad is not None
         assert x.grad is not None
 
     if os.path.isfile(adj_bug_path) and os.path.isfile(x_bug_path):
@@ -495,10 +488,10 @@ class TestSoftWeightedMedoidKNeighborhood():
             """
             This particular setting threw an error:
             IndexError: index 2029 is out of bounds for dimension 0 with size 2027
-            This test is to make sure it's fixed now and should just check that 
+            This test is to make sure it's fixed now and should just check that
             no error is thrown anymore
 
-            The cause of the error was the partial_distance_matrix function that couldn't 
+            The cause of the error was the partial_distance_matrix function that couldn't
             handle some batched adjacency matrices.
             """
 
@@ -507,12 +500,12 @@ class TestSoftWeightedMedoidKNeighborhood():
 
             A_sparse_tensor = SparseTensor.from_dense(A)
 
-            _ = soft_weighted_medoid_k_neighborhood(A_sparse_tensor,
-                                                    x,
-                                                    k=32,
-                                                    temperature=temperature,
-                                                    # forcing sparse implementation
-                                                    threshold_for_dense_if_cpu=0)
+            soft_weighted_medoid_k_neighborhood(A_sparse_tensor,
+                                                x,
+                                                k=32,
+                                                temperature=temperature,
+                                                # forcing sparse implementation
+                                                threshold_for_dense_if_cpu=0)
 
 
 class TestWeightedDimwiseMedian():

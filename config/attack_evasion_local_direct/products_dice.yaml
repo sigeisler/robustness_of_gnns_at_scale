@@ -1,0 +1,67 @@
+seml:
+  name: products_dice
+  executable: experiments/experiment_local_attack_direct.py
+  project_root_dir: ../..
+  output_dir: config/attack_evasion_local_direct/output
+
+slurm:
+  experiments_per_job: 1
+  sbatch_options:
+    gres: gpu:0       # num GPUs
+    mem: 48G          # memory
+    cpus-per-task: 4  # num cores
+    time: 0-12:00     # max time, D-HH:MM
+    partition: cpu
+    qos: phdcpu
+
+fixed:
+  data_dir: data/
+  dataset: ogbn-products
+  binary_attr: False
+  artifact_dir: cache
+  nodes: None
+  nodes_topk: 40
+  device: cpu
+  data_device: cpu
+  debug_level: info
+
+grid:
+  seed:
+    type: choice
+    options:
+      - 0
+      - 1
+      - 5
+  make_undirected:
+    type: choice
+    options:
+      - False
+  epsilons:
+    type: choice
+    options:
+      - [0.05]
+      - [0.1]
+      - [0.25]
+      - [0.5]
+      - [0.75]
+      - [1]
+
+gcn:
+  fixed:
+    attack: LocalDICE
+    model_label: Vanilla GCN (surrogate)
+    model_storage_type: pretrained
+
+
+pprgo_localprbcd:
+  fixed:
+    attack: LocalDICE
+    model_label: Vanilla PPRGo
+    model_storage_type: pretrained
+
+
+median_1_0_pprgo_localprbcd:
+  fixed:
+    attack: LocalDICE
+    model_label: Soft Median PPRGo (T=1.0)
+    model_storage_type: pretrained

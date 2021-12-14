@@ -7,17 +7,15 @@ The Subsequent code build upon the implementation https://github.com/DSE-MSU/Dee
 not intent to unify the code style, programming paradigms, etc. with the rest of the code base.
 
 """
-from typing import Union
-
 import numpy as np
 import torch
-from torch.nn import functional as F
+from torch_sparse import SparseTensor
+from tqdm import tqdm
 
-from rgnn_at_scale.models import DenseGCN
-from rgnn_at_scale.attacks.prbcd import PRBCD
+from rgnn_at_scale.attacks.base_attack import DenseAttack
 
 
-class PGD(object):
+class PGD(DenseAttack):
     """L_0 norm Projected Gradient Descent (PGD) attack as proposed in:
     Kaidi Xu, Hongge Chen, Sijia Liu, Pin Yu Chen, Tsui Wei Weng, Mingyi Hong, and Xue Lin.Topology attack and defense
     for graph neural networks: An optimization perspective. IJCAI International Joint Conference on Artificial
@@ -27,8 +25,8 @@ class PGD(object):
     ----------
     X : torch.Tensor
         [n, d] feature matrix.
-    adj : torch.sparse.FloatTensor
-        [n, n] sparse adjacency matrix.
+    adj : Union[SparseTensor, torch.Tensor]
+        [n, n] adjacency matrix.
     labels : torch.Tensor
         Labels vector of shape [n].
     idx_attack : np.ndarray
@@ -42,36 +40,23 @@ class PGD(object):
     """
 
     def __init__(self,
-                 X: torch.Tensor,
-                 adj: torch.sparse.FloatTensor,
-                 labels: torch.Tensor,
-                 idx_attack: np.ndarray,
-                 model: DenseGCN,
-                 device: Union[str, int, torch.device],
                  epochs: int = 200,
                  epsilon: float = 1e-5,
-                 loss_type: str = 'CE',
+                 base_lr: float = 1e-2,
                  **kwargs):
-        assert adj.device == X.device, 'The device of the features and adjacency matrix must match'
-        self.device = device
-        self.X = X.to(device)
-        self.adj = adj.to(device)
-        if self.adj.is_sparse:
-            self.adj = self.adj.to_dense()
-        self.labels = labels.to(device)
-        self.idx_attack = idx_attack
-        self.model = model
+        super().__init__(**kwargs)
+
+        assert self.make_undirected, 'Attack only implemented for undirected graphs'
+
         self.epochs = epochs
         self.epsilon = epsilon
-        self.loss_type = loss_type
+        self.base_lr = base_lr
 
-        self.n = self.X.shape[0]
-        self.device = X.device
+        self.adj = self.adj.to(self.device)
+        self.attr = self.attr.to(self.device)
+        self.attacked_model = self.attacked_model.to(self.device)
 
-        self.attr_adversary = self.X  # Only the adjacency matrix will be perturbed
-        self.adj_adversary = None
-
-    def attack(self, n_perturbations: int, **kwargs):
+    def _attack(self, n_perturbations: int, **kwargs):
         """Perform attack (`n_perturbations` is increasing as it was a greedy attack).
 
         Parameters
@@ -83,27 +68,20 @@ class PGD(object):
         self.adj_changes = torch.zeros(int(self.n * (self.n - 1) / 2), dtype=torch.float, device=self.device)
         self.adj_changes.requires_grad = True
 
-        self.model.eval()
-        for t in range(self.epochs):
+        self.attacked_model.eval()
+        for t in tqdm(range(self.epochs)):
             modified_adj = self.get_modified_adj()
-            logits = self.model(self.X, modified_adj)
-            loss = PRBCD.calculate_loss(self.loss_type, logits[self.idx_attack], self.labels[self.idx_attack])
+            logits = self.attacked_model(self.attr, modified_adj)
+            loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
             adj_grad = torch.autograd.grad(loss, self.adj_changes)[0]
 
-            if self.loss_type == 'CW':
-                lr = 1 / np.sqrt(t + 1)
-                self.adj_changes.data.add_(lr * adj_grad)
-            elif self.loss_type == 'MCE':
-                lr = 60 / np.sqrt(t + 1)
-                self.adj_changes.data.add_(lr * adj_grad)
-            else:
-                lr = 200 / np.sqrt(t + 1)
-                self.adj_changes.data.add_(lr * adj_grad)
+            lr = n_perturbations * self.base_lr / np.sqrt(t + 1)
+            self.adj_changes.data.add_(lr * adj_grad)
 
             self.projection(n_perturbations)
 
         self.random_sample(n_perturbations)
-        self.adj_adversary = self.get_modified_adj().detach().to_sparse()
+        self.adj_adversary = SparseTensor.from_dense(self.get_modified_adj().detach())
 
     def random_sample(self, n_perturbations: int):
         K = 20
@@ -118,8 +96,8 @@ class PGD(object):
                         continue
                     self.adj_changes.data.copy_(torch.tensor(sampled))
                     modified_adj = self.get_modified_adj()
-                    logits = self.model(self.X, modified_adj)
-                    loss = PRBCD.calculate_loss(self.loss_type, logits[self.idx_attack], self.labels[self.idx_attack])
+                    logits = self.attacked_model(self.attr, modified_adj)
+                    loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])
                     if best_loss < loss:
                         best_loss = loss
                         best_s = sampled
