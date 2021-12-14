@@ -144,7 +144,7 @@ cython_debug/
 .DS_Store
 
 # Data folder
-# data/
+data/
 plots/
 plots*/
 *.pickle
@@ -452,7 +452,6 @@ datasets/*
 # Local
 cache_debug
 cache_old
-data
 datasets
 cache_debug/*
 cache/*
