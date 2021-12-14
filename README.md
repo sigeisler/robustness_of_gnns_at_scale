@@ -6,7 +6,7 @@ Besides the standard python artifacts we provide:
 
 - `cache`: for the pretrained models / attacked adjacency matrices
 - `config`: the configuration files grouped by experiments
-- `datasets`: for storing the datasets
+- `data`: for storing the datasets
 - `experiments`: source code defining the types of experiments
 - `kernels`: the custom kernel package
 - `notebooks`: for (jupyter) notebooks
