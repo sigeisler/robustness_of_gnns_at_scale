@@ -13,7 +13,7 @@ slurm:
     time: 1-00:00     # max time, D-HH:MM
 
 fixed:
-  data_dir: datasets
+  data_dir: data/
   artifact_dir: cache_test
   nodes: None
   nodes_topk: 8

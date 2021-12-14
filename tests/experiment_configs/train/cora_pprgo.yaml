@@ -13,7 +13,7 @@ slurm:
     time: 0-05:00     # max time, D-HH:MM
 
 fixed:
-  data_dir: datasets
+  data_dir: data/
   train_params:
     patience: 100
     max_epochs: 10
