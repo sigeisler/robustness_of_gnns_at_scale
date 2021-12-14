@@ -15,7 +15,7 @@ slurm:
     
 
 fixed:
-  data_dir: datasets
+  data_dir: data/
   dataset: ogbn-products
   artifact_dir: cache
   model_storage_type: pretrained

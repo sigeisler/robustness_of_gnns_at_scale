@@ -24,7 +24,7 @@ fixed:
   data_device: cpu
   make_undirected: True
   binary_attr: False
-  data_dir: data
+  data_dir: data/
   dataset: ogbn-arxiv
 
 grid:      

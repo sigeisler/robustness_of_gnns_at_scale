@@ -13,7 +13,7 @@ slurm:
     time: 1-00:00     # max time, D-HH:MM
 
 fixed:
-  data_dir: data
+  data_dir: data/
   model_storage_type: pretrained
   surrogate_model_storage_type: pretrained
   artifact_dir: cache

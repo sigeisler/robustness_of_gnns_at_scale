@@ -15,7 +15,7 @@ slurm:
     qos: interactive
 
 fixed:
-  data_dir: datasets
+  data_dir: data/
   dataset: ogbn-products
   binary_attr: False
   train_params:

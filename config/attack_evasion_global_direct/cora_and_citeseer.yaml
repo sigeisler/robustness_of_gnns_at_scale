@@ -13,7 +13,7 @@ slurm:
     time: 0-08:00     # max time, D-HH:MM
 
 fixed:
-  data_dir: datasets/
+  data_dir: data/
   artifact_dir: cache
   pert_adj_storage_type: evasion_global_adj
   pert_attr_storage_type: evasion_global_attr

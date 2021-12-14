@@ -13,7 +13,7 @@ slurm:
     time: 1-00:00     # max time, D-HH:MM
 
 fixed:
-  data_dir: datasets/
+  data_dir: data/
   dataset: ogbn-papers100M
   binary_attr: False
   make_undirected: False
