@@ -5,7 +5,11 @@ from setuptools import setup, find_packages
 
 import torch
 
-cuda_v = f"cu{torch.version.cuda.replace('.', '')}"
+if torch.cuda.is_available():
+    cuda_v = f"cu{torch.version.cuda.replace('.', '')}"
+else:
+    cuda_v = "cpu"
+
 torch_v = torch.__version__.split('.')
 torch_v = '.'.join(torch_v[:-1] + ['0'])
 
@@ -23,6 +27,7 @@ system(f'pip install torch-spline-conv -f https://pytorch-geometric.com/whl/torc
 install_requires = [
     'filelock',
     'numba',
+    'numpy',
     'pandas',
     'sacred',
     'scikit-learn',
@@ -32,6 +37,8 @@ install_requires = [
     'tinydb',
     'tinydb-serialization',
     'tqdm',
+    'ogb',
+    'torchtyping',
     'torch-geometric'
 ]
 

@@ -1,7 +1,6 @@
 """For the util methods such as conversions or adjacency preprocessings.
 """
 from typing import Sequence, Tuple, Union
-import resource
 
 import numpy as np
 import torch
@@ -15,6 +14,13 @@ from rgnn_at_scale.helper.ppr_utils import ppr_topk
 
 from torchtyping import TensorType, patch_typeguard
 from typeguard import typechecked
+
+try:
+    import resource
+    _resource_module_available = True
+except ModuleNotFoundError:
+    _resource_module_available = False
+
 
 patch_typeguard()
 
@@ -714,7 +720,9 @@ def truncatedSVD(data, k=50):
 
 
 def get_max_memory_bytes():
-    return 1024 * resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    if _resource_module_available:
+        return 1024 * resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    return np.nan
 
 
 def matrix_to_torch(X):

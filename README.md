@@ -1,4 +1,6 @@
-# Reliable Graph Neural Networks via Robust Aggregation
+_Not yet final and, therfore, more will follow. Stay tuned._
+
+# Robustness of Graph Neural Networks at Scale
 
 ## Structure
 
@@ -19,13 +21,19 @@ Besides the standard python artifacts we provide:
 
 *Note: The setup is tested only for Linux 18.04 and will likely not work on other platforms.*
 
-For simplicity we recommend to install PyTorch a priori via anaconda:
+For simplicity we recommend to install PyTorch with CUDA support a priori via anaconda:
 ```bash
 conda install pytorch==1.8.1 torchvision torchaudio cudatoolkit=10.2 -c pytorch
 ```
 We used Python 3.7.6 and CUDA 10.2. We provide custom CUDA kernels that are fairly simple implementations for a `row-wise topk` and `row-wise weighted median` on a sparse matrix.
 
 Due to custom CUDA kernels, you must be able to compile via `nvcc`. Conda handles the c++ compiler etc. You also must have installed the CUDA toolkit and should select the matching CUDA version for your environment. Note that PyTorch Geometric and PyTorch have some version-dependent restriction regarding the supported CUDA versions. See also [Build PyTorch from source](https://pytorch.org/get-started/locally/#mac-from-source) which captures the requirements for building custom extensions. 
+
+If you don't have access to a machine with a CUDA compatible GPU you can also use a CPU-only setup. However, note that the `soft-median` defense is only implemented using Custom CUDA kernels, hence not supported in a CPU-only setup.
+Install pytorch for your CPU-only setup via anaconda:
+```
+conda install pytorch==1.8.1 torchvision torchaudio cpuonly -c pytorch
+```
 
 ### Main Package
 
@@ -36,7 +44,7 @@ pip install .
 ```
 By default the requirements are installed with very restrictive versioning since we did not test any other configuration. If you have version conflicts, you can also build without version restrictions via omitting the command `pip install -r requirements.txt` (not tested).
 
-### Prebuilt Kernels
+### Prebuilt Kernels [skipp this for CPU-only setup]
 
 You also need to fulfill the [requirements for compiling a custom C++/CUDA extension for PyTorch](https://pytorch.org/tutorials/advanced/cpp_extension.html#using-your-extension) - usually satisfied by default via the conda command above.
 
