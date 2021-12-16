@@ -81,7 +81,7 @@ For the training and evaluation code we decided to provide Sacred experiments wh
 
 To train or attack the models you can use the `script_execute_experiment` script and simply specif the respective configuration (if the configuration specifies `partition: gpu_large` you need at least 32 GB of GPU memory):
 ```bash
-python script_execute_experiment.py --config-files 'config/train/cora_and_citeseer.yaml'
+python script_execute_experiment.py --config-file 'config/train/cora_and_citeseer.yaml'
 ```
 
 Alternatively, you can also execute the experiment directly passing the desired configuration:
