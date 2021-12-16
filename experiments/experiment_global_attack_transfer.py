@@ -30,7 +30,7 @@ def config():
             ex.observers.append(seml.create_mongodb_observer(db_collection, overwrite=overwrite))
 
     # default params
-    data_dir = './datasets'
+    data_dir = './data'
     dataset = 'cora_ml'
     make_undirected = True
     binary_attr = False

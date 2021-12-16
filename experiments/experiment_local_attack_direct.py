@@ -55,7 +55,7 @@ def config():
     model_storage_type = 'pretrained'
     model_label = 'Vanilla PPRGo'
 
-    data_dir = './datasets'
+    data_dir = './data'
     binary_attr = False
     make_undirected = True
 

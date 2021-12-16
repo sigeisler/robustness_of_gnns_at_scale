@@ -53,7 +53,7 @@ def config():
     surrogate_model_storage_type = "pretrained_linear"
     surrogate_model_label = 'Linear GCN'
 
-    data_dir = "datasets/"
+    data_dir = './data'
     binary_attr = False
     make_undirected = True
 

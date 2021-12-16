@@ -11,8 +11,8 @@ parser = argparse.ArgumentParser(
     description='Execute experiments contained in yaml.',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter
 )
-parser.add_argument('--config-file', nargs='+', type=str,
-                    default=os.path.join('config', 'train', 'cora_and_citeseer_sgc.yaml'),
+parser.add_argument('--config-file', type=str,
+                    default=os.path.join('config', 'train', 'cora_and_citeseer.yaml'),
                     help='Config YAML files. The script deduplicates the configs, but does not check them.')
 parser.add_argument('--kwargs', type=json.loads, default='{}', help='Will overwrite the loaded config')
 parser.add_argument('--output', type=str, default=os.path.join('output'),
