@@ -133,6 +133,10 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
         if debug_level.lower() == "error":
             logger.setLevel(logging.ERROR)
 
+    if not torch.cuda.is_available():
+        assert device == "cpu", "CUDA is not availble, set device to 'cpu'"
+        assert data_device == "cpu", "CUDA is not availble, set device to 'cpu'"
+
     logging.info({
         'dataset': dataset, 'model_params': model_params, 'train_params': train_params, 'binary_attr': binary_attr,
         'make_undirected': make_undirected, 'seed': seed, 'artifact_dir': artifact_dir,

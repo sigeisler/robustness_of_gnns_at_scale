@@ -1,0 +1,58 @@
+seml:
+  name: rgnn_at_scale_attack_evasion_global_transfer
+  executable: experiments/experiment_global_attack_transfer.py
+  project_root_dir: ../../..
+  output_dir: config/attack_evasion_global_transfer/output
+
+slurm:
+  experiments_per_job: 1
+  sbatch_options:
+    gres: gpu:1       # num GPUs
+    mem: 4G          # memory
+    cpus-per-task: 4  # num cores
+    time: 0-01:00     # max time, D-HH:MM
+
+
+fixed:
+  data_dir: data/
+  epsilons: [0.1]
+  artifact_dir: cache_test
+  pert_adj_storage_type: evasion_global_transfer_adj
+  pert_attr_storage_type: evasion_global_transfer_attr
+  model_storage_type: pretrained
+  surrogate_model_storage_type: pretrained
+  device: cpu
+  data_device: cpu
+  make_undirected: True
+
+grid:
+  dataset:
+    type: choice
+    options:
+      - cora_ml
+  seed:
+    type: choice
+    options:
+      - 0
+      - 1
+      - 5
+  model_label:
+    type: choice
+    options:
+      - Vanilla GCN
+      - Soft Medoid GDC (T=0.5)
+      - Vanilla PPRGo
+      - Soft Medoid PPRGo (T=0.5)
+
+prbcd:
+  fixed:
+    attack: PRBCD
+    binary_attr: False
+    surrogate_model_label: Vanilla GCN
+    attack_params:
+      epochs: 11
+      fine_tune_epochs: 1
+      keep_heuristic: WeightOnly
+      search_space_size: 10_000
+      do_synchronize: True
+      loss_type: tanhMargin

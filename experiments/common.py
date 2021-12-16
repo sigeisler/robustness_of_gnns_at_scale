@@ -31,6 +31,10 @@ def prepare_attack_experiment(data_dir: str, dataset: str, attack: str, attack_p
         if debug_level.lower() == "error":
             logger.setLevel(logging.ERROR)
 
+    if not torch.cuda.is_available():
+        assert device == "cpu", "CUDA is not availble, set device to 'cpu'"
+        assert data_device == "cpu", "CUDA is not availble, set device to 'cpu'"
+
     logging.info({
         'dataset': dataset, 'attack': attack, 'attack_params': attack_params, 'epsilons': epsilons,
         'make_undirected': make_undirected, 'binary_attr': binary_attr, 'seed': seed,
