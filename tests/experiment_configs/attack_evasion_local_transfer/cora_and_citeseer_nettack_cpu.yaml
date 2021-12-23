@@ -1,0 +1,72 @@
+seml:
+  name: rgnn_at_scale_attack_evasion_local_transfer
+  executable: experiments/experiment_local_attack_transfer.py
+  project_root_dir: ../..
+  output_dir: config/attack_evasion_local_transfer/output
+
+slurm:
+  experiments_per_job: 4
+  sbatch_options:
+    gres: gpu:1       # num GPUs
+    mem: 16G          # memory
+    cpus-per-task: 4  # num cores
+    time: 1-00:00     # max time, D-HH:MM
+
+fixed:
+  data_dir: data/
+  model_storage_type: pretrained
+  surrogate_model_storage_type: pretrained_linear
+  artifact_dir: cache
+  nodes: None
+  nodes_topk: 40
+  device: cpu
+  data_device: cpu
+  binary_attr: False
+  attack: Nettack
+
+grid:
+  epsilons:
+    type: choice
+    options:
+      - [0.1]
+      - [0.25]
+      - [0.5]
+      - [0.75]
+      - [1.0]
+
+  dataset:
+    type: choice
+    options:
+      - cora_ml
+      - citeseer
+
+  seed:
+    type: choice
+    options:
+      - 0
+      - 1
+      - 5
+
+localprbcd_gcn:
+  fixed:
+    model_label: Vanilla GCN
+    make_undirected: True
+
+localprbcd_gcn_directed:
+  fixed:
+    model_label: Vanilla GCN
+    model_storage_type: pretrained_rownorm
+    make_undirected: False
+
+models:
+  grid:
+    model_label:
+      type: choice
+      options:
+        - Vanilla PPRGo
+
+    make_undirected:
+      type: choice
+      options:
+        - True
+        - False

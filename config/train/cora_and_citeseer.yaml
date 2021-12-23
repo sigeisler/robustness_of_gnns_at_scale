@@ -1,5 +1,5 @@
 seml:
-  name: rgnn_at_scale_train
+  name: gnn_cora_citeseer
   executable: experiments/experiment_train.py
   project_root_dir: ../..
   output_dir: config/train/output
@@ -109,6 +109,60 @@ soft_medoid_gdc_t0_5:
       jaccard_params: None
       do_cache_adj_prep: True
 
+<<<<<<< HEAD
+=======
+soft_median_gdc_t1_0:
+  fixed:
+    model_params:
+      label: Soft Median GDC (T=1.0)
+      model: RGNN
+      dropout: 0.5
+      n_filters: 64
+      mean: soft_median
+      mean_kwargs:
+          temperature: 1.0
+      gdc_params:
+          alpha: 0.15
+          k: 64
+      svd_params: None
+      jaccard_params: None
+      do_cache_adj_prep: True
+
+soft_median_gdc_t0_5:
+  fixed:
+    model_params:
+      label: Soft Median GDC (T=0.5)
+      model: RGNN
+      dropout: 0.5
+      n_filters: 64
+      mean: soft_median
+      mean_kwargs:
+          temperature: 0.5
+      gdc_params:
+          alpha: 0.15
+          k: 64
+      svd_params: None
+      jaccard_params: None
+      do_cache_adj_prep: True
+
+soft_median_gdc_t0_2:
+  fixed:
+    model_params:
+      label: Soft Median GDC (T=0.2)
+      model: RGNN
+      dropout: 0.5
+      n_filters: 64
+      mean: soft_median
+      mean_kwargs:
+          temperature: 0.2
+      gdc_params:
+          alpha: 0.15
+          k: 64
+      svd_params: None
+      jaccard_params: None
+      do_cache_adj_prep: True
+
+>>>>>>> camera-ready
 svd_rank50:
   fixed:
     model_params:

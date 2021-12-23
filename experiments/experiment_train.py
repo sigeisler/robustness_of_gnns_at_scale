@@ -9,7 +9,7 @@ import torch
 
 from rgnn_at_scale.data import prep_graph, split
 from rgnn_at_scale.helper.io import Storage
-from rgnn_at_scale.models import create_model
+from rgnn_at_scale.models import create_model, PPRGoWrapperBase
 from rgnn_at_scale.train import train
 from rgnn_at_scale.helper.utils import accuracy
 from rgnn_at_scale.helper import utils
@@ -37,8 +37,8 @@ def config():
             ex.observers.append(seml.create_mongodb_observer(db_collection, overwrite=overwrite))
 
     # default params
-    data_dir = './datasets'
-    dataset = 'ogbn-products'
+    data_dir = './data'
+    dataset = 'cora_ml'
     make_undirected = True
     binary_attr = False
     data_device = 0
@@ -49,17 +49,21 @@ def config():
     artifact_dir = 'cache_debug'
     model_storage_type = 'pretrained'
     model_params = dict(
-        label="Vanilla SGC",
-        model="SGC",
-        K=4,
-        cached=True
+        label="Vanilla GCN",
+        model="GCN",
+        n_filters=64,
     )
 
     train_params = dict(
         lr=1e-2,
-        weight_decay=0,
+        weight_decay=1e-3,
         patience=300,
         max_epochs=3000
+    )
+
+    ppr_cache_params = dict(
+        data_artifact_dir="cache",
+        data_storage_type="ppr"
     )
 
     display_steps = 100
@@ -68,7 +72,7 @@ def config():
 
 @ex.automain
 def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params: Dict[str, Any], binary_attr: bool,
-        make_undirected: bool, seed: int, artifact_dir: str, model_storage_type: str,
+        make_undirected: bool, seed: int, artifact_dir: str, model_storage_type: str, ppr_cache_params: Dict[str, str],
         device: Union[str, int], data_device: Union[str, int], display_steps: int, debug_level: str):
     """
     Instantiates a sacred experiment executing a training run for a given model configuration.
@@ -86,13 +90,16 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
             - GCN
             - DenseGCN
             - RGCN
+            - RGAT
+            - PPRGo
+            - RobustPPRGo
     train_params : Dict[str, Any], optional
         The training/hyperparamters to be passed as keyword arguments to the model's ".fit()" method or to 
         the global "train" method if "model.fit()" is undefined.
     device : Union[int, torch.device]
         The device to use for training. Must be `cpu` or GPU id
     data_device : Union[int, torch.device]
-        The device to use for storing the dataset.
+        The device to use for storing the dataset. For batched models (like PPRGo) this may differ from the device parameter. 
         In all other cases device takes precedence over data_device
     make_undirected : bool
         Normalizes adjacency matrix with symmetric degree normalization (non-scalable implementation!)
@@ -102,6 +109,13 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
         The path to the folder that acts as TinyDB Storage for trained models
     model_storage_type: str
         The name of the storage (TinyDB) table name the model is stored into.
+    ppr_cache_params: Dict[str, any]
+        Only used for PPRGo based models. Allows caching the ppr matrix on the hard drive and loading it from disk.
+        Tthe following keys in the dictionary need be provided:
+            data_artifact_dir : str
+                The folder name/path in which to look for the storage (TinyDB) objects
+            data_storage_type : str
+                The name of the storage (TinyDB) table name that's supposed to be used for caching ppr matrices
 
     Returns
     -------
@@ -119,10 +133,14 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
         if debug_level.lower() == "error":
             logger.setLevel(logging.ERROR)
 
+    if not torch.cuda.is_available():
+        assert device == "cpu", "CUDA is not availble, set device to 'cpu'"
+        assert data_device == "cpu", "CUDA is not availble, set device to 'cpu'"
+
     logging.info({
         'dataset': dataset, 'model_params': model_params, 'train_params': train_params, 'binary_attr': binary_attr,
         'make_undirected': make_undirected, 'seed': seed, 'artifact_dir': artifact_dir,
-        'model_storage_type': model_storage_type, 'device': device,
+        'model_storage_type': model_storage_type, 'ppr_cache_params': ppr_cache_params, 'device': device,
         'display_steps': display_steps, 'data_device': data_device
     })
 
@@ -146,10 +164,17 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
 
     # Collect all hyperparameters of model
     ppr_cache = None
+    if ppr_cache_params is not None:
+        ppr_cache = dict(ppr_cache_params)
+        ppr_cache.update(dict(
+            dataset=dataset,
+            make_undirected=make_undirected,
+        ))
     hyperparams = dict(model_params)
     hyperparams.update({
         'n_features': n_features,
         'n_classes': n_classes,
+        'ppr_cache_params': ppr_cache,
         'train_params': train_params
     })
 
@@ -177,10 +202,16 @@ def run(data_dir: str, dataset: str, model_params: Dict[str, Any], train_params:
 
     model.eval()
 
+    # For really large graphs we don't want to compute predictions for all nodes, just the test nodes is enough.
+    # Calculating predictions for a sub-set of nodes is only possible for batched gnns like PPRGo
     with torch.no_grad():
         model.eval()
-        prediction = model(attr, adj)
-        test_accuracy = accuracy(prediction.cpu(), labels.cpu(), idx_test)
+        if isinstance(model, PPRGoWrapperBase):
+            prediction = model(attr, adj, ppr_idx=idx_test)
+            test_accuracy = (prediction.cpu().argmax(1) == labels.cpu()[idx_test]).float().mean().item()
+        else:
+            prediction = model(attr, adj)
+            test_accuracy = accuracy(prediction.cpu(), labels.cpu(), idx_test)
 
     logging.info(f'Test accuracy is {test_accuracy} with seed {seed}')
 

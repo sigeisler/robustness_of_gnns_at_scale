@@ -1,7 +1,6 @@
 """For the util methods such as conversions or adjacency preprocessings.
 """
 from typing import Sequence, Tuple, Union
-import resource
 
 import numpy as np
 import torch
@@ -15,6 +14,13 @@ from rgnn_at_scale.helper.ppr_utils import ppr_topk
 
 from torchtyping import TensorType, patch_typeguard
 from typeguard import typechecked
+
+try:
+    import resource
+    _resource_module_available = True
+except ModuleNotFoundError:
+    _resource_module_available = False
+
 
 patch_typeguard()
 
@@ -83,6 +89,117 @@ def row_norm(A: TensorType["a", "b"]):
     return A / A.sum(-1)[:, None]
 
 
+def calc_ppr_exact_row(A, alpha):
+    num_nodes = A.shape[0]
+    A_norm = row_norm(A)
+    return alpha * torch.inverse(torch.eye(num_nodes, device=A.device) + (alpha - 1) * A_norm)
+
+
+def calc_ppr_update(ppr: SparseTensor,
+                    Ai: SparseTensor,
+                    p: SparseTensor,
+                    i: int,
+                    alpha: float):
+    num_nodes = ppr.size(0)
+    assert ppr.size(1) == Ai.size(1), "shapes of ppr and adjacency must be the same"
+    assert Ai[0, i].nnz() == 0, "The adjacency's must not have self loops"
+    assert (torch.logical_or(Ai.storage.value() == 1, Ai.storage.value() == 0)).all().item(), \
+        "The adjacency must be unweighted"
+    assert p[0, i].sum() == 0, "Self loops must not be perturbed"
+    assert torch.all(p.storage._value > 0), "For technical reasons all values in p must be greater than 0"
+
+    v_rows, v_cols, v_vals = p.coo()
+    v_idx = torch.stack([v_rows, v_cols], dim=0)
+
+    Ai_rows, Ai_cols, Ai_vals = Ai.coo()
+    Ai_idx = torch.stack([Ai_rows, Ai_cols], dim=0)
+
+    ppr_rows, ppr_cols, ppr_vals = ppr.coo()
+    ppr_idx = torch.stack([ppr_rows, ppr_cols], dim=0)
+
+    # A_norm = A[i] / A[i].sum()
+    Ai_norm_val = Ai_vals / Ai_vals.sum()
+
+    u = SparseTensor.from_edge_index(edge_index=torch.tensor([[i], [0]]),
+                                     edge_attr=torch.tensor([1], dtype=torch.float32),
+                                     sparse_sizes=(num_nodes, 1))
+
+    # sparse addition: row = A[i] + v
+    row_sum = Ai.sum() + v_vals.sum()
+    row_idx = torch.cat((v_idx, Ai_idx), dim=-1)
+    row_weights = torch.cat((v_vals, Ai_vals))
+    row_idx, row_weights = coalesce(
+        row_idx,
+        row_weights,
+        m=1,
+        n=num_nodes,
+        op='sum'
+    )
+    # Works since the attack will always assign at least a small constant the elements in p
+    # row_weights[row_weights > 1] = -row_weights[row_weights > 1] + 2
+
+    # sparse normalization: row_diff = row / row.sum()
+    row_weights /= row_sum
+    v_vals /= row_sum
+
+    # sparse subtraction: row_diff = row - A_norm
+    row_idx = torch.cat((row_idx, Ai_idx), dim=-1)
+    row_weights = torch.cat((row_weights, -Ai_norm_val))
+    row_idx, row_weights = coalesce(
+        row_idx,
+        row_weights,
+        m=1,
+        n=num_nodes,
+        op='sum'
+    )
+
+    # sparse normalization with const: (alpha - 1) * row_diff
+    row_weights *= (alpha - 1)
+
+    row = SparseTensor.from_edge_index(edge_index=row_idx,
+                                       edge_attr=row_weights,
+                                       sparse_sizes=(1, num_nodes))
+
+    P_inv = SparseTensor.from_edge_index(edge_index=ppr_idx,
+                                         edge_attr=(1 / alpha) * ppr_vals,
+                                         sparse_sizes=(num_nodes, num_nodes))
+    # P_inv @ u
+    P_inv_at_u = P_inv @ u
+
+    # (1 + row_diff_norm @ P_inv @ u)
+    P_uv_inv_norm_const = row @ P_inv_at_u
+    P_uv_inv_norm_const_vals = P_uv_inv_norm_const.storage.value()
+    P_uv_inv_norm_const_vals += 1
+
+    P_uv_inv_diff = P_inv_at_u @ (row @ P_inv)
+    P_uv_inv_diff_rows, P_uv_inv_diff_cols, P_uv_inv_diff_vals = P_uv_inv_diff.coo()
+    P_uv_inv_diff_idx = torch.stack([P_uv_inv_diff_rows, P_uv_inv_diff_cols], dim=0)
+
+    P_uv_inv_diff_vals /= P_uv_inv_norm_const_vals
+
+    # sparse subtraction: P_uv_inv = P_inv - P_uv_inv_diff
+    P_inv_rows, P_inv_cols, P_inv_vals = P_inv.coo()
+    P_inv_idx = torch.stack([P_inv_rows, P_inv_cols], dim=0)
+
+    P_uv_inv_idx = torch.cat((P_inv_idx, P_uv_inv_diff_idx), dim=-1)
+    P_uv_inv_weights = torch.cat((P_inv_vals, P_uv_inv_diff_vals * -1))
+
+    P_uv_inv_idx, P_uv_inv_weights = coalesce(
+        P_uv_inv_idx,
+        P_uv_inv_weights,
+        m=num_nodes,
+        n=num_nodes,
+        op='sum'
+    )
+
+    # ppr_pert_update = alpha * (P_uv_inv)
+    P_uv_inv_weights *= alpha
+
+    return SparseTensor.from_edge_index(edge_index=P_uv_inv_idx,
+                                        edge_attr=P_uv_inv_weights,
+                                        sparse_sizes=(num_nodes, num_nodes))
+
+
 def mul(a: SparseTensor, v: float) -> SparseTensor:
     a = a.copy()
     a.storage._value = a.storage.value() * v
@@ -95,6 +212,243 @@ def mul(a: SparseTensor, v: float) -> SparseTensor:
         )
     return a
 
+
+def calc_ppr_update_sparse_result(ppr: sp.csr_matrix,
+                                  Ai: SparseTensor,
+                                  p: SparseTensor,
+                                  i: int,
+                                  alpha: float):
+    """
+        Returns only the i-th row of the updated ppr
+    """
+    num_nodes = ppr.shape[0]
+    assert ppr.shape[1] == Ai.size(1), "shapes of ppr and adjacency must be the same"
+
+    assert (torch.logical_or(Ai.storage.value() == 1, Ai.storage.value() == 0)).all().item(), \
+        "The adjacency must be unweighted"
+    assert torch.all(p.storage.value() > 0), "For technical reasons all values in p must be greater than 0"
+    assert torch.all(p.storage.value() <= 1), "All values in p must be less than 1"
+
+    v_rows, v_cols, v_vals = p.coo()
+    # Avoid perturbing self-loops
+    v_vals = torch.where(v_cols == i, torch.tensor(0., device=v_vals.device), v_vals)
+    v_idx = torch.stack([v_rows, v_cols], dim=0)
+
+    Ai_rows, Ai_cols, Ai_vals = Ai.coo()
+    Ai_idx = torch.stack([Ai_rows, Ai_cols], dim=0)
+
+    # A_norm = A[i] / A[i].sum()
+    Ai_norm_val = Ai_vals / Ai_vals.sum()
+
+    # sparse addition: row = A[i] + v
+    row_idx = torch.cat((v_idx, Ai_idx), dim=-1)
+    row_weights = torch.cat((v_vals, Ai_vals))
+    row_idx, row_weights = coalesce(
+        row_idx,
+        row_weights,
+        m=1,
+        n=num_nodes,
+        op='sum'
+    )
+    # Works since the attack will always assign at least a small constant the elements in p
+    row_weights[row_weights > 1] = -row_weights[row_weights > 1] + 2
+
+    # sparse normalization: row_diff = row / row.sum()
+    row_sum = row_weights.sum()
+    row_weights /= row_sum
+
+    # sparse subtraction: row_diff = row - A_norm
+    row_idx = torch.cat((row_idx, Ai_idx), dim=-1)
+    row_weights = torch.cat((row_weights, -Ai_norm_val))
+    row_idx, row_weights = coalesce(
+        row_idx,
+        row_weights,
+        m=1,
+        n=num_nodes,
+        op='sum'
+    )
+
+    # sparse normalization with const: (alpha - 1) * row_diff
+    row_weights *= (alpha - 1)
+
+    # row can be dense
+    row = SparseTensor.from_edge_index(edge_index=row_idx,
+                                       edge_attr=row_weights,
+                                       sparse_sizes=(1, num_nodes))
+
+    # (1 + row_diff_norm @ P_inv @ u)
+    with torch.no_grad():
+        P_uv_inv_norm_const = (  # Shape [1, 1]
+            1
+            + (
+                # Shape [1, |p|]
+                mul(SparseTensor.from_scipy(ppr[row.storage.col().cpu(), i]).to(row.device()), 1 / alpha).t()
+                @ row.storage.value()[:, None]  # Shape [|p|, 1]
+            )
+        )
+
+    # (P_inv @ u @ row_diff_norm @ P_inv)
+    ppr_slice = ppr[row.storage.col().cpu()]  # Shape [n, |p|]
+    col_mask = ppr_slice.getnnz(0) > 0
+    col_mask[ppr[i].indices] = True
+    ppr_slice = ppr_slice[:, col_mask]  # Shape [l, |p|] - l depends on p (in expectation)
+
+    P_uv_inv_diff = (  # Shape [l, 1]
+        ppr[i, i] / alpha * (
+            mul(SparseTensor.from_scipy(ppr_slice).to(row.device()).t(), 1 / alpha)  # Shape [l, |p|]
+            @ row.storage.value()[:, None]  # Shape [|p|, 1]
+        ).T
+    )
+
+    P_uv_inv_diff /= P_uv_inv_norm_const
+
+    # sparse subtraction: P_uv_inv = P_inv[:,i] - P_uv_inv_diff
+
+    P_uv_inv = torch.clamp(
+        mul(SparseTensor.from_scipy(ppr[i, col_mask]).to(row.device()), 1 / alpha).to_dense() - P_uv_inv_diff,
+        0
+    )
+
+    ppr_pert_update = alpha * P_uv_inv
+
+    return SparseTensor(
+        row=torch.zeros(col_mask.sum(), device=row.device(), dtype=torch.long),
+        col=torch.arange(num_nodes, device=row.device())[col_mask],
+        value=ppr_pert_update.squeeze(),
+        sparse_sizes=(1, num_nodes)
+    )
+
+
+def calc_ppr_update_topk_sparse(ppr: SparseTensor,
+                                Ai: SparseTensor,
+                                p: torch.Tensor,
+                                i: int,
+                                alpha: float,
+                                topk: int):
+
+    num_nodes = Ai.size(1)
+    ppr_pert_update = calc_ppr_update_sparse_result(ppr=ppr,
+                                                    Ai=Ai,
+                                                    p=p,
+                                                    i=i,
+                                                    alpha=alpha,)
+    values, indices = torch.topk(ppr_pert_update, topk, dim=-1)
+    col_ind = indices.flatten()
+    row_idx = torch.zeros(topk, dtype=torch.long)
+    return torch.sparse.FloatTensor(torch.stack([row_idx, col_ind]), values.flatten(), (1, num_nodes)).to_dense()
+
+
+@typechecked
+def calc_ppr_update_dense(ppr: TensorType["n_nodes", "n_nodes"],
+                          A: TensorType["n_nodes", "n_nodes"],
+                          p: TensorType[1, "n_nodes"],
+                          i: int,
+                          alpha: float):
+    num_nodes = A.shape[0]
+    assert ppr.shape == A.shape, "shapes of ppr and adjacency must be the same"
+    assert (torch.diag(A) == torch.zeros(num_nodes, device=A.device)).all().item(), \
+        "The adjacency's must not have self loops"
+    assert (torch.logical_or(A == 1, A == 0)).all().item(), "The adjacency must be unweighted"
+
+    u = torch.zeros((num_nodes, 1), dtype=torch.float32, device=ppr.device)
+    u[i] = 1
+    v = torch.where(A[i] > 0, -p, p)
+
+    row = A[i] + v
+    row = row / row.sum()
+    A_norm = A[i] / A[i].sum()
+    row_diff = row - A_norm
+    row_diff_norm = (alpha - 1) * row_diff
+
+    # Sherman Morrison Formular for (P + uv)^-1
+    P_inv = (1 / alpha) * ppr
+    P_uv_inv = P_inv - (P_inv @ u @ row_diff_norm @ P_inv) / (1 + row_diff_norm @ P_inv @ u)
+
+    ppr_pert_update = alpha * (P_uv_inv)
+    return ppr_pert_update
+
+
+@typechecked
+def calc_ppr_update_topk_dense(ppr: TensorType["n_nodes", "n_nodes"],
+                               A: TensorType["n_nodes", "n_nodes"],
+                               p: TensorType[1, "n_nodes"],
+                               i: int,
+                               alpha: float,
+                               topk: int):
+    num_nodes = A.shape[0]
+    ppr_pert_update = calc_ppr_update_dense(ppr, A, p, i, alpha)
+    values, indices = torch.topk(ppr_pert_update, topk, dim=-1)
+    col_ind = indices.flatten()
+    row_idx = torch.arange(num_nodes)[:, None].expand(num_nodes, topk).flatten()
+    return torch.sparse.FloatTensor(torch.stack([row_idx, col_ind]), values.flatten()).coalesce().to_dense()
+
+
+@typechecked
+def get_ppr_matrix(adjacency_matrix: TensorType["n_nodes", "n_nodes"],
+                   alpha: float = 0.15,
+                   k: int = 32,
+                   use_cpu: bool = False,
+                   **kwargs) -> TensorType["n_nodes", "n_nodes"]:
+    """Calculates the personalized page rank diffusion of the adjacency matrix as proposed in Johannes Klicpera,
+    Stefan Weißenberger, and Stephan Günnemann. Diffusion Improves Graph Learning.
+
+    Parameters
+    ----------
+    adjacency_matrix : torch.Tensor
+        Sparse adjacency matrix.
+    alpha : float, optional
+        Teleport probability, by default 0.15.
+    k : int, optional
+        Neighborhood for sparsification, by default 32.
+    use_cpu : bool, optional
+        If True the matrix inverion will be performed on the CPU, by default False.
+
+    Returns
+    -------
+    torch.Tensor
+        Preprocessed adjacency matrix.
+    """
+    dim = -1
+
+    if k < 1:
+        k = adjacency_matrix.shape[0]
+
+    assert alpha > 0 and alpha < 1
+    if use_cpu:
+        device = adjacency_matrix.device
+        adjacency_matrix = adjacency_matrix.cpu()
+
+    if adjacency_matrix.is_sparse:
+        adjacency_matrix = adjacency_matrix.to_dense()
+
+    dtype = adjacency_matrix.dtype
+
+    adjacency_matrix = alpha * torch.inverse(
+        torch.eye(*adjacency_matrix.shape, device=adjacency_matrix.device, dtype=dtype)
+        - (1 - alpha) * adjacency_matrix
+    )
+
+    if use_cpu:
+        adjacency_matrix = adjacency_matrix.to(device)
+
+    selected_vals, selected_idx = torch.topk(adjacency_matrix, int(k), dim=dim)
+    norm = selected_vals.sum(dim)
+    norm[norm <= 0] = 1
+    selected_vals /= norm[:, None]
+
+    row_idx = torch.arange(adjacency_matrix.size(0), device=adjacency_matrix.device)[:, None]\
+        .expand(adjacency_matrix.size(0), int(k))
+
+    return torch.sparse.FloatTensor(
+        torch.stack((row_idx.flatten(), selected_idx.flatten())),
+        selected_vals.flatten()
+    ).coalesce()
+
+
+def _construct_sparse(neighbors, weights, shape):
+    i = np.repeat(np.arange(len(neighbors)), np.fromiter(map(len, neighbors), dtype=np.int))
+    j = np.concatenate(neighbors)
+    return sp.coo_matrix((np.concatenate(weights), (i, j)), shape)
 
 
 def get_approx_topk_ppr_matrix(edge_idx: torch.Tensor,
@@ -366,7 +720,9 @@ def truncatedSVD(data, k=50):
 
 
 def get_max_memory_bytes():
-    return 1024 * resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    if _resource_module_available:
+        return 1024 * resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    return np.nan
 
 
 def matrix_to_torch(X):
@@ -374,65 +730,3 @@ def matrix_to_torch(X):
         return SparseTensor.from_scipy(X)
     else:
         return torch.FloatTensor(X)
-
-
-@typechecked
-def get_ppr_matrix(adjacency_matrix: TensorType["n_nodes", "n_nodes"],
-                   alpha: float = 0.15,
-                   k: int = 32,
-                   use_cpu: bool = False,
-                   **kwargs) -> TensorType["n_nodes", "n_nodes"]:
-    """Calculates the personalized page rank diffusion of the adjacency matrix as proposed in Johannes Klicpera,
-    Stefan Weißenberger, and Stephan Günnemann. Diffusion Improves Graph Learning.
-
-    Parameters
-    ----------
-    adjacency_matrix : torch.Tensor
-        Sparse adjacency matrix.
-    alpha : float, optional
-        Teleport probability, by default 0.15.
-    k : int, optional
-        Neighborhood for sparsification, by default 32.
-    use_cpu : bool, optional
-        If True the matrix inverion will be performed on the CPU, by default False.
-
-    Returns
-    -------
-    torch.Tensor
-        Preprocessed adjacency matrix.
-    """
-    dim = -1
-
-    if k < 1:
-        k = adjacency_matrix.shape[0]
-
-    assert alpha > 0 and alpha < 1
-    if use_cpu:
-        device = adjacency_matrix.device
-        adjacency_matrix = adjacency_matrix.cpu()
-
-    if adjacency_matrix.is_sparse:
-        adjacency_matrix = adjacency_matrix.to_dense()
-
-    dtype = adjacency_matrix.dtype
-
-    adjacency_matrix = alpha * torch.inverse(
-        torch.eye(*adjacency_matrix.shape, device=adjacency_matrix.device, dtype=dtype)
-        - (1 - alpha) * adjacency_matrix
-    )
-
-    if use_cpu:
-        adjacency_matrix = adjacency_matrix.to(device)
-
-    selected_vals, selected_idx = torch.topk(adjacency_matrix, int(k), dim=dim)
-    norm = selected_vals.sum(dim)
-    norm[norm <= 0] = 1
-    selected_vals /= norm[:, None]
-
-    row_idx = torch.arange(adjacency_matrix.size(0), device=adjacency_matrix.device)[:, None]\
-        .expand(adjacency_matrix.size(0), int(k))
-
-    return torch.sparse.FloatTensor(
-        torch.stack((row_idx.flatten(), selected_idx.flatten())),
-        selected_vals.flatten()
-    ).coalesce()

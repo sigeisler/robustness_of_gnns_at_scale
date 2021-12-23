@@ -1,0 +1,96 @@
+# Minimal config for an experiment that runs in < 5 minutes on a command machine with a NVIDIA GTX 1080Ti.
+
+seml:
+  name: rgnn_at_scale_attack_evasion_local_direct
+  executable: experiments/experiment_local_attack_direct.py
+  project_root_dir: ../..
+  output_dir: config/attack_evasion_local_direct/output
+
+slurm:
+  experiments_per_job: 4
+  sbatch_options:
+    gres: gpu:1       # num GPUs
+    mem: 16G          # memory
+    cpus-per-task: 4  # num cores
+    time: 1-00:00     # max time, D-HH:MM
+
+fixed:
+  data_dir: data/
+  artifact_dir: cache
+  nodes: None
+  nodes_topk: 4  # 40
+  attack_params.epochs: 500
+  attack_params.fine_tune_epochs: 100
+  attack_params.search_space_size: 10_000
+  attack_params.ppr_recalc_at_end: True
+  attack_params.loss_type: Margin
+  device: 0
+  data_device: 0
+  binary_attr: False
+
+grid:
+  epsilons:
+    type: choice
+    options:
+      # - [0.1]
+      # - [0.25]
+      - [0.5]
+      # - [0.75]
+      # - [1.0]
+  seed:
+    type: choice
+    options:
+      - 0
+      # - 1
+      # - 5
+  dataset:
+    type: choice
+    options:
+      - cora_ml
+      # - citeseer
+
+localprbcd_gcn:
+  fixed:
+    attack: LocalPRBCD
+    model_label: Vanilla GCN
+    model_storage_type: pretrained
+    attack_params:
+      lr_factor: 0.05
+    make_undirected: True
+
+# localprbcd_gcn_directed:
+#   fixed:
+#     attack: LocalPRBCD
+#     model_label: Vanilla GCN
+#     model_storage_type: pretrained_rownorm
+#     attack_params:
+#       lr_factor: 0.05
+#     make_undirected: False
+
+pprgo_localprbcd:
+  fixed:
+    attack: LocalBatchedPRBCD
+    model_label: Vanilla PPRGo
+    model_storage_type: pretrained
+    attack_params:
+      lr_factor: 0.05
+  grid:
+    make_undirected:
+      type: choice
+      options:
+        # - False
+        - True
+
+median_1_0_pprgo_localprbcd:
+  fixed:
+    attack: LocalBatchedPRBCD
+    model_label: Soft Median PPRGo (T=1.0)
+    model_storage_type: pretrained
+    attack_params:
+      lr_factor: 0.25
+  grid:
+    make_undirected:
+      type: choice
+      options:
+        # - False
+        - True

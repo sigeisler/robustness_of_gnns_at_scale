@@ -1,0 +1,55 @@
+seml:
+  name: sga_arxiv
+  executable: experiments/experiment_local_attack_transfer.py
+  project_root_dir: ../..
+  output_dir: config/attack_evasion_local_transfer/output
+
+slurm:
+  experiments_per_job: 2
+  sbatch_options:
+    gres: gpu:1       # num GPUs
+    mem: 16G          # memory
+    cpus-per-task: 4  # num cores
+    time: 1-00:00     # max time, D-HH:MM
+
+fixed:
+  data_dir: data/
+  model_storage_type: pretrained
+  surrogate_model_storage_type: pretrained
+  artifact_dir: cache
+  nodes: None
+  nodes_topk: 40
+  device: 0
+  data_device: 0
+  binary_attr: False
+  make_undirected: True
+  attack: SGA
+  surrogate_model_label: Vanilla SGC
+
+grid:
+  epsilons:
+    type: choice
+    options:
+      # - [0.1]
+      - [0.25]
+      - [0.5]
+      # - [0.75]
+      - [1.0]
+  seed:
+    type: choice
+    options:
+      - 0
+      - 1
+      - 5
+  dataset:
+    type: choice
+    options:
+      - ogbn-arxiv
+
+sga_sgc:
+  fixed:
+    model_label: Vanilla SGC
+
+sga_gcn:
+  fixed:
+    model_label: Vanilla GCN

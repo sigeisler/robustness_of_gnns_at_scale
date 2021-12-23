@@ -1,0 +1,130 @@
+seml:
+  name: papers_rgnn_at_scale_train
+  executable: experiments/experiment_train.py
+  project_root_dir: ../..
+  output_dir: config/train/output
+
+slurm:
+  experiments_per_job: 1
+  sbatch_options:
+    gres: gpu:1       # num GPUs
+    mem: 160G
+    cpus-per-task: 4  # num cores
+    time: 1-00:00     # max time, D-HH:MM
+
+fixed:
+  data_dir: data/
+  dataset: ogbn-papers100M
+  binary_attr: False
+  make_undirected: False
+  device: 0
+  data_device: cpu
+  artifact_dir: cache
+  model_storage_type: pretrained
+  ppr_cache_params:
+    data_artifact_dir: cache
+    data_storage_type: ppr
+  model_params:
+      topk: 128
+      eps: 1e-5
+      ppr_normalization: row
+      alpha: 0.001
+      batch_norm: True
+      dropout: 0.0
+      n_filters: 512
+      n_layers: 7
+  train_params:
+    lr: 1e-3
+    max_epochs: 10
+    patience: 30
+    weight_decay: 0
+    batch_size: 768
+    batch_mult_val: 1
+    forward_batch_size: 128
+
+grid:
+  seed: 
+    type: choice
+    options:
+      - 0
+      - 1
+      - 5
+
+pprgo:
+  fixed:
+    model_params:
+      label: Vanilla PPRGo
+      model: PPRGo
+    train_params:
+      lr: 1e-3
+      forward_batch_size: 256
+    data_device: cpu
+
+soft_median_pprgo_10:
+  fixed:
+    model_params:
+      label: Soft Median PPRGo (T=20.0)
+      model: RobustPPRGo
+      mean: soft_median
+      mean_kwargs: 
+        temperature: 20.0
+    train_params:
+      lr: 1e-3
+
+soft_median_pprgo_20:
+  fixed:
+    model_params:
+      label: Soft Median PPRGo (T=20.0)
+      model: RobustPPRGo
+      mean: soft_median
+      mean_kwargs: 
+        temperature: 20.0
+    train_params:
+      lr: 1e-3
+
+soft_median_pprgo_50:
+  fixed:
+    model_params:
+      label: Soft Median PPRGo (T=50.0)
+      model: RobustPPRGo
+      mean: soft_median
+      mean_kwargs: 
+        temperature: 50.0
+    train_params:
+      lr: 1e-3
+
+soft_median_pprgo_100:
+  fixed:
+    model_params:
+      label: Soft Median PPRGo (T=100.0)
+      model: RobustPPRGo
+      mean: soft_median
+      mean_kwargs: 
+        temperature: 100.0
+    train_params:
+      lr: 1e-3
+
+soft_median_pprgo_200:
+  fixed:
+    model_params:
+      label: Soft Median PPRGo (T=200.0)
+      model: RobustPPRGo
+      mean: soft_median
+      mean_kwargs: 
+        temperature: 200.0
+    train_params:
+      lr: 1e-3
+
+
+soft_median_pprgo_500:
+  fixed:
+    model_params:
+      label: Soft Median PPRGo (T=500.0)
+      model: RobustPPRGo
+      mean: soft_median
+      mean_kwargs: 
+        temperature: 500.0
+    train_params:
+      lr: 1e-3
+
+    

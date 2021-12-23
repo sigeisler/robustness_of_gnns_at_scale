@@ -1,5 +1,5 @@
 seml:
-  name: arxiv_rgnn_at_scale_train
+  name: rgnn_arxiv
   executable: experiments/experiment_train.py
   project_root_dir: ../..
   output_dir: config/train/output
@@ -24,7 +24,7 @@ fixed:
   data_device: cpu
   make_undirected: True
   binary_attr: False
-
+  data_dir: data/
   dataset: ogbn-arxiv
 
 grid:      
@@ -105,3 +105,165 @@ soft_medoid_gdc_t5:
       svd_params: None
       jaccard_params: None
       with_batch_norm: True
+
+soft_median_gdc_t0_2:
+  fixed:
+    model_params:
+      label: Soft Median GDC (T=0.2)
+      model: RGNN
+      dropout: 0.5
+      n_filters: [256, 256]
+      mean: soft_median
+      mean_kwargs:
+          temperature: 0.2
+      gdc_params:
+          alpha: 0.1
+          k: 64
+          use_cpu: True
+      do_checkpoint: True
+      do_normalize_adj_once: True
+      n_chunks: 10
+      svd_params: None
+      jaccard_params: None
+      with_batch_norm: True
+
+soft_median_gdc_t0_5:
+  fixed:
+    model_params:
+      label: Soft Median GDC (T=0.5)
+      model: RGNN
+      dropout: 0.5
+      n_filters: [256, 256]
+      mean: soft_median
+      mean_kwargs:
+          temperature: 0.5
+      gdc_params:
+          alpha: 0.1
+          k: 64
+          use_cpu: True
+      do_checkpoint: True
+      do_normalize_adj_once: True
+      n_chunks: 10
+      svd_params: None
+      jaccard_params: None
+      with_batch_norm: True
+
+soft_median_gdc_t1_0:
+  fixed:
+    model_params:
+      label: Soft Median GDC (T=1.0)
+      model: RGNN
+      dropout: 0.5
+      n_filters: [256, 256]
+      mean: soft_median
+      mean_kwargs:
+          temperature: 1.0
+      gdc_params:
+          alpha: 0.1
+          k: 64
+          use_cpu: True
+      do_checkpoint: True
+      do_normalize_adj_once: True
+      n_chunks: 10
+      svd_params: None
+      jaccard_params: None
+      with_batch_norm: True
+
+soft_median_gdc_t5_0:
+  fixed:
+    model_params:
+      label: Soft Median GDC (T=5.0)
+      model: RGNN
+      dropout: 0.5
+      n_filters: [256, 256]
+      mean: soft_median
+      mean_kwargs:
+          temperature: 5
+      gdc_params:
+          alpha: 0.1
+          k: 64
+          use_cpu: True
+      do_checkpoint: True
+      do_normalize_adj_once: True
+      n_chunks: 10
+      svd_params: None
+      jaccard_params: None
+      with_batch_norm: True
+
+pprgo:
+  fixed:
+    data_device: 'cpu'
+    model_params:
+      label: Vanilla PPRGo
+      model: PPRGo
+      ppr_normalization: 'row' 
+      batch_norm: False
+      n_filters: 320
+      n_layers: 2
+      alpha: 0.1
+      topk: 256
+      eps: 1e-6
+      dropout: 0.0
+    train_params:
+      lr: 1e-2
+      weight_decay:  0
+      batch_mult_val: 1
+      batch_size: 8192
+      forward_batch_size: 8192
+    ppr_cache_params:
+      data_artifact_dir: cache
+      data_storage_type: ppr
+
+soft_median_rpprgo_t1_0:
+  fixed:
+    data_device: 'cpu'
+    model_params:
+      label: Soft Median PPRGo (T=1.0)
+      model: RobustPPRGo
+      ppr_normalization: 'row' 
+      batch_norm: False
+      n_filters: 320
+      n_layers: 2
+      alpha: 0.1
+      topk: 256
+      eps: 1e-6
+      dropout: 0.0
+      mean: soft_median
+      mean_kwargs: 
+        temperature: 1.0
+    train_params:
+      lr: 1e-3
+      weight_decay:  1e-5
+      batch_mult_val: 1
+      batch_size: 4096
+      forward_batch_size: 4096
+    ppr_cache_params:
+      data_artifact_dir: cache
+      data_storage_type: ppr
+
+soft_median_rpprgo_t5_0:
+  fixed:
+    data_device: 'cpu'
+    model_params:
+      label: Soft Median PPRGo (T=1.0)
+      model: RobustPPRGo
+      ppr_normalization: 'row' 
+      batch_norm: False
+      n_filters: 320
+      n_layers: 3
+      alpha: 0.1
+      topk: 256
+      eps: 1e-6
+      dropout: 0.1
+      mean: soft_median
+      mean_kwargs: 
+        temperature: 1.0
+    train_params:
+      lr: 1e-3
+      weight_decay:  1e-5
+      batch_mult_val: 1
+      batch_size: 4096
+      forward_batch_size: 4096
+    ppr_cache_params:
+      data_artifact_dir: cache
+      data_storage_type: ppr

@@ -192,7 +192,7 @@ class RGCN(Module):
         miu, sigma = self.gc2(miu, sigma, self.adj_norm1,
                               self.adj_norm2, self.gamma)
         output = miu + self.gaussian.sample().to(self.device) * torch.sqrt(sigma + 1e-8)
-        return output
+        return F.log_softmax(output, dim=1)
 
     def fit(self, features, adj, labels, idx_train, idx_val=None, train_iters=200, verbose=True):
 

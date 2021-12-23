@@ -1,0 +1,55 @@
+seml:
+  name: lin_cora_citeseer
+  executable: experiments/experiment_train.py
+  project_root_dir: ../..
+  output_dir: config/train/output
+
+slurm:
+  experiments_per_job: 1
+  sbatch_options:
+    gres: gpu:1       # num GPUs
+    mem: 16G          # memory
+    cpus-per-task: 4  # num cores
+    time: 0-01:00     # max time, D-HH:MM
+
+fixed:
+  train_params:
+    lr: 1e-2
+    weight_decay: 1e-3
+    patience: 300
+    max_epochs: 3000
+  artifact_dir: cache
+  model_storage_type: pretrained_linear
+  device: 0
+  data_device: 0 
+  make_undirected: True
+  binary_attr: False
+
+grid:
+  dataset:
+    type: choice
+    options:
+      - cora_ml
+      - citeseer
+
+  seed:
+    type: choice
+    options:
+      - 0
+      - 1
+      - 5
+      # - 42
+      # - 100
+
+linear_gcn:
+  fixed:
+    model_params:
+      label: Linear GCN
+      activation: Identiy
+      model: GCN
+      do_cache_adj_prep: True
+      n_filters: 64
+      dropout: 0.5
+      svd_params: None
+      jaccard_params: None
+      gdc_params: None

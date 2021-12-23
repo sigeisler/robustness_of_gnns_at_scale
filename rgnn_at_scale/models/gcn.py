@@ -205,13 +205,22 @@ class GCN(nn.Module):
                 data: Optional[Union[Data, TensorType["n_nodes", "n_features"]]] = None,
                 adj: Optional[Union[SparseTensor,
                                     torch.sparse.FloatTensor,
-                                    Tuple[TensorType[2, "nnz"], TensorType["nnz"]]]] = None,
+                                    Tuple[TensorType[2, "nnz"], TensorType["nnz"]],
+                                    TensorType["n_nodes", "n_nodes"]]] = None,
                 attr_idx: Optional[TensorType["n_nodes", "n_features"]] = None,
                 edge_idx: Optional[TensorType[2, "nnz"]] = None,
                 edge_weight: Optional[TensorType["nnz"]] = None,
                 n: Optional[int] = None,
                 d: Optional[int] = None) -> TensorType["n_nodes", "n_classes"]:
         x, edge_idx, edge_weight = GCN.parse_forward_input(data, adj, attr_idx, edge_idx, n, d)
+
+        device = next(self.parameters()).device
+        if x.device != device:
+            x = x.to(device)
+        if edge_idx.device != device:
+            edge_idx = edge_idx.to(device)
+        if edge_weight is not None and edge_weight.device != device:
+            edge_weight = edge_weight.to(device)
 
         # Perform preprocessing such as SVD, GDC or Jaccard
         edge_idx, edge_weight = self._cache_if_option_is_set(self._preprocess_adjacency_matrix,
@@ -229,7 +238,8 @@ class GCN(nn.Module):
     def parse_forward_input(data: Optional[Union[Data, TensorType["n_nodes", "n_features"]]] = None,
                             adj: Optional[Union[SparseTensor,
                                                 torch.sparse.FloatTensor,
-                                                Tuple[TensorType[2, "nnz"], TensorType["nnz"]]]] = None,
+                                                Tuple[TensorType[2, "nnz"], TensorType["nnz"]],
+                                                TensorType["n_nodes", "n_nodes"]]] = None,
                             attr_idx: Optional[TensorType["n_nodes", "n_features"]] = None,
                             edge_idx: Optional[TensorType[2, "nnz"]] = None,
                             edge_weight: Optional[TensorType["nnz"]] = None,
@@ -256,6 +266,9 @@ class GCN(nn.Module):
             edge_idx_rows, edge_idx_cols, edge_weight = adj.coo()
             edge_idx = torch.stack([edge_idx_rows, edge_idx_cols], dim=0)
         else:
+            if not adj.is_sparse:
+                adj = adj.to_sparse()
+
             x, edge_idx, edge_weight = data, adj._indices(), adj._values()
 
         if edge_weight is None:

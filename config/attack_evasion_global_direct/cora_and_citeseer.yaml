@@ -13,7 +13,7 @@ slurm:
     time: 0-08:00     # max time, D-HH:MM
 
 fixed:
-  data_dir: datasets/
+  data_dir: data/
   artifact_dir: cache
   pert_adj_storage_type: evasion_global_adj
   pert_attr_storage_type: evasion_global_attr
@@ -45,13 +45,16 @@ grid:
     options:
      - Vanilla GCN
      - Vanilla GDC
+     - Soft Median GDC (T=1.0)
+     - Soft Median GDC (T=0.5)
+     - Soft Median GDC (T=0.2)
 
 greedy_rbcd:
   fixed:
     attack: GreedyRBCD
     attack_params:
       search_space_size: 100_000
-      loss_type: CE
+      loss_type: MCE
 
 prbcd:
   fixed:
@@ -63,4 +66,4 @@ prbcd:
       keep_heuristic: WeightOnly
       search_space_size: 100_000
       do_synchronize: True
-      loss_type: CE
+      loss_type: tanhMargin

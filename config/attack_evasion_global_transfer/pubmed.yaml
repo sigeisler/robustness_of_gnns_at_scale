@@ -13,7 +13,7 @@ slurm:
     time: 0-08:00     # max time, D-HH:MM
 
 fixed:
-  data_dir: datasets/
+  data_dir: data/
   epsilons: [0, 0.01, 0.05, 0.1]
   artifact_dir: cache
   pert_adj_storage_type: evasion_global_transfer_adj
@@ -40,6 +40,12 @@ grid:
       - Soft Medoid GDC (T=1.0)
       - Soft Medoid GDC (T=0.5)
       - Soft Medoid GDC (T=0.2)
+      - Soft Median GDC (T=1.0)
+      - Soft Median GDC (T=0.5)
+      - Soft Median GDC (T=0.2)
+      - Vanilla PPRGo
+      - Soft Median PPRGo (T=1.0)
+      - Soft Median PPRGo (T=5.0)
 
 pgd:
   fixed:
@@ -69,7 +75,7 @@ greedy_rbcd:
     surrogate_model_label: Vanilla GCN
     attack_params:
       search_space_size: 2_500_000
-      loss_type: CE
+      loss_type: MCE
 
 prbcd:
   fixed:
@@ -89,6 +95,14 @@ prbcd:
           options:
             - CE
             - CW
+            - NCE
+            - MCE
+            - tanhMargin
+            - Margin
+            - eluMargin
+            - tanhMarginMCE-0.25
+            - tanhMarginMCE-0.5
+            - tanhMarginMCE-0.75
 
 dice:
   fixed:

@@ -30,7 +30,7 @@ def config():
             ex.observers.append(seml.create_mongodb_observer(db_collection, overwrite=overwrite))
 
     # default params
-    data_dir = './datasets'
+    data_dir = './data'
     dataset = 'cora_ml'
     make_undirected = True
     binary_attr = False
@@ -46,12 +46,12 @@ def config():
         keep_heuristic="WeightOnly",
         search_space_size=100_000,
         do_synchronize=True,
-        loss_type="CE",
+        loss_type="tanhMargin",
     )
     epsilons = [0.01, 0.1]
 
-    artifact_dir = 'cache_debug'
-    model_label = "Vanilla GCN"
+    artifact_dir = 'cache'
+    model_label = "Soft Median GDC (T=0.5)"
     model_storage_type = 'pretrained'
     pert_adj_storage_type = 'evasion_global_adj'
     pert_attr_storage_type = 'evasion_global_attr'
@@ -79,7 +79,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
     device : Union[int, torch.device]
         The device to use for training. Must be `cpu` or GPU id
     data_device : Union[int, torch.device]
-        The device to use for storing the dataset.
+        The device to use for storing the dataset. For batched models (like PPRGo) this may differ from the device parameter. 
         In all other cases device takes precedence over data_device
     make_undirected : bool
         Normalizes adjacency matrix with symmetric degree normalization (non-scalable implementation!)

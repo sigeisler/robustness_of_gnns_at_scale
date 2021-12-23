@@ -30,7 +30,7 @@ def config():
             ex.observers.append(seml.create_mongodb_observer(db_collection, overwrite=overwrite))
 
     # default params
-    data_dir = './datasets'
+    data_dir = './data'
     dataset = 'cora_ml'
     make_undirected = True
     binary_attr = False
@@ -39,20 +39,13 @@ def config():
     device = 0
     seed = 0
 
-    attack = 'PRBCD'
-    attack_params = dict(
-        epochs=500,
-        fine_tune_epochs=100,
-        keep_heuristic="WeightOnly",
-        search_space_size=1_000_000,
-        do_synchronize=True,
-        loss_type="CE",
-    )
+    attack = 'GreedyRBCD'
+    attack_params = {}
     epsilons = [0.01, 0.1]
 
     artifact_dir = 'cache_debug'
     model_storage_type = 'pretrained'
-    model_label = "Vanilla GCN"
+    model_label = None  # "Soft Median PPRGo (T=0.5)"
     surrogate_model_storage_type = 'pretrained'
     surrogate_model_label = "Vanilla GCN"
     pert_adj_storage_type = 'evasion_global_transfer_adj'
@@ -81,7 +74,7 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
     device : Union[int, torch.device]
         The device to use for training. Must be `cpu` or GPU id
     data_device : Union[int, torch.device]
-        The device to use for storing the dataset.
+        The device to use for storing the dataset. For batched models (like PPRGo) this may differ from the device parameter. 
         In all other cases device takes precedence over data_device
     make_undirected : bool
         Normalizes adjacency matrix with symmetric degree normalization (non-scalable implementation!)
@@ -156,8 +149,8 @@ def run(data_dir: str, dataset: str, attack: str, attack_params: Dict[str, Any],
                           pert_params, adversary, surrogate_model_label)
 
         # Clear to save GPU memory
-        adj_adversary = adversary.adj_adversary
-        attr_adversary = adversary.attr_adversary
+        adj_adversary, attr_adversary = adversary.get_pertubations()
+
         del adversary
 
         for model, hyperparams in models_and_hyperparams:

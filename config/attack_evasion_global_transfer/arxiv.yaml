@@ -11,9 +11,10 @@ slurm:
     mem: 16G          # memory
     cpus-per-task: 4  # num cores
     time: 0-08:00     # max time, D-HH:MM
+    # partition: gpu_large
 
 fixed:
-  data_dir: datasets/
+  data_dir: data/
   epsilons: [0, 0.01, 0.05, 0.10]
   artifact_dir: cache
   pert_adj_storage_type: evasion_global_transfer_adj
@@ -33,23 +34,14 @@ grid:
       - 1
       - 5
 
-# greedy_rbcd:
-#   fixed:
-#     attack: GreedyRBCD
-#     binary_attr: False
-#     surrogate_model_label: Vanilla GCN
-#     attack_params:
-#       search_space_size: 10_000_000
-#   grid: 
-#     attack_params:
-#       type: parameter_collection
-#       params:
-#         loss_type: 
-#           type: choice
-#           options:
-#             - CE
-#             - CW
-
+greedy_rbcd:
+  fixed:
+    attack: GreedyRBCD
+    binary_attr: False
+    surrogate_model_label: Vanilla GCN
+    attack_params:
+      search_space_size: 10_000_000
+      attack_params: MCE
 
 prbcd:
   fixed:
@@ -69,6 +61,12 @@ prbcd:
           options:
             - CE
             - CW
+            - NCE
+            - MCE
+            - tanhMargin
+            - Margin
+            - eluMargin
+            - tanhMarginMCE-0.95
 
 
 dice:
