@@ -27,9 +27,9 @@ jobs:
       run: |
         # $CONDA is an environment variable pointing to the root of the miniconda directory
         echo $CONDA/bin >> $GITHUB_PATH
-    - name: Install Pytorch for CPU
+    - name: Install Pytorch 1.8.1 for CPU
       run: |
-        conda install pytorch==1.8.1 torchvision torchaudio cpuonly -c pytorch
+        conda install pytorch==1.8.1 torchvision==0.9.1 torchaudio==0.8.1 cpuonly -c pytorch
     - name: Install dependencies and actual module
       run: |
         # Install requirements
