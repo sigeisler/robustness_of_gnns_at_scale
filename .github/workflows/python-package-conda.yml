@@ -22,13 +22,17 @@ jobs:
     - name: Set up Python 3.7.6
       uses: actions/setup-python@v3
       with:
-        python-version: 3.7.6
+        python-version: "3.7.6"
     - name: Add conda to system path
       run: |
         # $CONDA is an environment variable pointing to the root of the miniconda directory
         echo $CONDA/bin >> $GITHUB_PATH
     - name: Install Pytorch 1.8.1 for CPU
       run: |
+        which python
+        conda list
+        conda install python=3.7.6
+        conda list
         conda install pytorch==1.8.1 torchvision==0.9.1 torchaudio==0.8.1 cpuonly -c pytorch
     - name: Install dependencies and actual module
       run: |
