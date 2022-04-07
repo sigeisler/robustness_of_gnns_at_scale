@@ -205,8 +205,8 @@ class SGC(nn.Module):
         modules = nn.ModuleList([
             nn.Sequential(collections.OrderedDict(
                 [
-                    (f'sgc', self._build_conv_layer(in_channels=self.n_features,
-                                                    out_channels=self.n_classes, K=self.K))]
+                    (f'{"sgc"}', self._build_conv_layer(in_channels=self.n_features,
+                                                        out_channels=self.n_classes, K=self.K))]
             ))
         ])
 

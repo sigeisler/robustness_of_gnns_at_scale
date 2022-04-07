@@ -10,7 +10,7 @@ import torch
 import torch_sparse
 from torch_sparse import SparseTensor
 
-from rgnn_at_scale.models import MODEL_TYPE
+# from rgnn_at_scale.models import MODEL_TYPE
 from rgnn_at_scale.helper import utils
 from rgnn_at_scale.attacks.base_attack import Attack, SparseAttack
 

@@ -152,7 +152,7 @@ class SGA(SparseLocalAttack):
             logits = logits.to(self.device)
 
         # 1. predict the next most probable class of target t (node_idx)
-        #logits = self.get_surrogate_logits(node_idx)
+        # logits = self.get_surrogate_logits(node_idx)
         sorted_logits = logits.argsort(-1)
         self.best_non_target_class = sorted_logits[sorted_logits !=
                                                    self.labels[node_idx, None]].reshape(logits.size(0), -1)[:, -1]
@@ -348,7 +348,7 @@ class SGA(SparseLocalAttack):
             if edge_weight is not None:
                 edge_weight = edge_weight[mask].to(self.device)
             adj = SparseTensor.from_edge_index(adj.to(self.device), edge_weight)
-            
+
             return model(data=self.attr.to(self.device), adj=adj)[node_idx:node_idx + 1]
 
     def normalize_subgraph(self, sub_edge_idx: TensorType[2, "nnz"],
