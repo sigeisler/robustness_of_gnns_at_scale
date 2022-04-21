@@ -206,7 +206,7 @@ class SGC(nn.Module):
             nn.Sequential(collections.OrderedDict(
                 [
                     ('sgc', self._build_conv_layer(in_channels=self.n_features,
-                                                        out_channels=self.n_classes, K=self.K))]
+                                                   out_channels=self.n_classes, K=self.K))]
             ))
         ])
 
