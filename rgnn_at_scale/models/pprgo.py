@@ -507,7 +507,7 @@ class PPRGoWrapperBase(ABC):
                 storage.save_sparse_matrix(self.ppr_cache_params["data_storage_type"], params,
                                            topk_train, ignore_duplicate=True)
 
-        logging.info(f"Memory Usage after calculating/loading topk ppr for train:")
+        logging.info("Memory Usage after calculating/loading topk ppr for train:")
         logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
 
         # try to read topk train from disk:
@@ -528,7 +528,7 @@ class PPRGoWrapperBase(ABC):
                 storage.save_sparse_matrix(self.ppr_cache_params["data_storage_type"], params,
                                            topk_val, ignore_duplicate=True)
 
-        logging.info(f"Memory Usage after calculating/loading topk ppr for validation:")
+        logging.info("Memory Usage after calculating/loading topk ppr for validation:")
         logging.info(utils.get_max_memory_bytes() / (1024 ** 3))
 
         train_set = RobustPPRDataset(attr_matrix_all=attr,
@@ -635,7 +635,7 @@ class PPRGoWrapperBase(ABC):
                 # logging.info(f"Save best_state for new best_epoch_loss {best_epoch_loss}\n")
             else:
                 if it >= best_epoch + patience:
-                    logging.info(f"Early stopping due to increase in validation loss")
+                    logging.info("Early stopping due to increase in validation loss")
                     break
                 # logging.info(f"No decrease in validation loss in epoch {it} since best epoch {best_epoch} ...")
 

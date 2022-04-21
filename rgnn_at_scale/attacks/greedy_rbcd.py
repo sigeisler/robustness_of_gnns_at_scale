@@ -41,7 +41,7 @@ class GreedyRBCD(PRBCD):
         is_one_mask = torch.isclose(edge_weight, torch.tensor(1.))
         self.edge_index = edge_index[:, is_one_mask]
         self.edge_weight = edge_weight[is_one_mask]
-        #self.edge_weight = torch.ones_like(self.edge_weight)
+        # self.edge_weight = torch.ones_like(self.edge_weight)
         assert self.edge_index.size(1) == self.edge_weight.size(0)
 
     def _attack(self, n_perturbations: int):
@@ -81,7 +81,7 @@ class GreedyRBCD(PRBCD):
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
 
-            # Calculate logits for each node (Algorithm 2, line 7) 
+            # Calculate logits for each node (Algorithm 2, line 7)
             logits = self._get_logits(self.attr, edge_index, edge_weight)
             # Calculate loss combining all each node (Algorithm 2, line 8)
             loss = self.calculate_loss(logits[self.idx_attack], self.labels[self.idx_attack])

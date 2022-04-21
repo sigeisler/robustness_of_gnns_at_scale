@@ -293,7 +293,7 @@ class Storage():
                 self.lock_timeout
             )
             if len(ids) > 0:
-                logging.info(f"Ignoring duplicate save in save_sparse_matrix call")
+                logging.info("Ignoring duplicate save in save_sparse_matrix call")
                 return self._build_artifact_path(artifact_type, ids[0].doc_id).replace(".pt", ".npz")
 
         ids = Storage.locked_call(
@@ -307,11 +307,11 @@ class Storage():
         try:
             path = self._build_artifact_path(artifact_type, ids[0]).replace(".pt", ".npz")
             sp.save_npz(path, sparse_matrix)
-            logging.info(f"Saved sparse matrix to storage")
+            logging.info("Saved sparse matrix to storage")
             if ppr_idx is not None:
                 ppr_path = path.replace(".npz", "idx.npy")
                 np.save(ppr_path, ppr_idx)
-                logging.info(f"Saved ppr index to storage")
+                logging.info("Saved ppr index to storage")
             return path
         except:  # noqa: E722
             Storage.locked_call(

@@ -19,7 +19,8 @@ from rgnn_at_scale.data import CachedPPRMatrix
 class LocalBatchedPRBCD(LocalPRBCD):
 
     @typechecked
-    def __init__(self, model: BATCHED_PPR_MODELS, ppr_recalc_at_end: bool = True, ppr_cache_params: Dict[str, Any] = None, **kwargs):
+    def __init__(self, model: BATCHED_PPR_MODELS, ppr_recalc_at_end: bool = True,
+                 ppr_cache_params: Dict[str, Any] = None, **kwargs):
         super().__init__(model=model, **kwargs)
 
         self.ppr_cache_params = ppr_cache_params
