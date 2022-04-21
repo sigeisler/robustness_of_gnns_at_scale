@@ -69,9 +69,9 @@ pip install -r requirements-dev.txt
 
 ## Minimum Working Example
 
-As a minimum working example we provide the jupyter notebook (`conda install jupyter`): `notebooks/Figure - Which nodes get attacked?.ipynb`
+As a minimum working example we provide a [Quick Start](notebooks/Quick_start_robustness_gnns_at_scale.ipynb) jupyter notebook, which can be run in colab. Here, we train a `Vanilla GCN` on the `Cora` dataset and attack it with local and global `PR-BCD`.
 
-This is the code used to analyze the learning curves and the distribution of attacked nodes (e.g. Fig. 2).
+Further, the [Figure - Which nodes get attacked.ipynb](notebooks/Figure%20-%20Which%20nodes%20get%20attacked.ipynb) notebook shows the code used to analyze the learning curves and the distribution of attacked nodes (e.g. Fig. 2).
 
 ## Training
 
