@@ -59,14 +59,7 @@ prbcd:
         loss_type: 
           type: choice
           options:
-            - CE
-            - CW
-            - NCE
-            - MCE
             - tanhMargin
-            - Margin
-            - eluMargin
-            - tanhMarginMCE-0.95
 
 
 dice:

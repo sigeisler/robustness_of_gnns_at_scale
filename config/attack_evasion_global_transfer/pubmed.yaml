@@ -47,27 +47,6 @@ grid:
       - Soft Median PPRGo (T=1.0)
       - Soft Median PPRGo (T=5.0)
 
-pgd:
-  fixed:
-    attack: PGD
-    binary_attr: False
-    surrogate_model_label: Vanilla Dense GCN
-
-fgsm:
-  fixed:
-    attack: FGSM
-    binary_attr: False
-    surrogate_model_label: Vanilla Dense GCN
-  grid: 
-    attack_params:
-      type: parameter_collection
-      params:
-        stop_optimizing_if_label_flipped: 
-          type: choice
-          options:
-            - True
-            - False
-
 greedy_rbcd:
   fixed:
     attack: GreedyRBCD
@@ -93,16 +72,7 @@ prbcd:
         loss_type: 
           type: choice
           options:
-            - CE
-            - CW
-            - NCE
-            - MCE
             - tanhMargin
-            - Margin
-            - eluMargin
-            - tanhMarginMCE-0.25
-            - tanhMarginMCE-0.5
-            - tanhMarginMCE-0.75
 
 dice:
   fixed:

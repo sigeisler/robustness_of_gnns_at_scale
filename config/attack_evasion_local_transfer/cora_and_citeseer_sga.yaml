@@ -47,43 +47,38 @@ grid:
       - cora_ml
       - citeseer
 
-# sga_sgc:
-#   fixed:
-#     model_label: Vanilla SGC
-
-# sga_gcn:
-#   fixed:
-#     model_label: Vanilla GCN
-
-# sga_gdc:
-#   fixed:
-#     model_label: Vanilla GDC
-
-sga_gat:
+sga_sgc:
   fixed:
-    model_label: Vanilla GAT
+    model_label: Vanilla SGC
 
+sga_gcn:
+  fixed:
+    model_label: Vanilla GCN
 
-# sga_gdc_mediod:
-#   fixed:
-#     model_label: Soft Medoid GDC (T=0.5)
+sga_gdc:
+  fixed:
+    model_label: Vanilla GDC
 
-# sga_gdc_median:
-#   fixed:
-#     model_label: Soft Median GDC (T=0.5)
+sga_gdc_mediod:
+  fixed:
+    model_label: Soft Medoid GDC (T=0.5)
+
+sga_gdc_median:
+  fixed:
+    model_label: Soft Median GDC (T=0.5)
 
     
-# sga_pprgo:
-#   fixed:
-#     dataset: cora_ml
-#     model_label:  Vanilla PPRGo
+sga_pprgo:
+  fixed:
+    dataset: cora_ml
+    model_label:  Vanilla PPRGo
 
-# sga_pprgo_mediod:
-#   fixed:
-#     dataset: cora_ml
-#     model_label: Soft Medoid PPRGo (T=0.5)
+sga_pprgo_mediod:
+  fixed:
+    dataset: cora_ml
+    model_label: Soft Medoid PPRGo (T=0.5)
 
-# sga_pprgo_median:
-#   fixed:
-#     dataset: cora_ml
-#     model_label: Soft Median PPRGo (T=0.5)
+sga_pprgo_median:
+  fixed:
+    dataset: cora_ml
+    model_label: Soft Median PPRGo (T=0.5)

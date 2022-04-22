@@ -11,7 +11,6 @@ slurm:
     mem: 64G
     cpus-per-task: 4  # num cores
     time: 0-05:00     # max time, D-HH:MM
-    #qos: interactive
 
 fixed:
   data_dir: data/

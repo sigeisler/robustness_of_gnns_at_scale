@@ -74,7 +74,7 @@ def prepare_attack_experiment(data_dir: str, dataset: str, attack: str, attack_p
                        make_undirected=make_undirected,
                        seed=seed,
                        attack=attack,
-                       model=model_label,
+                       model=model_label if model_label == surrogate_model_label else None,  # For legacy reasons
                        surrogate_model=surrogate_model_label,
                        attack_params=attack_params)
 

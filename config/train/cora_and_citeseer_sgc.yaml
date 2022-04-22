@@ -11,14 +11,8 @@ slurm:
     mem: 16G          # memory
     cpus-per-task: 4  # num cores
     time: 0-00:10     # max time, D-HH:MM
-    # partition: cpu
-    qos: studentprio
-    #qos: interactive
-    # qos: studentpriocpu
-
 
 fixed:
-  #data_dir: data/
   train_params:
     patience: 300
     max_epochs: 3000

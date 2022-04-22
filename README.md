@@ -1,5 +1,3 @@
-_Not yet final and, therfore, more will follow. Stay tuned._
-
 # Robustness of Graph Neural Networks at Scale
 
 ## Structure

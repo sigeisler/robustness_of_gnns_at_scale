@@ -15,7 +15,7 @@ slurm:
 
 fixed:
   data_dir: data/
-  epsilons: [0,0.1] #[0, 0.01, 0.05, 0.1, 0.25, 0.5, 1]
+  epsilons: [0, 0.01, 0.05, 0.1, 0.25, 0.5, 1]
   artifact_dir: cache
   pert_adj_storage_type: evasion_global_transfer_adj
   pert_attr_storage_type: evasion_global_transfer_attr
@@ -41,17 +41,15 @@ grid:
     type: choice
     options:
       - Vanilla GCN
-      # - Vanilla Dense GCN
-      # - Vanilla GAT
       - Vanilla GDC
       - Soft Medoid GDC (T=0.5)
       - Soft Median GDC (T=0.2)
-      # - Soft Median GDC (T=0.5)
-      # - Soft Median GDC (T=1.0)
+      - Soft Median GDC (T=0.5)
+      - Soft Median GDC (T=1.0)
       - SVD GCN (rank=50)
-      # - SVD GCN (rank=100)
+      - SVD GCN (rank=100)
       - Jaccard GCN
-      # - RGCN
+      - RGCN
       - Vanilla PPRGo
       # - Soft Medoid PPRGo (T=1.0)
       # - Soft Medoid PPRGo (T=0.5)
