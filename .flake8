@@ -5,4 +5,4 @@ exclude =
     __pycache__
     sparse_smoothing
     experiment*
-ignore=E24,W50,W690
+ignore=E24,W50,W690,F821

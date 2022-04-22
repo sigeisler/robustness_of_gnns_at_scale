@@ -115,7 +115,7 @@ def set_executable_and_working_dir(config_path, seml_dict):
         logging.warning("'project_root_dir' not defined in seml config. Source files will not be saved in MongoDB.")
     seml_dict['working_dir'] = working_dir
     if not (executable_relative_to_config or executable_relative_to_project_root):
-        raise ExecutableError(f"Could not find the executable.")
+        raise ExecutableError("Could not find the executable.")
     executable = str(Path(executable).expanduser().resolve())
     seml_dict['executable'] = (str(Path(executable).relative_to(working_dir)) if executable_relative_to_project_root
                                else str(Path(executable).relative_to(config_dir)))
@@ -217,9 +217,9 @@ def unflatten(dictionary: dict, sep: str = '.', recursive: bool = False, levels=
             key_levels = list(set(key_levels))
             new_parts = []
             ix_current = 0
-            for l in key_levels:
-                new_parts.append(sep.join(parts[ix_current:l + 1]))
-                ix_current = l + 1
+            for level in key_levels:
+                new_parts.append(sep.join(parts[ix_current:level + 1]))
+                ix_current = level + 1
 
             if ix_current < len(parts):
                 new_parts.append(sep.join(parts[ix_current::]))
@@ -373,7 +373,7 @@ def detect_duplicate_parameters(inverted_config: dict, sub_config_name: str = No
                      "parameter '{p1}' in dot-notation starting with other parameter "
                      "'{p2}', which is ambiguous.")
     else:
-        error_str = (f"Conflicting parameters, most likely "
+        error_str = ("Conflicting parameters, most likely "
                      "due to ambiguous use of dot-notation in the config dict. Found "
                      "parameter '{p1}' in dot-notation starting with other parameter "
                      "'{p2}', which is ambiguous.")
