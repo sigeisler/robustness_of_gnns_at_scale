@@ -57,7 +57,7 @@ localprbcd_pprgo:
     attack: LocalBatchedPRBCD
     model_label: Vanilla PPRGo
     attack_params.loss_type: Margin
-    attack_params.search_space_size: 20_000
+    attack_params.block_size: 20_000
     attack_params.lr_factor: 1e-1
 
 
@@ -66,6 +66,6 @@ localprbcd_pprgo_median:
     attack: LocalBatchedPRBCD
     model_label: Soft Median PPRGo (T=1.0)
     attack_params.loss_type: Margin
-    attack_params.search_space_size: 20_000
+    attack_params.block_size: 20_000
     attack_params.lr_factor: 1e-1
 

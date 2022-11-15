@@ -55,7 +55,7 @@ greedy_rbcd:
     binary_attr: False
     surrogate_model_label: Vanilla GCN (surrogate)
     attack_params:
-      search_space_size: 10_000_000
+      block_size: 10_000_000
       do_synchronize: True
       loss_type: MCE
 
@@ -66,7 +66,7 @@ prbcd:
     surrogate_model_label: Vanilla GCN (surrogate)
     attack_params:
       keep_heuristic: WeightOnly
-      search_space_size: 10_000_000
+      block_size: 10_000_000
       do_synchronize: True
       lr_factor: 5e4
       attack_params: tanhMargin

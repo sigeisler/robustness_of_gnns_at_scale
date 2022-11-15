@@ -44,7 +44,7 @@ def config():
         epochs=500,
         fine_tune_epochs=100,
         keep_heuristic="WeightOnly",
-        search_space_size=100_000,
+        block_size=100_000,
         do_synchronize=True,
         loss_type="tanhMargin",
     )

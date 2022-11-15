@@ -57,6 +57,6 @@ localprbcd_GCN:
     attack: LocalPRBCD
     model_label: Vanilla GCN (surrogate)
     attack_params.loss_type: Margin
-    attack_params.search_space_size: 20_000
+    attack_params.block_size: 20_000
     attack_params.lr_factor: 0.05
 
