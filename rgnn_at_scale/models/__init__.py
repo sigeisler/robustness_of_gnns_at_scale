@@ -1,7 +1,6 @@
 # import re
 from typing import Any, Dict, Union
 
-from rgnn_at_scale.models.gat import RGAT
 from rgnn_at_scale.models.gcn import GCN, DenseGCN
 from rgnn_at_scale.models.sgc import SGC
 from rgnn_at_scale.models.rgnn import RGNN
@@ -30,8 +29,6 @@ def create_model(hyperparams: Dict[str, Any]) -> MODEL_TYPE:
         return GCN(**hyperparams)
     if hyperparams['model'] == "SGC":
         return SGC(**hyperparams)
-    if hyperparams['model'] == 'RGAT':
-        return RGAT(**hyperparams)
     if hyperparams['model'] == 'DenseGCN':
         return DenseGCN(**hyperparams)
     if hyperparams['model'] == 'RGCN':
@@ -45,7 +42,6 @@ def create_model(hyperparams: Dict[str, Any]) -> MODEL_TYPE:
 
 __all__ = [GCN,
            DenseGCN,
-           RGAT,
            RGNN,
            RGCN,
            PPRGoWrapperBase,
