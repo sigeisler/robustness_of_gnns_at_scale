@@ -1,15 +1,6 @@
 name: Python Package using Conda
 
-on:
-  push:
-    branches:
-      - main
-  pull_request:
-    types:
-      - opened
-      - edited
-      - synchronize
-      - reopened
+on: push
 
 jobs:
   build-linux:
@@ -29,9 +20,7 @@ jobs:
         echo $CONDA/bin >> $GITHUB_PATH
     - name: Install Pytorch 1.12.1 for CPU
       run: |
-        # conda install python==3.7.13
-        # conda install pytorch==1.10.1 torchvision==0.11.2 torchaudio==0.10.1 cpuonly -c pytorch
-        conda install python==3.9
+        conda install python==3.9 scipy==1.4.1
         conda install pytorch==1.12.1 torchvision==0.13.1 torchaudio==0.12.1 cpuonly -c pytorch
         conda install pyg -c pyg
     - name: Install dependencies and actual module
