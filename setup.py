@@ -16,13 +16,13 @@ torch_v = '.'.join(torch_v[:-1] + ['0'])
 
 def system(command: str):
     output = subprocess.check_output(command, shell=True)
-    logging.info(output)
+    logging.warn(output)
 
 
-# system(f'pip install torch-scatter -f https://pytorch-geometric.com/whl/torch-{torch_v}+{cuda_v}.html')
-# system(f'pip install torch-sparse -f https://pytorch-geometric.com/whl/torch-{torch_v}+{cuda_v}.html')
-# system(f'pip install torch-cluster -f https://pytorch-geometric.com/whl/torch-{torch_v}+{cuda_v}.html')
-# system(f'pip install torch-spline-conv -f https://pytorch-geometric.com/whl/torch-{torch_v}+{cuda_v}.html')
+system(f'pip install torch-scatter -f https://pytorch-geometric.com/whl/torch-{torch_v}+{cuda_v}.html')
+system(f'pip install torch-sparse -f https://pytorch-geometric.com/whl/torch-{torch_v}+{cuda_v}.html')
+system(f'pip install torch-cluster -f https://pytorch-geometric.com/whl/torch-{torch_v}+{cuda_v}.html')
+system(f'pip install torch-spline-conv -f https://pytorch-geometric.com/whl/torch-{torch_v}+{cuda_v}.html')
 
 install_requires = [
     'filelock',
@@ -39,7 +39,7 @@ install_requires = [
     'tqdm',
     'ogb',
     'torchtyping',
-    # 'torch-geometric'
+    'torch-geometric'
 ]
 
 setup(
