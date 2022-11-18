@@ -1,4 +1,3 @@
-# import re
 from typing import Any, Dict, Union
 
 from rgnn_at_scale.models.gcn import GCN, DenseGCN
