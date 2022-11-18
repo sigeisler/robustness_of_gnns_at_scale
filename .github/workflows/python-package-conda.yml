@@ -21,7 +21,7 @@ jobs:
     - name: Install Pytorch 1.10.1 for CPU
       run: |
         conda install python==3.7.13
-        conda install pytorch==1.10.2 torchvision==0.11.2 torchaudio==0.10.1 cpuonly -c pytorch
+        conda install pytorch==1.10.2 torchvision==0.11.3 torchaudio==0.10.2 cpuonly -c pytorch
     - name: Install dependencies and actual module
       run: |
         # Install requirements
