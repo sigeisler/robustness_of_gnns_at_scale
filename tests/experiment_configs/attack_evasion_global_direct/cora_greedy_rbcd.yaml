@@ -50,6 +50,6 @@ greedy_rbcd:
   fixed:
     attack: GreedyRBCD
     attack_params:
-      search_space_size: 100_000
+      block_size: 100_000
       loss_type: MCE
       epochs: 5

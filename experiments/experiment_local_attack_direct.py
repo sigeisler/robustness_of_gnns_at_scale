@@ -39,7 +39,7 @@ def config():
         },
         "epochs": 400,
         "fine_tune_epochs": 100,
-        "search_space_size": 10_000,
+        "block_size": 10_000,
         "ppr_recalc_at_end": True,
         "loss_type": "Margin",
         "lr_factor": 0.05

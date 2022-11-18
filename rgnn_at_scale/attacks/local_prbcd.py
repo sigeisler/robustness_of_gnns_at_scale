@@ -26,8 +26,8 @@ class LocalPRBCD(SparseLocalAttack):
                  display_step: int = 20,
                  epochs: int = 150,
                  fine_tune_epochs: int = 50,
-                 search_space_size: int = 10_000,
-                 with_early_stropping: bool = True,
+                 block_size: int = 10_000,
+                 with_early_stopping: bool = True,
                  do_synchronize: bool = False,
                  eps: float = 1e-14,
                  final_samples: int = 20,
@@ -48,8 +48,8 @@ class LocalPRBCD(SparseLocalAttack):
         self.epochs = epochs
         self.fine_tune_epochs = fine_tune_epochs
         self.epochs_resampling = epochs - fine_tune_epochs
-        self.search_space_size = search_space_size
-        self.with_early_stropping = with_early_stropping
+        self.block_size = block_size
+        self.with_early_stopping = with_early_stopping
         self.eps = eps
         self.do_synchronize = do_synchronize
         self.final_samples = final_samples
@@ -58,7 +58,7 @@ class LocalPRBCD(SparseLocalAttack):
         self.modified_edge_weight_diff: torch.Tensor = None
 
         self.lr_factor = lr_factor
-        self.lr_factor *= max(math.sqrt(self.n / self.search_space_size), 1.)
+        self.lr_factor *= max(math.sqrt(self.n / self.block_size), 1.)
 
     def _attack(self, n_perturbations: int, node_idx: int, **kwargs):
 
@@ -116,7 +116,7 @@ class LocalPRBCD(SparseLocalAttack):
                     if torch.cuda.is_available():
                         logging.info(f'Cuda memory {torch.cuda.memory_allocated() / (1024 ** 3)}')
 
-                if self.with_early_stropping and best_margin > classification_statistics['margin']:
+                if self.with_early_stopping and best_margin > classification_statistics['margin']:
                     best_margin = classification_statistics['margin']
                     best_epoch = epoch
                     best_search_space = self.current_search_space.clone().cpu()
@@ -126,7 +126,7 @@ class LocalPRBCD(SparseLocalAttack):
 
                 if epoch < self.epochs_resampling - 1:
                     self.resample_search_space(node_idx, n_perturbations, gradient)
-                elif self.with_early_stropping and epoch == self.epochs_resampling - 1:
+                elif self.with_early_stopping and epoch == self.epochs_resampling - 1:
                     logging.info(
                         f'Loading search space of epoch {best_epoch} (margin={best_margin}) for fine tuning\n')
                     self.current_search_space = best_search_space.clone().to(self.device)
@@ -144,7 +144,7 @@ class LocalPRBCD(SparseLocalAttack):
             logging.info(f"Failed to attack node {node_idx} with n_perturbations={n_perturbations}")
             return None
 
-        if self.with_early_stropping:
+        if self.with_early_stopping:
             self.current_search_space = best_search_space.to(self.device)
             self.modified_edge_weight_diff = best_edge_weight_diff.to(self.device)
 
@@ -241,7 +241,7 @@ class LocalPRBCD(SparseLocalAttack):
 
     def sample_search_space(self, node_idx: int, n_perturbations: int):
         while True:
-            self.current_search_space = torch.randint(self.n - 1, (self.search_space_size,), device=self.device)
+            self.current_search_space = torch.randint(self.n - 1, (self.block_size,), device=self.device)
             self.current_search_space[self.current_search_space >= node_idx] += 1
             self.current_search_space = torch.unique(self.current_search_space, sorted=True)
             self.modified_edge_weight_diff = torch.full_like(self.current_search_space, self.eps,
@@ -261,7 +261,7 @@ class LocalPRBCD(SparseLocalAttack):
 
         # Sample until enough edges were drawn
         while True:
-            number_new_edges = self.search_space_size - self.current_search_space.size(0)
+            number_new_edges = self.block_size - self.current_search_space.size(0)
             new_index = torch.randint(self.n - 1, (number_new_edges,), device=self.device)
             new_index[new_index >= node_idx] += 1
             self.current_search_space = torch.cat((self.current_search_space, new_index))

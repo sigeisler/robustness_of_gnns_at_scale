@@ -49,16 +49,16 @@ grid:
       - 1
       - 5
 
-# gcn:
-#   fixed:
-#     model_label: Vanilla GCN
-#     make_undirected: True
+gcn:
+  fixed:
+    model_label: Vanilla GCN
+    make_undirected: True
 
-# gcn_directed:
-#   fixed:
-#     model_label: Vanilla GCN
-#     model_storage_type: pretrained_rownorm
-    # make_undirected: False
+gcn_directed:
+  fixed:
+    model_label: Vanilla GCN
+    model_storage_type: pretrained_rownorm
+    make_undirected: False
 
 models:
   grid:
@@ -66,7 +66,7 @@ models:
       type: choice
       options:
         - Vanilla PPRGo
-        # - Soft Median PPRGo (T=1.0)
+        - Soft Median PPRGo (T=1.0)
 
     make_undirected:
       type: choice

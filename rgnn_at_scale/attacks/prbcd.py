@@ -25,7 +25,7 @@ class PRBCD(SparseAttack):
                  display_step: int = 20,
                  epochs: int = 400,
                  fine_tune_epochs: int = 100,
-                 search_space_size: int = 1_000_000,
+                 block_size: int = 1_000_000,
                  with_early_stopping: bool = True,
                  do_synchronize: bool = False,
                  eps: float = 1e-7,
@@ -38,7 +38,7 @@ class PRBCD(SparseAttack):
         self.epochs = epochs
         self.fine_tune_epochs = fine_tune_epochs
         self.epochs_resampling = epochs - fine_tune_epochs
-        self.search_space_size = search_space_size
+        self.block_size = block_size
         self.with_early_stopping = with_early_stopping
         self.eps = eps
         self.do_synchronize = do_synchronize
@@ -53,7 +53,7 @@ class PRBCD(SparseAttack):
         else:
             self.n_possible_edges = self.n ** 2  # We filter self-loops later
 
-        self.lr_factor = lr_factor * max(math.log2(self.n_possible_edges / self.search_space_size), 1.)
+        self.lr_factor = lr_factor * max(math.log2(self.n_possible_edges / self.block_size), 1.)
 
     def _attack(self, n_perturbations, **kwargs):
         """Perform attack (`n_perturbations` is increasing as it was a greedy attack).
@@ -63,8 +63,8 @@ class PRBCD(SparseAttack):
         n_perturbations : int
             Number of edges to be perturbed (assuming an undirected graph)
         """
-        assert self.search_space_size > n_perturbations, \
-            f'The search space size ({self.search_space_size}) must be ' \
+        assert self.block_size > n_perturbations, \
+            f'The search space size ({self.block_size}) must be ' \
             + f'greater than the number of permutations ({n_perturbations})'
 
         # For early stopping (not explicitly covered by pesudo code)
@@ -311,7 +311,7 @@ class PRBCD(SparseAttack):
     def sample_random_block(self, n_perturbations: int = 0):
         for _ in range(self.max_final_samples):
             self.current_search_space = torch.randint(
-                self.n_possible_edges, (self.search_space_size,), device=self.device)
+                self.n_possible_edges, (self.block_size,), device=self.device)
             self.current_search_space = torch.unique(self.current_search_space, sorted=True)
             if self.make_undirected:
                 self.modified_edge_index = PRBCD.linear_to_triu_idx(self.n, self.current_search_space)
@@ -345,7 +345,7 @@ class PRBCD(SparseAttack):
 
         # Sample until enough edges were drawn
         for i in range(self.max_final_samples):
-            n_edges_resample = self.search_space_size - self.current_search_space.size(0)
+            n_edges_resample = self.block_size - self.current_search_space.size(0)
             lin_index = torch.randint(self.n_possible_edges, (n_edges_resample,), device=self.device)
 
             self.current_search_space, unique_idx = torch.unique(

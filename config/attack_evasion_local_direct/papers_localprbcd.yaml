@@ -55,7 +55,7 @@ localprbcd_pprgo_vanilla:
     attack: LocalBatchedPRBCD
     model_label: Vanilla PPRGo
     attack_params.loss_type: Margin
-    attack_params.search_space_size: 2_500
+    attack_params.block_size: 2_500
     attack_params.lr_factor: 1e-1
 
 
@@ -64,7 +64,7 @@ localprbcd_pprgo_median10:
     attack: LocalBatchedPRBCD
     model_label: Soft Median PPRGo (T=10.0)
     attack_params.loss_type: Margin
-    attack_params.search_space_size: 2_500
+    attack_params.block_size: 2_500
     attack_params.lr_factor: 1e-1
 
 
@@ -73,7 +73,7 @@ localprbcd_pprgo_median20:
     attack: LocalBatchedPRBCD
     model_label: Soft Median PPRGo (T=20.0)
     attack_params.loss_type: Margin
-    attack_params.search_space_size: 2_500
+    attack_params.block_size: 2_500
     attack_params.lr_factor: 1e-1
 
 
@@ -82,7 +82,7 @@ localprbcd_pprgo_median50:
     attack: LocalBatchedPRBCD
     model_label: Soft Median PPRGo (T=50.0)
     attack_params.loss_type: Margin
-    attack_params.search_space_size: 2_500
+    attack_params.block_size: 2_500
     attack_params.lr_factor: 1e-1
 
 
@@ -91,7 +91,7 @@ localprbcd_pprgo_median100:
     attack: LocalBatchedPRBCD
     model_label: Soft Median PPRGo (T=100.0)
     attack_params.loss_type: Margin
-    attack_params.search_space_size: 2_500
+    attack_params.block_size: 2_500
     attack_params.lr_factor: 1e-1
 
 
@@ -100,7 +100,7 @@ localprbcd_pprgo_median200:
     attack: LocalBatchedPRBCD
     model_label: Soft Median PPRGo (T=200.0)
     attack_params.loss_type: Margin
-    attack_params.search_space_size: 2_500
+    attack_params.block_size: 2_500
     attack_params.lr_factor: 1e-1
 
 
@@ -109,7 +109,7 @@ localprbcd_pprgo_median500:
     attack: LocalBatchedPRBCD
     model_label: Soft Median PPRGo (T=500.0)
     attack_params.loss_type: Margin
-    attack_params.search_space_size: 2_500
+    attack_params.block_size: 2_500
     attack_params.lr_factor: 1e-1
 
 

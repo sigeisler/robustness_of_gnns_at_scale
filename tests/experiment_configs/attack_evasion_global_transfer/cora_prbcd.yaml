@@ -55,6 +55,6 @@ prbcd:
       epochs: 11
       fine_tune_epochs: 1
       keep_heuristic: WeightOnly
-      search_space_size: 10_000
+      block_size: 10_000
       do_synchronize: True
       loss_type: tanhMargin

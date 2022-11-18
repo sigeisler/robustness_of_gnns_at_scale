@@ -12,7 +12,6 @@ slurm:
     cpus-per-task: 4  # num cores
     time: 0-01:00     # max time, D-HH:MM
     partition: gpu_large
-    qos: studentprio
 
 fixed:
   data_dir: data/

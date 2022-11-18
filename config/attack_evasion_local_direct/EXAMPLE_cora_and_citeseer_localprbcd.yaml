@@ -21,7 +21,7 @@ fixed:
   nodes_topk: 4  # 40
   attack_params.epochs: 500
   attack_params.fine_tune_epochs: 100
-  attack_params.search_space_size: 10_000
+  attack_params.block_size: 10_000
   attack_params.ppr_recalc_at_end: True
   attack_params.loss_type: Margin
   device: 0

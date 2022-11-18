@@ -40,7 +40,7 @@ greedy_rbcd:
     binary_attr: False
     surrogate_model_label: Vanilla GCN
     attack_params:
-      search_space_size: 10_000_000
+      block_size: 10_000_000
       attack_params: MCE
 
 prbcd:
@@ -50,7 +50,7 @@ prbcd:
     surrogate_model_label: Vanilla GCN
     attack_params:
       keep_heuristic: WeightOnly
-      search_space_size: 10_000_000
+      block_size: 10_000_000
       do_synchronize: True
   grid: 
     attack_params:
@@ -59,14 +59,7 @@ prbcd:
         loss_type: 
           type: choice
           options:
-            - CE
-            - CW
-            - NCE
-            - MCE
             - tanhMargin
-            - Margin
-            - eluMargin
-            - tanhMarginMCE-0.95
 
 
 dice:

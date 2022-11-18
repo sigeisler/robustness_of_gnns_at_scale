@@ -48,95 +48,95 @@ grid:
       - 1
       - 5
 
-# gcn:
-#   fixed:
-#     model_label: Vanilla GCN
-#     surrogate_model_label: Vanilla GCN
-#     make_undirected: True
-#     attack_params:
-#       lr_factor: 0.05
+gcn:
+  fixed:
+    model_label: Vanilla GCN
+    surrogate_model_label: Vanilla GCN
+    make_undirected: True
+    attack_params:
+      lr_factor: 0.05
 
-# gcn_sgc_surrogate:
-#   fixed:
-#     model_label: Vanilla GCN
-#     surrogate_model_label: Vanilla SGC
-#     make_undirected: True
-#     attack_params:
-#       lr_factor: 0.05
+gcn_sgc_surrogate:
+  fixed:
+    model_label: Vanilla GCN
+    surrogate_model_label: Vanilla SGC
+    make_undirected: True
+    attack_params:
+      lr_factor: 0.05
 
-# gcn_directed:
-#   fixed:
-#     model_label: Vanilla GCN
-#     surrogate_model_label: Vanilla GCN
-#     model_storage_type: pretrained_rownorm
-#     surrogate_model_storage_type: pretrained_rownorm
-#     make_undirected: False
-    # attack_params:
-    #   lr_factor: 0.05
+gcn_directed:
+  fixed:
+    model_label: Vanilla GCN
+    surrogate_model_label: Vanilla GCN
+    model_storage_type: pretrained_rownorm
+    surrogate_model_storage_type: pretrained_rownorm
+    make_undirected: False
+    attack_params:
+      lr_factor: 0.05
 
-# vanilla_pprgo_with_surrogate:
-#   fixed:
-#     model_label: Vanilla PPRGo
-#     surrogate_model_label: Vanilla GCN
-#     attack_params:
-#       lr_factor: 0.05
-#   grid:
-#     make_undirected:
-#       type: choice
-#       options:
-#         - True
-#         # - False
+vanilla_pprgo_with_surrogate:
+  fixed:
+    model_label: Vanilla PPRGo
+    surrogate_model_label: Vanilla GCN
+    attack_params:
+      lr_factor: 0.05
+  grid:
+    make_undirected:
+      type: choice
+      options:
+        - True
+        # - False
 
-# softmedian_pprgo_with_surrogate:
-#   fixed:
-#     model_label: Soft Median PPRGo (T=1.0)
-#     surrogate_model_label: Vanilla GCN
-#     attack_params:
-#       lr_factor: 0.05
-#   grid:
-#     make_undirected:
-#       type: choice
-#       options:
-#         - True
-#         # - False
+softmedian_pprgo_with_surrogate:
+  fixed:
+    model_label: Soft Median PPRGo (T=1.0)
+    surrogate_model_label: Vanilla GCN
+    attack_params:
+      lr_factor: 0.05
+  grid:
+    make_undirected:
+      type: choice
+      options:
+        - True
+        # - False
 
-# vanilla_pprgo_no_surrogate:
-#   fixed:
-#     model_label: Vanilla PPRGo
-#     surrogate_model_label: Vanilla PPRGo
-#     attack: LocalBatchedPRBCD
-#     attack_params:
-#       lr_factor: 0.05
-#       ppr_recalc_at_end: True
-#   grid:
-#     make_undirected:
-#       type: choice
-#       options:
-#         - True
-#         # - False
+vanilla_pprgo_no_surrogate:
+  fixed:
+    model_label: Vanilla PPRGo
+    surrogate_model_label: Vanilla PPRGo
+    attack: LocalBatchedPRBCD
+    attack_params:
+      lr_factor: 0.05
+      ppr_recalc_at_end: True
+  grid:
+    make_undirected:
+      type: choice
+      options:
+        - True
+        # - False
 
-# softmedian_pprgo_no_surrogate:
-#   fixed:
-#     model_label: Soft Median PPRGo (T=1.0)
-#     surrogate_model_label: Soft Median PPRGo (T=1.0)
-#     attack: LocalBatchedPRBCD
-#     attack_params:
-#       lr_factor: 0.25
-#       ppr_recalc_at_end: True
-#   grid:
-#     make_undirected:
-#       type: choice
-#       options:
-#         - True
-#         # - False
+softmedian_pprgo_no_surrogate:
+  fixed:
+    model_label: Soft Median PPRGo (T=1.0)
+    surrogate_model_label: Soft Median PPRGo (T=1.0)
+    attack: LocalBatchedPRBCD
+    attack_params:
+      lr_factor: 0.25
+      ppr_recalc_at_end: True
+  grid:
+    make_undirected:
+      type: choice
+      options:
+        - True
+        # - False
 
-# vanilla_sgc_with_surrogate:
-#   fixed:
-#     model_label: Vanilla SGC
-#     surrogate_model_label: Vanilla GCN
-#     attack_params:
-#       lr_factor: 0.05
-#     make_undirected: True
+vanilla_sgc_with_surrogate:
+  fixed:
+    model_label: Vanilla SGC
+    surrogate_model_label: Vanilla GCN
+    attack_params:
+      lr_factor: 0.05
+    make_undirected: True
 
 vanilla_sgc_no_surrogate:
   fixed:
@@ -147,50 +147,26 @@ vanilla_sgc_no_surrogate:
     make_undirected: True
     artifact_dir: cache_tobias
 
-# vanilla_gdc_gcn_surrogate:
-#   fixed:
-#     model_label: Vanilla GDC
-#     surrogate_model_label: Vanilla GCN
-#     make_undirected: True
-#     attack_params:
-#       lr_factor: 0.05
+vanilla_gdc_gcn_surrogate:
+  fixed:
+    model_label: Vanilla GDC
+    surrogate_model_label: Vanilla GCN
+    make_undirected: True
+    attack_params:
+      lr_factor: 0.05
 
-# vanilla_gdc_sgc_surrogate:
-#   fixed:
-#     model_label: Vanilla GDC
-#     surrogate_model_label: Vanilla SGC
-#     make_undirected: True
-#     attack_params:
-#       lr_factor: 0.05
+vanilla_gdc_sgc_surrogate:
+  fixed:
+    model_label: Vanilla GDC
+    surrogate_model_label: Vanilla SGC
+    make_undirected: True
+    attack_params:
+      lr_factor: 0.05
 
-# vanilla_gdc_no_surrogate:
-#   fixed:
-#     model_label: Vanilla GDC
-#     surrogate_model_label: Vanilla GDC
-#     make_undirected: True
-#     attack_params:
-#       lr_factor: 0.05
-
-# vanilla_gat_no_surrogate:
-#   fixed:
-#     model_label: Vanilla GAT
-#     surrogate_model_label: Vanilla GAT
-#     make_undirected: True
-#     attack_params:
-#       lr_factor: 0.05
-
-# vanilla_gat_gcn_surrogate:
-#   fixed:
-#     model_label: Vanilla GAT
-#     surrogate_model_label: Vanilla GCN
-#     make_undirected: True
-#     attack_params:
-#       lr_factor: 0.05
-
-# vanilla_gat_sgc_surrogate:
-#   fixed:
-#     model_label: Vanilla GAT
-#     surrogate_model_label: Vanilla SGC
-#     make_undirected: True
-#     attack_params:
-#       lr_factor: 0.05
+vanilla_gdc_no_surrogate:
+  fixed:
+    model_label: Vanilla GDC
+    surrogate_model_label: Vanilla GDC
+    make_undirected: True
+    attack_params:
+      lr_factor: 0.05

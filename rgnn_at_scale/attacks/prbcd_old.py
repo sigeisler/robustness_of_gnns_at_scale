@@ -26,8 +26,8 @@ class PRBCD(SparseAttack):
                  display_step: int = 20,
                  epochs: int = 400,
                  fine_tune_epochs: int = 100,
-                 search_space_size: int = 1_000_000,
-                 with_early_stropping: bool = True,
+                 block_size: int = 1_000_000,
+                 with_early_stopping: bool = True,
                  do_synchronize: bool = False,
                  eps: float = 1e-7,
                  max_resamples: int = 20,
@@ -44,8 +44,8 @@ class PRBCD(SparseAttack):
         self.display_step = display_step
         self.epochs = epochs
         self.fine_tune_epochs = fine_tune_epochs
-        self.search_space_size = search_space_size
-        self.with_early_stropping = with_early_stropping
+        self.block_size = block_size
+        self.with_early_stopping = with_early_stopping
         self.eps = eps
         self.do_synchronize = do_synchronize
         self.max_resamples = max_resamples
@@ -54,7 +54,7 @@ class PRBCD(SparseAttack):
         self.modified_edge_index: torch.Tensor = None
         self.modified_edge_weight_diff: torch.Tensor = None
 
-        self.lr_factor = lr_factor * max(math.log2(self.n_possible_edges / self.search_space_size), 1.)
+        self.lr_factor = lr_factor * max(math.log2(self.n_possible_edges / self.block_size), 1.)
 
     def _attack(self, n_perturbations, **kwargs):
         """Perform attack (`n_perturbations` is increasing as it was a greedy attack).
@@ -64,8 +64,8 @@ class PRBCD(SparseAttack):
         n_perturbations : int
             Number of edges to be perturbed (assuming an undirected graph)
         """
-        assert self.search_space_size > n_perturbations, \
-            f'The search space size ({self.search_space_size}) must be ' \
+        assert self.block_size > n_perturbations, \
+            f'The search space size ({self.block_size}) must be ' \
             + f'greater than the number of permutations ({n_perturbations})'
         self.sample_search_space(n_perturbations)
         best_accuracy = float('Inf')
@@ -116,7 +116,7 @@ class PRBCD(SparseAttack):
                 if epoch % self.display_step == 0:
                     logging.info(f'\nEpoch: {epoch} Loss: {loss.item()} Accuracy: {100 * accuracy:.3f} %\n')
 
-                if self.with_early_stropping and best_accuracy > accuracy:
+                if self.with_early_stopping and best_accuracy > accuracy:
                     best_accuracy = accuracy
                     best_epoch = epoch
                     best_search_space = self.current_search_space.clone().cpu()
@@ -127,7 +127,7 @@ class PRBCD(SparseAttack):
 
                 if epoch < self.epochs - 1:
                     self.resample_search_space(n_perturbations, edge_index, edge_weight, gradient)
-                elif self.with_early_stropping and epoch == self.epochs - 1:
+                elif self.with_early_stopping and epoch == self.epochs - 1:
                     logging.info(
                         f'Loading search space of epoch {best_epoch} (accuarcy={best_accuracy}) for fine tuning\n')
                     self.current_search_space = best_search_space.to(self.device)
@@ -139,7 +139,7 @@ class PRBCD(SparseAttack):
             del loss
             del gradient
 
-        if self.with_early_stropping:
+        if self.with_early_stopping:
             self.current_search_space = best_search_space.to(self.device)
             self.modified_edge_index = best_edge_index.to(self.device)
             self.modified_edge_weight_diff = best_edge_weight_diff.to(self.device)
@@ -319,7 +319,7 @@ class PRBCD(SparseAttack):
     def sample_search_space(self, n_perturbations: int = 0):
         for i in range(self.max_resamples):
             self.current_search_space = torch.randint(
-                self.n_possible_edges, (self.search_space_size,), device=self.device)
+                self.n_possible_edges, (self.block_size,), device=self.device)
             self.current_search_space = torch.unique(self.current_search_space, sorted=True)
             if self.make_undirected:
                 self.modified_edge_index = PRBCD.linear_to_triu_idx(self.n, self.current_search_space)
@@ -352,7 +352,7 @@ class PRBCD(SparseAttack):
 
         # Sample until enough edges were drawn
         for i in range(self.max_resamples):
-            n_edges_resample = self.search_space_size - self.current_search_space.size(0)
+            n_edges_resample = self.block_size - self.current_search_space.size(0)
             lin_index = torch.randint(self.n_possible_edges, (n_edges_resample,), device=self.device)
             self.current_search_space, unique_idx = torch.unique(
                 torch.cat((self.current_search_space, lin_index)),
