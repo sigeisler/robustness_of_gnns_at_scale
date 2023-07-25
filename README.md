@@ -1,5 +1,7 @@
 # Robustness of Graph Neural Networks at Scale (NeurIPS 2021)
 
+*Update: The attacks [GRBCD](https://pytorch-geometric.readthedocs.io/en/latest/modules/contrib.html#torch_geometric.contrib.nn.models.GRBCDAttack) and [PRBCD are now part of PyTorch Geometric](https://pytorch-geometric.readthedocs.io/en/latest/modules/contrib.html#torch_geometric.contrib.nn.models.PRBCDAttack)*
+
 Here we provide the code and configuration for our NeurIPS 2021 paper "Robustness of Graph Neural Networks at Scale".
 
 Other resources: [Project page](https://www.cs.cit.tum.de/daml/robustness-of-gnns-at-scale/) - [Paper](https://arxiv.org/pdf/2110.14038.pdf) - [Video (Slideslive)](https://slideslive.com/38967603/robustness-of-graph-neural-networks-at-scale?ref=search)
